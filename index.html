@@ -1,0 +1,1294 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>个人信息收件箱 iOS 交互图 · V1 精致版</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #dedacf;              /* 工作区底色 */
+      --screen: #f4efe6;          /* 手机屏幕底色 */
+      --card: #fffdf8;            /* 卡片 */
+      --card-warm: #fdf8ee;       /* 行程卡暖色 */
+      --panel-2: #ece6d9;
+      --text: #26221c;
+      --sub: #8c8375;
+      --line: rgba(92, 80, 60, .14);
+      --accent: #c2410c;          /* 陶土橙 */
+      --accent-soft: rgba(194, 65, 12, .12);
+      --green: #3f6f4f;
+      --green-soft: rgba(63, 111, 79, .14);
+      --slate: #5b6b9e;           /* 行程蓝 */
+      --slate-soft: rgba(91, 107, 158, .14);
+      --red: #b3341f;
+      --radius: 20px;
+      --radius-sm: 14px;
+      --shadow: 0 24px 60px rgba(60, 45, 25, .18);
+      --card-shadow: 0 2px 10px rgba(80, 60, 30, .05);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    [hidden] { display: none !important; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(360px, 430px) minmax(420px, 1fr);
+      gap: 28px;
+      min-height: 100vh;
+      padding: 28px;
+      align-items: start;
+    }
+
+    /* ---------- 手机壳 ---------- */
+
+    .phone {
+      position: sticky;
+      top: 24px;
+      width: min(100%, 410px);
+      height: 860px;
+      border-radius: 54px;
+      background: #16130f;
+      padding: 10px;
+      box-shadow: var(--shadow);
+      justify-self: center;
+    }
+
+    .phone-inner {
+      position: relative;
+      height: 100%;
+      border-radius: 44px;
+      overflow: hidden;
+      background: var(--screen);
+    }
+
+    .island {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 118px;
+      height: 32px;
+      border-radius: 999px;
+      background: #16130f;
+      z-index: 30;
+    }
+
+    .status-bar {
+      height: 54px;
+      padding: 18px 30px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: .01em;
+    }
+
+    .status-icons { display: flex; align-items: center; gap: 6px; }
+
+    .screen {
+      height: calc(100% - 54px);
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+    }
+
+    /* ---------- 顶部大标题 ---------- */
+
+    .nav { padding: 6px 20px 8px; }
+
+    .nav-top {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .nav-date {
+      color: var(--sub);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      margin-bottom: 2px;
+    }
+
+    .title {
+      margin: 0;
+      font-size: 36px;
+      line-height: 1.06;
+      font-weight: 800;
+      letter-spacing: .01em;
+    }
+
+    .nav-actions { display: flex; gap: 8px; align-items: center; }
+
+    .icon-btn {
+      width: 40px;
+      height: 40px;
+      border: 0;
+      border-radius: 14px;
+      background: var(--card);
+      color: var(--sub);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      box-shadow: var(--card-shadow);
+    }
+
+    .icon-btn svg { width: 19px; height: 19px; }
+
+    .content {
+      overflow: auto;
+      padding: 6px 16px 24px;
+      scrollbar-width: none;
+    }
+
+    .content::-webkit-scrollbar { display: none; }
+
+    /* ---------- 区块头 ---------- */
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 20px 4px 10px;
+    }
+
+    .section-left {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      min-width: 0;
+    }
+
+    .section-left strong { font-size: 17px; letter-spacing: .01em; }
+
+    .section-count { color: var(--sub); font-size: 13px; font-weight: 600; }
+
+    .icon-chip {
+      width: 30px;
+      height: 30px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      flex: none;
+    }
+
+    .icon-chip svg { width: 16px; height: 16px; }
+
+    .icon-chip.trip { background: var(--slate-soft); color: var(--slate); }
+    .icon-chip.express { background: var(--accent-soft); color: var(--accent); }
+    .icon-chip.todo { background: var(--green-soft); color: var(--green); }
+
+    .section-link {
+      border: 0;
+      background: transparent;
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 800;
+      padding: 4px 2px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      flex: none;
+    }
+
+    .section-link svg { width: 13px; height: 13px; }
+
+    /* ---------- 通用卡片 ---------- */
+
+    .card {
+      background: var(--card);
+      border: 1px solid rgba(92, 80, 60, .08);
+      border-radius: var(--radius);
+      padding: 15px 16px;
+      margin-bottom: 10px;
+      display: grid;
+      gap: 8px;
+      box-shadow: var(--card-shadow);
+    }
+
+    .meta, .small { color: var(--sub); font-size: 12.5px; line-height: 1.4; }
+
+    .card-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .badge {
+      border-radius: 999px;
+      padding: 4px 9px;
+      font-size: 11.5px;
+      font-weight: 800;
+      white-space: nowrap;
+      background: var(--panel-2);
+      color: var(--sub);
+    }
+
+    .badge.accent { background: var(--accent-soft); color: var(--accent); }
+    .badge.green { background: var(--green-soft); color: var(--green); }
+    .badge.slate { background: var(--slate-soft); color: var(--slate); }
+    .badge.red { background: rgba(179, 52, 31, .13); color: var(--red); }
+
+    /* ---------- 横滑卡片组 ---------- */
+
+    .h-scroll {
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: 88%;
+      gap: 12px;
+      overflow-x: auto;
+      padding: 2px 2px 4px;
+      scroll-snap-type: x mandatory;
+      scrollbar-width: none;
+    }
+
+    .h-scroll::-webkit-scrollbar { display: none; }
+
+    .h-scroll > .card {
+      scroll-snap-align: start;
+      margin-bottom: 0;
+    }
+
+    .dots {
+      display: flex;
+      justify-content: center;
+      gap: 5px;
+      padding: 8px 0 2px;
+    }
+
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(92, 80, 60, .22);
+    }
+
+    .dot.active { width: 18px; background: var(--accent); }
+
+    /* ---------- 行程卡 ---------- */
+
+    .trip-card {
+      background: linear-gradient(160deg, #fffdf8, var(--card-warm));
+      gap: 14px;
+    }
+
+    .card-title {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+      font-size: 15px;
+    }
+
+    .card-title strong { font-size: 16px; letter-spacing: .01em; }
+
+    .dot-sep { color: var(--sub); font-weight: 700; }
+
+    .meta-inline { color: var(--sub); font-size: 13px; font-weight: 600; white-space: nowrap; }
+
+    .cal-ok { color: var(--green); display: inline-flex; }
+    .cal-ok svg { width: 15px; height: 15px; }
+
+    .countdown { text-align: right; white-space: nowrap; flex: none; }
+
+    .countdown b {
+      color: var(--accent);
+      font-size: 19px;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+
+    .countdown span { color: var(--sub); font-size: 11.5px; font-weight: 700; margin-left: 3px; }
+
+    .route {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .route-time { flex: none; }
+
+    .route-time b {
+      display: block;
+      font-size: 30px;
+      font-weight: 800;
+      line-height: 1.05;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -.01em;
+    }
+
+    .route-time span {
+      display: block;
+      margin-top: 4px;
+      color: var(--sub);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .route-time.right { text-align: right; }
+
+    .route-line {
+      flex: 1;
+      position: relative;
+      height: 32px;
+      background-image: linear-gradient(90deg, var(--slate) 42%, transparent 42%);
+      background-size: 9px 2px;
+      background-repeat: repeat-x;
+      background-position: 0 15px;
+      opacity: .95;
+    }
+
+    .route-dot {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 26px;
+      height: 26px;
+      border-radius: 999px;
+      background: var(--screen);
+      border: 1.5px solid var(--slate-soft);
+      color: var(--slate);
+      display: grid;
+      place-items: center;
+    }
+
+    .route-dot svg { width: 13px; height: 13px; }
+
+    /* ---------- 快递卡 ---------- */
+
+    .code-box {
+      border: 1.5px dashed rgba(92, 80, 60, .28);
+      border-radius: var(--radius-sm);
+      padding: 11px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: rgba(255, 253, 248, .6);
+    }
+
+    .code-label {
+      display: block;
+      color: var(--sub);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      margin-bottom: 2px;
+    }
+
+    .code {
+      font-size: 28px;
+      font-weight: 900;
+      letter-spacing: .04em;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.05;
+    }
+
+    .code-actions { display: flex; gap: 8px; flex: none; }
+
+    .round-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: var(--card);
+      color: var(--sub);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+    }
+
+    .round-btn svg { width: 16px; height: 16px; }
+
+    .round-btn.solid {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      box-shadow: 0 6px 14px rgba(194, 65, 12, .32);
+    }
+
+    /* ---------- 待办 ---------- */
+
+    .todo-card {
+      display: grid;
+      grid-template-columns: 26px 1fr auto;
+      gap: 11px;
+      align-items: center;
+    }
+
+    .todo-card strong { font-size: 15px; }
+
+    .check {
+      width: 24px;
+      height: 24px;
+      border: 2px solid var(--green);
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      color: var(--green);
+      background: transparent;
+      padding: 0;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .due { color: var(--sub); font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+    .due.accent { color: var(--accent); font-weight: 800; }
+
+    /* ---------- Tab 栏 ---------- */
+
+    .tabbar {
+      height: 84px;
+      padding: 9px 8px 22px;
+      border-top: 1px solid rgba(92, 80, 60, .1);
+      background: rgba(252, 249, 243, .92);
+      backdrop-filter: blur(20px);
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 2px;
+    }
+
+    .tab {
+      border: 0;
+      border-radius: 12px;
+      color: #a49a89;
+      background: transparent;
+      font-size: 10.5px;
+      font-weight: 700;
+      display: grid;
+      gap: 3px;
+      place-items: center;
+      cursor: pointer;
+      padding: 4px 0 2px;
+    }
+
+    .tab.active { color: var(--accent); font-weight: 800; }
+
+    .tab-icon { position: relative; display: grid; place-items: center; }
+    .tab-icon svg { width: 22px; height: 22px; }
+
+    .tab-badge {
+      position: absolute;
+      top: -4px;
+      right: -8px;
+      min-width: 15px;
+      height: 15px;
+      padding: 0 4px;
+      border-radius: 999px;
+      background: var(--red);
+      color: #fff;
+      font-size: 9.5px;
+      font-weight: 800;
+      display: grid;
+      place-items: center;
+      line-height: 1;
+    }
+
+    /* ---------- 其他通用 ---------- */
+
+    .notice {
+      border-radius: var(--radius);
+      background: var(--slate-soft);
+      border: 1px solid rgba(91, 107, 158, .2);
+      padding: 12px 14px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .notice strong, .card strong { font-size: 14.5px; }
+    .notice span { color: var(--sub); font-size: 12px; line-height: 1.35; }
+
+    .section-title {
+      margin: 18px 4px 8px;
+      color: var(--sub);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .05em;
+    }
+
+    .item-card {
+      grid-template-columns: 4px 1fr auto;
+      gap: 10px;
+      align-items: start;
+    }
+
+    .rail {
+      width: 4px;
+      min-height: 46px;
+      border-radius: 999px;
+      background: var(--slate);
+    }
+
+    .rail.green { background: var(--green); }
+    .rail.gray { background: #b0a795; }
+
+    .quick-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .pill {
+      border: 1px solid var(--line);
+      background: var(--card);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 7px 11px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .search {
+      height: 38px;
+      border-radius: 12px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      color: var(--sub);
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+
+    .chips {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 2px 0 8px;
+      scrollbar-width: none;
+    }
+
+    .chip {
+      border-radius: 999px;
+      padding: 7px 11px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+      color: var(--sub);
+    }
+
+    .chip.active { color: #fff; background: var(--accent); border-color: var(--accent); }
+
+    .empty {
+      margin: 44px 20px;
+      text-align: center;
+      display: grid;
+      gap: 10px;
+      justify-items: center;
+      color: var(--sub);
+    }
+
+    .empty svg { width: 40px; height: 40px; opacity: .7; }
+
+    .primary {
+      border: 0;
+      border-radius: 13px;
+      padding: 11px 15px;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 800;
+      font-size: 14px;
+      cursor: pointer;
+      box-shadow: 0 8px 18px rgba(194, 65, 12, .28);
+    }
+
+    .secondary {
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      padding: 10px 13px;
+      background: var(--card);
+      color: var(--accent);
+      font-weight: 800;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .panel-page { display: none; }
+    .panel-page.active { display: block; }
+
+    .details { display: grid; gap: 10px; }
+
+    .field {
+      background: var(--card);
+      border: 1px solid rgba(92, 80, 60, .08);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      font-size: 14px;
+      box-shadow: var(--card-shadow);
+    }
+
+    .right { min-width: 0; color: var(--sub); text-align: right; }
+
+    .sheet {
+      position: absolute;
+      left: 14px;
+      right: 14px;
+      bottom: 96px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: 0 24px 60px rgba(60, 45, 25, .3);
+      padding: 16px;
+      display: grid;
+      gap: 10px;
+      z-index: 20;
+    }
+
+    .sheet-handle {
+      width: 42px;
+      height: 5px;
+      border-radius: 999px;
+      background: rgba(92, 80, 60, .2);
+      justify-self: center;
+    }
+
+    /* ---------- 右侧文档 ---------- */
+
+    .diagram { display: grid; gap: 18px; }
+
+    .doc-section {
+      background: #f7f3ea;
+      border: 1px solid rgba(92, 80, 60, .12);
+      border-radius: 18px;
+      padding: 20px;
+    }
+
+    .doc-section h1 { font-size: 28px; margin: 0 0 8px; }
+    .doc-section h2 { font-size: 18px; margin: 0 0 12px; }
+
+    .ia {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .ia-node {
+      border: 1px solid rgba(92, 80, 60, .1);
+      background: #fffdf8;
+      border-radius: 14px;
+      padding: 12px;
+      min-height: 78px;
+    }
+
+    .ia-node b { display: block; margin-bottom: 5px; font-size: 13px; }
+    .ia-node span { display: block; color: var(--sub); font-size: 12px; line-height: 1.45; }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(120px, 1fr));
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .flow-step {
+      border: 1px solid rgba(92, 80, 60, .1);
+      border-radius: 14px;
+      padding: 12px;
+      background: #fffdf8;
+      min-height: 94px;
+      position: relative;
+    }
+
+    .flow-step:not(:last-child)::after {
+      content: "›";
+      position: absolute;
+      right: -8px;
+      top: 34px;
+      color: var(--sub);
+      font-size: 22px;
+      z-index: 1;
+    }
+
+    .flow-step b { font-size: 13px; display: block; margin-bottom: 5px; }
+    .flow-step span { font-size: 12px; color: var(--sub); line-height: 1.4; }
+
+    .state-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .state {
+      border: 1px solid rgba(92, 80, 60, .1);
+      border-radius: 14px;
+      padding: 12px;
+      background: #fffdf8;
+      font-size: 12px;
+      color: var(--sub);
+      line-height: 1.45;
+    }
+
+    .state b { display: block; color: var(--text); margin-bottom: 4px; font-size: 13px; }
+
+    .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+    @media (max-width: 960px) {
+      .workspace { grid-template-columns: 1fr; padding: 14px; }
+      .phone { position: relative; top: 0; }
+      .ia, .state-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 520px) {
+      .phone { height: 810px; border-radius: 40px; }
+      .phone-inner { border-radius: 32px; }
+      .ia, .state-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <!-- SVG 图标库 -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <g id="i-home"><path d="M3 9.5 12 3l9 6.5V20a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 20Z"/><path d="M9.5 21.5v-7h5v7"/></g>
+      <g id="i-box"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></g>
+      <g id="i-train"><rect x="5" y="3" width="14" height="14" rx="3.5"/><path d="M5 10.5h14"/><path d="M8.6 14h.01M15.4 14h.01"/><path d="m9.5 17-2 4M14.5 17l2 4"/></g>
+      <g id="i-check-circle"><circle cx="12" cy="12" r="9.5"/><path d="m7.8 12.4 2.8 2.8 5.6-6"/></g>
+      <g id="i-bookmark"><path d="M18.5 21.5 12 16.8l-6.5 4.7v-17A1.5 1.5 0 0 1 7 3h10a1.5 1.5 0 0 1 1.5 1.5Z"/></g>
+      <g id="i-gear"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></g>
+      <g id="i-copy"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></g>
+      <g id="i-check"><path d="m5 12.5 4.5 4.5L19 7.5"/></g>
+      <g id="i-cal-check"><rect x="3.5" y="5" width="17" height="16" rx="3"/><path d="M8 3v4M16 3v4M3.5 10.5h17"/><path d="m9.2 15.6 2 2 3.6-4"/></g>
+      <g id="i-arrow-r"><path d="M4.5 12h14"/><path d="m13 6.5 5.5 5.5-5.5 5.5"/></g>
+      <g id="i-alert"><circle cx="12" cy="12" r="9.5"/><path d="M12 7.5v5.5M12 16.5h.01"/></g>
+    </defs>
+  </svg>
+
+  <main class="workspace">
+    <section class="phone" aria-label="iOS app 原型 · V1 精致版 暖调浅色">
+      <div class="phone-inner">
+        <div class="island"></div>
+
+        <div class="status-bar">
+          <span>9:41</span>
+          <span class="status-icons">
+            <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+            <svg width="16" height="11" viewBox="0 0 16 11" fill="currentColor"><path d="M8 9.2a1.4 1.4 0 1 1 0 2.8 1.4 1.4 0 0 1 0-2.8Zm-3.1-2.7a4.6 4.6 0 0 1 6.2 0l-1.3 1.4a2.7 2.7 0 0 0-3.6 0Zm-2.6-2.7a8.3 8.3 0 0 1 11.4 0l-1.3 1.3a6.5 6.5 0 0 0-8.8 0Z" transform="translate(0 -1.5)"/></svg>
+            <svg width="25" height="12" viewBox="0 0 25 12" fill="none" stroke="currentColor"><rect x=".5" y=".5" width="21" height="11" rx="3.5" opacity=".4"/><rect x="2" y="2" width="15" height="8" rx="2" fill="currentColor" stroke="none"/><path d="M23.5 4v4" stroke-linecap="round" opacity=".4"/></svg>
+          </span>
+        </div>
+
+        <div class="screen">
+          <header class="nav">
+            <div class="nav-top">
+              <div>
+                <div class="nav-date" id="navDate">周三 · 7月8日</div>
+                <h1 class="title" id="screenTitle">今天</h1>
+              </div>
+              <div class="nav-actions">
+                <button class="icon-btn" data-page="repair" title="需修正"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-alert"/></svg></button>
+                <button class="icon-btn" data-page="settings" title="设置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-gear"/></svg></button>
+              </div>
+            </div>
+            <div class="search" id="searchBar" hidden>搜索标题、链接、标签</div>
+          </header>
+
+          <div class="content">
+            <!-- ============ 今天（聚合首页） ============ -->
+            <section class="panel-page active" id="home">
+              <div class="section-header" style="margin-top:8px">
+                <div class="section-left">
+                  <span class="icon-chip trip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-train"/></svg></span>
+                  <strong>行程</strong>
+                  <span class="section-count">2 个即将出行</span>
+                </div>
+                <button class="section-link" data-page="trip">全部 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><use href="#i-arrow-r"/></svg></button>
+              </div>
+              <div class="h-scroll" aria-label="行程横向卡片组">
+                <article class="card trip-card">
+                  <div class="card-row">
+                    <div class="card-title">
+                      <strong>G1234</strong><span class="dot-sep">·</span><span class="meta-inline">商务 07车12F</span>
+                      <span class="cal-ok" title="日历已同步"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-cal-check"/></svg></span>
+                    </div>
+                    <div class="countdown"><b>20h</b><span>后出发</span></div>
+                  </div>
+                  <div class="route">
+                    <div class="route-time"><b>08:00</b><span>上海虹桥</span></div>
+                    <div class="route-line"><span class="route-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-train"/></svg></span></div>
+                    <div class="route-time right"><b>13:28</b><span>北京南</span></div>
+                  </div>
+                </article>
+                <article class="card trip-card">
+                  <div class="card-row">
+                    <div class="card-title">
+                      <strong>MU5678</strong><span class="dot-sep">·</span><span class="meta-inline">T2 · 经济舱</span>
+                      <span class="cal-ok" title="日历已同步"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-cal-check"/></svg></span>
+                    </div>
+                    <div class="countdown"><b>6天</b><span>后出发</span></div>
+                  </div>
+                  <div class="route">
+                    <div class="route-time"><b>14:20</b><span>浦东 T2</span></div>
+                    <div class="route-line"><span class="route-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-train"/></svg></span></div>
+                    <div class="route-time right"><b>17:05</b><span>深圳宝安</span></div>
+                  </div>
+                </article>
+              </div>
+              <div class="dots" aria-hidden="true"><span class="dot active"></span><span class="dot"></span></div>
+
+              <div class="section-header">
+                <div class="section-left">
+                  <span class="icon-chip express"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-box"/></svg></span>
+                  <strong>快递</strong>
+                  <span class="section-count">2 件待取</span>
+                </div>
+                <button class="section-link" data-page="express">全部 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><use href="#i-arrow-r"/></svg></button>
+              </div>
+              <div class="h-scroll" aria-label="快递横向卡片组">
+                <article class="card">
+                  <div class="card-row">
+                    <div class="card-title"><strong>顺丰速运</strong><span class="dot-sep">·</span><span class="meta-inline">丰巢柜 A-1024</span></div>
+                    <span class="badge accent">待取</span>
+                  </div>
+                  <div class="code-box">
+                    <div><span class="code-label">取件码</span><div class="code">8-2-1024</div></div>
+                    <div class="code-actions">
+                      <button class="round-btn" title="标记已取"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check-circle"/></svg></button>
+                      <button class="round-btn solid" title="复制取件码"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-copy"/></svg></button>
+                    </div>
+                  </div>
+                </article>
+                <article class="card">
+                  <div class="card-row">
+                    <div class="card-title"><strong>圆通速递</strong><span class="dot-sep">·</span><span class="meta-inline">菜鸟驿站 · 1号楼北门</span></div>
+                    <span class="badge accent">待取</span>
+                  </div>
+                  <div class="code-box">
+                    <div><span class="code-label">取件码</span><div class="code">C6-88</div></div>
+                    <div class="code-actions">
+                      <button class="round-btn" title="标记已取"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check-circle"/></svg></button>
+                      <button class="round-btn solid" title="复制取件码"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-copy"/></svg></button>
+                    </div>
+                  </div>
+                </article>
+              </div>
+              <div class="dots" aria-hidden="true"><span class="dot active"></span><span class="dot"></span></div>
+
+              <div class="section-header">
+                <div class="section-left">
+                  <span class="icon-chip todo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check-circle"/></svg></span>
+                  <strong>待办</strong>
+                  <span class="section-count">3 项未完成</span>
+                </div>
+                <button class="section-link" data-page="todo">全部 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><use href="#i-arrow-r"/></svg></button>
+              </div>
+              <article class="card todo-card">
+                <button class="check" aria-label="完成"></button>
+                <div><strong>提交季度报销单</strong><div class="meta">来自截图 · 已同步滴答</div></div>
+                <span class="due accent">今天 18:00</span>
+              </article>
+              <article class="card todo-card">
+                <button class="check" aria-label="完成"></button>
+                <div><strong>给妈妈回电话</strong><div class="meta">手动添加</div></div>
+                <span class="due">无期限</span>
+              </article>
+              <article class="card todo-card">
+                <button class="check" aria-label="完成"></button>
+                <div><strong>预约牙医复诊</strong><div class="meta">来自短信 · 待同步</div></div>
+                <span class="due">周五</span>
+              </article>
+
+              <div class="section-title">需处理</div>
+              <article class="card item-card">
+                <div class="rail gray"></div>
+                <div>
+                  <div class="card-row"><strong>无法自动识别的短信</strong><span class="badge accent">需修正</span></div>
+                  <div class="meta">置信度低 · 点开选择类型或编辑字段</div>
+                </div>
+              </article>
+            </section>
+
+            <!-- ============ 快递 ============ -->
+            <section class="panel-page" id="express">
+              <div class="section-title">待取</div>
+              <article class="card">
+                <div class="card-row">
+                  <div class="card-title"><strong>顺丰速运</strong><span class="dot-sep">·</span><span class="meta-inline">丰巢柜 A-1024</span></div>
+                  <span class="badge accent">待取</span>
+                </div>
+                <div class="code-box">
+                  <div><span class="code-label">取件码</span><div class="code">8-2-1024</div></div>
+                  <div class="code-actions">
+                    <button class="round-btn" title="标记已取"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check-circle"/></svg></button>
+                    <button class="round-btn solid" title="复制取件码"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-copy"/></svg></button>
+                  </div>
+                </div>
+                <div class="small">来自短信 · 今天 16:20</div>
+              </article>
+              <article class="card">
+                <div class="card-row">
+                  <div class="card-title"><strong>圆通速递</strong><span class="dot-sep">·</span><span class="meta-inline">菜鸟驿站 · 1号楼北门</span></div>
+                  <span class="badge accent">待取</span>
+                </div>
+                <div class="code-box">
+                  <div><span class="code-label">取件码</span><div class="code">C6-88</div></div>
+                  <div class="code-actions">
+                    <button class="round-btn" title="标记已取"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check-circle"/></svg></button>
+                    <button class="round-btn solid" title="复制取件码"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-copy"/></svg></button>
+                  </div>
+                </div>
+                <div class="small">来自短信 · 今天 11:08</div>
+              </article>
+              <div class="section-title">已签收</div>
+              <article class="card" style="opacity:.62">
+                <div class="card-row"><strong>京东物流</strong><span class="badge">已签收</span></div>
+                <div class="meta">昨天 14:32 · 放至前台</div>
+              </article>
+            </section>
+
+            <!-- ============ 行程 ============ -->
+            <section class="panel-page" id="trip">
+              <div class="section-title">即将出行</div>
+              <article class="card trip-card">
+                <div class="card-row">
+                  <div class="card-title">
+                    <strong>G1234</strong><span class="dot-sep">·</span><span class="meta-inline">商务 07车12F</span>
+                    <span class="cal-ok" title="日历已同步"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-cal-check"/></svg></span>
+                  </div>
+                  <div class="countdown"><b>20h</b><span>后出发</span></div>
+                </div>
+                <div class="route">
+                  <div class="route-time"><b>08:00</b><span>上海虹桥</span></div>
+                  <div class="route-line"><span class="route-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-train"/></svg></span></div>
+                  <div class="route-time right"><b>13:28</b><span>北京南</span></div>
+                </div>
+                <div class="card-row"><span class="badge green">日历已同步</span><button class="pill">详情</button></div>
+              </article>
+              <div class="empty" style="margin-top:24px">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-train"/></svg>
+                <strong>空态样式：暂无即将出行</strong>
+                <span>没有未来行程时，这里只保留手动添加和历史入口。</span>
+                <button class="primary">手动添加行程</button>
+              </div>
+              <div class="section-title">历史行程 ›</div>
+              <article class="card">
+                <div class="card-row"><strong>MU5678 上海 → 深圳</strong><span class="badge">已结束</span></div>
+                <div class="meta">6月21日 13:15 · 已折叠在历史分组</div>
+              </article>
+            </section>
+
+            <!-- ============ 待办 ============ -->
+            <section class="panel-page" id="todo">
+              <div class="notice">
+                <div>
+                  <strong>滴答清单 · 已同步 14:32</strong><br>
+                  <span>未绑定时显示“本地模式”，功能照常可用。</span>
+                </div>
+                <span class="badge green">已同步</span>
+              </div>
+              <div class="section-title">待办</div>
+              <article class="card todo-card">
+                <button class="check" aria-label="完成"></button>
+                <div><strong>提交季度报销单</strong><div class="meta">来自截图 · 已同步滴答</div></div>
+                <span class="due accent">今天 18:00</span>
+              </article>
+              <article class="card todo-card">
+                <button class="check" aria-label="完成"></button>
+                <div><strong>给妈妈回电话</strong><div class="meta">手动添加 · 本地待同步</div></div>
+                <span class="badge slate">同步中</span>
+              </article>
+              <article class="card todo-card">
+                <button class="check" aria-label="完成"></button>
+                <div><strong>预约牙医复诊</strong><div class="meta">周五 · 滴答侧有修改</div></div>
+                <span class="badge accent">冲突</span>
+              </article>
+              <div class="section-title">已完成</div>
+              <article class="card todo-card" style="opacity:.62">
+                <button class="check" aria-label="已完成">✓</button>
+                <div><strong>买感冒药</strong><div class="meta">昨天完成</div></div>
+                <span class="badge">已完成</span>
+              </article>
+            </section>
+
+            <!-- ============ 收藏 ============ -->
+            <section class="panel-page" id="bookmark">
+              <button class="primary" id="openShareSheetInPhone" style="width:100%;margin-bottom:10px">模拟系统分享弹窗</button>
+              <div class="chips">
+                <span class="chip active">全部</span><span class="chip">链接</span><span class="chip">文本</span><span class="chip">图片</span><span class="chip">iOS</span>
+              </div>
+              <article class="card">
+                <div class="card-row"><strong>SwiftUI 数据流整理</strong><span class="badge accent">链接</span></div>
+                <div class="meta">developer.apple.com</div>
+                <div style="height:74px;border-radius:12px;background:linear-gradient(135deg,#f3ead9,#fdf8ee);border:1px solid var(--line);display:grid;place-items:center;color:var(--sub);font-size:12px">缩略图 / Open Graph</div>
+                <div class="quick-actions"><span class="chip">#iOS</span><span class="chip">#学习</span></div>
+              </article>
+              <article class="card">
+                <div class="card-row"><strong>链接抓取失败样式</strong><span class="badge">裸链接</span></div>
+                <div class="meta">https://x.com/example/status/123456</div>
+                <div class="small">显示域名和 URL，不阻塞入库。</div>
+              </article>
+              <article class="card">
+                <div class="card-row"><strong>一段临时保存的文本</strong><span class="badge">文本</span></div>
+                <div class="meta">来自系统分享 · 可添加标签和备注</div>
+              </article>
+            </section>
+
+            <!-- ============ 设置 ============ -->
+            <section class="panel-page" id="settings">
+              <div class="details">
+                <div class="field"><strong>LLM 解析引擎</strong><span class="right">本地 Apple 模型 / Claude API</span></div>
+                <div class="field"><strong>API Key</strong><span class="right">SecureField</span></div>
+                <div class="field"><strong>滴答清单</strong><span class="right">OAuth 绑定、清单、频率</span></div>
+                <div class="field"><strong>快递查询</strong><span class="right">快递100 Key</span></div>
+                <div class="field"><strong>行程日历</strong><span class="right">自动写入、目标日历</span></div>
+                <div class="field"><strong>通知偏好</strong><span class="right">快递 / 行程 / Todo</span></div>
+                <div class="field"><strong>数据</strong><span class="right">解析历史、导出、清空</span></div>
+                <div class="field"><strong>关于</strong><span class="right">v0.1.0</span></div>
+              </div>
+            </section>
+
+            <!-- ============ 离线新增 ============ -->
+            <section class="panel-page" id="newItems">
+              <div class="section-title">离线期间新增</div>
+              <article class="card item-card">
+                <div class="rail"></div><div><strong>顺丰速运 · 待取</strong><div class="meta">短信自动入库 · 已解析</div></div><span class="badge green">新</span>
+              </article>
+              <article class="card item-card">
+                <div class="rail green"></div><div><strong>交水费</strong><div class="meta">截图 OCR · 待确认</div></div><span class="badge accent">确认</span>
+              </article>
+              <article class="card item-card">
+                <div class="rail green"></div><div><strong>提交报销</strong><div class="meta">截图 OCR · 待确认</div></div><span class="badge accent">确认</span>
+              </article>
+            </section>
+
+            <!-- ============ 修正解析 ============ -->
+            <section class="panel-page" id="repair">
+              <div class="notice" style="background:var(--accent-soft);border-color:rgba(194,65,12,.22)">
+                <div>
+                  <strong>解析结果需要人工确认</strong><br>
+                  <span>保留原始内容，编辑字段后即可归类。</span>
+                </div>
+                <span class="badge accent">需修正</span>
+              </div>
+              <div class="card">
+                <strong>原始内容</strong>
+                <div class="meta">【铁路客服】您购买的 7月10日 G1234 上海虹桥至北京南车票...</div>
+              </div>
+              <div class="details">
+                <div class="field"><strong>类型</strong><span class="right">行程</span></div>
+                <div class="field"><strong>日期</strong><span class="right" style="color:var(--accent)">7月1日？低置信度</span></div>
+                <div class="field"><strong>车次</strong><span class="right">G1234</span></div>
+                <div class="field"><strong>座位</strong><span class="right">3车 12A</span></div>
+              </div>
+              <div class="quick-actions" style="margin-top:12px"><button class="primary">保存修正</button><button class="secondary">重新解析</button></div>
+            </section>
+
+            <!-- ============ 截图识别 ============ -->
+            <section class="panel-page" id="screenshotFlow">
+              <div class="card">
+                <div class="card-row"><strong>识别到 4 条待办</strong><span class="badge slate">截图 OCR</span></div>
+                <div style="height:120px;border-radius:12px;background:var(--panel-2);border:1.5px dashed rgba(92,80,60,.28);display:grid;place-items:center;color:var(--sub);font-size:12px">来源截图缩略图</div>
+              </div>
+              <article class="card todo-card"><button class="check">✓</button><div><strong>交电费</strong><div class="meta">今天</div></div><span></span></article>
+              <article class="card todo-card"><button class="check">✓</button><div><strong>买感冒药</strong><div class="meta">无日期</div></div><span></span></article>
+              <article class="card todo-card"><button class="check"></button><div><strong>广告文案</strong><div class="meta">疑似非待办</div></div><span></span></article>
+              <article class="card todo-card"><button class="check">✓</button><div><strong>周五前提交报销</strong><div class="meta">周五</div></div><span></span></article>
+              <button class="primary" style="width:100%;margin-top:8px">添加 3 条待办</button>
+            </section>
+
+            <!-- ============ 首次同步 ============ -->
+            <section class="panel-page" id="syncFlow">
+              <div class="card">
+                <div class="card-row"><strong>首次同步预览</strong><span class="badge slate">滴答清单</span></div>
+                <div class="meta">本地 Todo 12 条 · 滴答任务 34 条</div>
+              </div>
+              <div class="details">
+                <div class="field"><strong>上传本地任务</strong><span class="right">8 条</span></div>
+                <div class="field"><strong>下载滴答任务</strong><span class="right">30 条</span></div>
+                <div class="field"><strong>自动合并重复</strong><span class="right">4 条</span></div>
+                <div class="field"><strong>冲突处理</strong><span class="right">2 条，按最后修改时间</span></div>
+              </div>
+              <button class="primary" style="width:100%;margin-top:12px">开始同步</button>
+            </section>
+          </div>
+
+          <nav class="tabbar">
+            <button class="tab active" data-page="home">
+              <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-home"/></svg></span>
+              <span>今天</span>
+            </button>
+            <button class="tab" data-page="express">
+              <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-box"/></svg><span class="tab-badge">1</span></span>
+              <span>快递</span>
+            </button>
+            <button class="tab" data-page="trip">
+              <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-train"/></svg></span>
+              <span>行程</span>
+            </button>
+            <button class="tab" data-page="todo">
+              <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check-circle"/></svg><span class="tab-badge">2</span></span>
+              <span>待办</span>
+            </button>
+            <button class="tab" data-page="bookmark">
+              <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-bookmark"/></svg></span>
+              <span>收藏</span>
+            </button>
+          </nav>
+
+          <div class="sheet" id="shareSheet" hidden>
+            <div class="sheet-handle"></div>
+            <div class="card-row">
+              <strong>保存到收件箱</strong>
+              <button class="icon-btn" id="closeShareSheetTop" title="关闭" style="width:32px;height:32px;border-radius:10px">×</button>
+            </div>
+            <span class="badge accent" style="justify-self:start">Share Extension</span>
+            <div class="card" style="margin-bottom:0">
+              <strong>SwiftUI 数据流整理</strong>
+              <div class="meta">developer.apple.com · 缩略图抓取中...</div>
+            </div>
+            <div class="field"><strong>类型</strong><span class="right">收藏</span></div>
+            <div class="field"><strong>标签</strong><span class="right">iOS, 学习</span></div>
+            <div class="quick-actions"><button class="secondary" id="closeSheet">取消</button><button class="primary" id="saveShareSheet">保存</button></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="diagram">
+      <div class="doc-section">
+        <h1>个人信息收件箱 iOS 交互图</h1>
+        <p class="meta">V1 精致版 · 暖调 · 浅色。左侧可点底部 Tab、设置、需修正；下方按钮可切换关键流程页面和 Share Extension 弹窗。</p>
+        <div class="legend">
+          <button class="secondary" data-page="screenshotFlow">截图识别确认页</button>
+          <button class="secondary" data-page="syncFlow">滴答首次同步页</button>
+          <button class="secondary" id="openShareSheet">Share Extension 弹窗</button>
+          <button class="secondary" data-page="repair">解析失败修正页</button>
+          <button class="secondary" data-page="newItems">离线新增摘要页</button>
+        </div>
+      </div>
+
+      <div class="doc-section">
+        <h2>信息架构</h2>
+        <div class="ia">
+          <div class="ia-node"><b>统一入口</b><span>短信快捷指令、截图快捷指令、系统分享、手动添加。</span></div>
+          <div class="ia-node"><b>统一条目模型</b><span>所有信息先落为 InboxItem，带来源、原文、解析状态和类型 payload。</span></div>
+          <div class="ia-node"><b>解析层</b><span>规则引擎优先，LLM 兜底；状态包括解析中、成功、失败、需修正。</span></div>
+          <div class="ia-node"><b>聚合页</b><span>今日优先时间线，承接新入库提醒和未分类修正。</span></div>
+          <div class="ia-node"><b>类型页</b><span>快递、行程、Todo、收藏都是按类型过滤的视图。</span></div>
+          <div class="ia-node"><b>设置页</b><span>LLM、滴答、物流 API、日历、通知和数据管理。</span></div>
+        </div>
+      </div>
+
+      <div class="doc-section">
+        <h2>关键流程</h2>
+        <div class="flow">
+          <div class="flow-step"><b>短信自动入库</b><span>快捷指令传入短信，创建解析中卡片。</span></div>
+          <div class="flow-step"><b>规则 / LLM</b><span>先规则匹配，未命中进入 1-3 秒 LLM 解析。</span></div>
+          <div class="flow-step"><b>静默归类</b><span>快递、行程、Todo 自动进入对应视图。</span></div>
+          <div class="flow-step"><b>离线摘要</b><span>打开 App 显示“你不在时收到了 3 条”。</span></div>
+          <div class="flow-step"><b>需修正</b><span>失败内容进入未分类，保留原文。</span></div>
+        </div>
+        <br>
+        <div class="flow">
+          <div class="flow-step"><b>截图识别</b><span>快捷指令截屏后进入 OCR 解析中。</span></div>
+          <div class="flow-step"><b>多条待办</b><span>识别结果以可勾选列表展示。</span></div>
+          <div class="flow-step"><b>确认编辑</b><span>用户选择要保存的待办，必要时改标题和日期。</span></div>
+          <div class="flow-step"><b>批量入库</b><span>Todo 保留来源截图，可在详情查看原图。</span></div>
+          <div class="flow-step"><b>同步队列</b><span>本地立即生效，滴答后台同步。</span></div>
+        </div>
+      </div>
+
+      <div class="doc-section">
+        <h2>状态设计</h2>
+        <div class="state-grid">
+          <div class="state"><b>空态</b>不做新手教程，保留主要动作：手动添加、绑定服务、查看历史。</div>
+          <div class="state"><b>解析中</b>显示临时卡片和 spinner，不阻塞继续使用 App。</div>
+          <div class="state"><b>解析失败</b>落到未分类，提供重新解析、改类型、编辑字段、删除。</div>
+          <div class="state"><b>物流失败</b>保留上次结果或单号，提供外部查询。</div>
+          <div class="state"><b>日历状态</b>已同步、未授权、失败可重试，直接显示在行程卡片。</div>
+          <div class="state"><b>Todo 同步</b>已同步、同步中、失败、冲突，行级小标识。</div>
+          <div class="state"><b>分享抓取失败</b>降级为裸链接卡片，不阻塞保存。</div>
+          <div class="state"><b>离线</b>本地可读写，外部查询和同步进入队列。</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const titles = {
+      home: "今天",
+      express: "快递",
+      trip: "行程",
+      todo: "待办",
+      bookmark: "收藏",
+      settings: "设置",
+      newItems: "新增信息",
+      repair: "修正解析",
+      screenshotFlow: "截图识别",
+      syncFlow: "首次同步"
+    };
+
+    const searchBar = document.getElementById("searchBar");
+    const screenTitle = document.getElementById("screenTitle");
+    const navDate = document.getElementById("navDate");
+    const pages = Array.from(document.querySelectorAll(".panel-page"));
+    const tabs = Array.from(document.querySelectorAll(".tab"));
+    const shareSheet = document.getElementById("shareSheet");
+
+    function openShareSheet() {
+      showPage("bookmark");
+      shareSheet.removeAttribute("hidden");
+    }
+
+    function closeShareSheet() {
+      shareSheet.setAttribute("hidden", "");
+    }
+
+    function showPage(id) {
+      pages.forEach(page => page.classList.toggle("active", page.id === id));
+      tabs.forEach(tab => tab.classList.toggle("active", tab.dataset.page === id));
+      screenTitle.textContent = titles[id] || "今天";
+      navDate.hidden = id !== "home";
+      searchBar.hidden = id !== "bookmark";
+      closeShareSheet();
+    }
+
+    document.querySelectorAll("[data-page]").forEach(button => {
+      button.addEventListener("click", () => showPage(button.dataset.page));
+    });
+
+    // 横滑卡片组：滚动时更新分页圆点
+    document.querySelectorAll(".h-scroll").forEach(scroller => {
+      const dots = scroller.nextElementSibling;
+      if (!dots || !dots.classList.contains("dots")) return;
+      scroller.addEventListener("scroll", () => {
+        const index = Math.round(scroller.scrollLeft / (scroller.scrollWidth / scroller.children.length));
+        Array.from(dots.children).forEach((dot, i) => dot.classList.toggle("active", i === index));
+      }, { passive: true });
+    });
+
+    document.getElementById("openShareSheet").addEventListener("click", openShareSheet);
+    document.getElementById("openShareSheetInPhone").addEventListener("click", openShareSheet);
+    document.getElementById("closeSheet").addEventListener("click", closeShareSheet);
+    document.getElementById("closeShareSheetTop").addEventListener("click", closeShareSheet);
+    document.getElementById("saveShareSheet").addEventListener("click", closeShareSheet);
+
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape") {
+        closeShareSheet();
+      }
+    });
+  </script>
+</body>
+</html>

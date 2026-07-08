@@ -1,0 +1,426 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		211842926C591F28A58A81D5 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CC21DA2A336C3F18CBD4472 /* AppSettings.swift */; };
+		2A9072EF706DEFE65EA02398 /* DidaService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CF741249636C17F15890CB8 /* DidaService.swift */; };
+		2B6169C091832764B753F49C /* OmnyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8AA264B58ADFB671485DEE6 /* OmnyApp.swift */; };
+		3B55C4A7C51CACDF76C6ED90 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CF59AADF0299C174979693B /* SettingsView.swift */; };
+		3B6643656985F33192C0B1BC /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDA3EC43CC114A3BA3AAE2CD /* Secrets.swift */; };
+		402F23D9EC330177DF3D2AFB /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5765578C5CF868977175F47 /* TodayView.swift */; };
+		428BDC49572EB4F2911B4FD9 /* OCRService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5BE3B107B134EB9418AC588 /* OCRService.swift */; };
+		4A8E8F6479DE99F5E30D7A05 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE835B50414B0383DD7772DA /* RootView.swift */; };
+		B753F262EC77180CF0A4E5D0 /* Cards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EE20B2F349C81A0B7136CA6 /* Cards.swift */; };
+		CCAAFBF6F56DECE1F2E419E2 /* InboxItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37F66C226030118977E6ED59 /* InboxItem.swift */; };
+		D1436F1C8D387FB2E7E76106 /* Ingestor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A42FEA9C1D69A760D542AE4D /* Ingestor.swift */; };
+		DD739467D78B00097E1C3EFD /* OmnyIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F11CE0A32B974AB527A89BD /* OmnyIntents.swift */; };
+		E32CD62F4A5289EDEFF2D6D0 /* ListViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9D19D7FE0FC7B0F439834DC /* ListViews.swift */; };
+		E5FE10AEF8923B1C7F6A70EE /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7B355A202BA7EB4EFADE8BB /* Theme.swift */; };
+		FC67BC38603BFF996C6616EE /* OmnyCore in Frameworks */ = {isa = PBXBuildFile; productRef = B38BBAD844DE7BB40C46030C /* OmnyCore */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		37F66C226030118977E6ED59 /* InboxItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxItem.swift; sourceTree = "<group>"; };
+		4455F6F7EC03910790C400B0 /* OmnyCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = OmnyCore; path = ../OmnyCore; sourceTree = SOURCE_ROOT; };
+		487983E7453EA416476B5FA9 /* Omny.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Omny.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4EE20B2F349C81A0B7136CA6 /* Cards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Cards.swift; sourceTree = "<group>"; };
+		4F11CE0A32B974AB527A89BD /* OmnyIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OmnyIntents.swift; sourceTree = "<group>"; };
+		6CF59AADF0299C174979693B /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		6CF741249636C17F15890CB8 /* DidaService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DidaService.swift; sourceTree = "<group>"; };
+		7CC21DA2A336C3F18CBD4472 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		A42FEA9C1D69A760D542AE4D /* Ingestor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ingestor.swift; sourceTree = "<group>"; };
+		A9D19D7FE0FC7B0F439834DC /* ListViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListViews.swift; sourceTree = "<group>"; };
+		B8AA264B58ADFB671485DEE6 /* OmnyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OmnyApp.swift; sourceTree = "<group>"; };
+		BE835B50414B0383DD7772DA /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		C5765578C5CF868977175F47 /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
+		EDA3EC43CC114A3BA3AAE2CD /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
+		F5BE3B107B134EB9418AC588 /* OCRService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRService.swift; sourceTree = "<group>"; };
+		F7B355A202BA7EB4EFADE8BB /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		662D6E8C3916519D64A4FBDE /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FC67BC38603BFF996C6616EE /* OmnyCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		27D9BEF99F17B9F95BFC8152 /* Intents */ = {
+			isa = PBXGroup;
+			children = (
+				4F11CE0A32B974AB527A89BD /* OmnyIntents.swift */,
+			);
+			path = Intents;
+			sourceTree = "<group>";
+		};
+		5E7F1F6D28DF2A72B69B7249 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				4EE20B2F349C81A0B7136CA6 /* Cards.swift */,
+				A9D19D7FE0FC7B0F439834DC /* ListViews.swift */,
+				BE835B50414B0383DD7772DA /* RootView.swift */,
+				6CF59AADF0299C174979693B /* SettingsView.swift */,
+				F7B355A202BA7EB4EFADE8BB /* Theme.swift */,
+				C5765578C5CF868977175F47 /* TodayView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		66C82CDC1FF5E811F4EF5ED0 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				37F66C226030118977E6ED59 /* InboxItem.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		723DACB923F5A59F9583F47D /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				487983E7453EA416476B5FA9 /* Omny.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		875CA79802AE908934DBB758 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				4455F6F7EC03910790C400B0 /* OmnyCore */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		9EE8A413235A0D7947CE291D = {
+			isa = PBXGroup;
+			children = (
+				9F636D359A57439C54F8C4BF /* Omny */,
+				875CA79802AE908934DBB758 /* Packages */,
+				723DACB923F5A59F9583F47D /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		9F636D359A57439C54F8C4BF /* Omny */ = {
+			isa = PBXGroup;
+			children = (
+				B8AA264B58ADFB671485DEE6 /* OmnyApp.swift */,
+				27D9BEF99F17B9F95BFC8152 /* Intents */,
+				66C82CDC1FF5E811F4EF5ED0 /* Models */,
+				B9A8FF567AD75513B70CF599 /* Services */,
+				5E7F1F6D28DF2A72B69B7249 /* Views */,
+			);
+			path = Omny;
+			sourceTree = "<group>";
+		};
+		B9A8FF567AD75513B70CF599 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				7CC21DA2A336C3F18CBD4472 /* AppSettings.swift */,
+				6CF741249636C17F15890CB8 /* DidaService.swift */,
+				A42FEA9C1D69A760D542AE4D /* Ingestor.swift */,
+				F5BE3B107B134EB9418AC588 /* OCRService.swift */,
+				EDA3EC43CC114A3BA3AAE2CD /* Secrets.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		70A731F55022E37FDB13C5D8 /* Omny */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 66B26116A2B7C8BE696753AD /* Build configuration list for PBXNativeTarget "Omny" */;
+			buildPhases = (
+				BB8F91B0A8D0936CA34A1033 /* Sources */,
+				662D6E8C3916519D64A4FBDE /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Omny;
+			packageProductDependencies = (
+				B38BBAD844DE7BB40C46030C /* OmnyCore */,
+			);
+			productName = Omny;
+			productReference = 487983E7453EA416476B5FA9 /* Omny.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		C9B7B61DBAC495B899BC8D07 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					70A731F55022E37FDB13C5D8 = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 8AE6D1128207ED3386F8E357 /* Build configuration list for PBXProject "Omny" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 9EE8A413235A0D7947CE291D;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				4B0910CD23FD5BE05EE6603C /* XCLocalSwiftPackageReference "../OmnyCore" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 723DACB923F5A59F9583F47D /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				70A731F55022E37FDB13C5D8 /* Omny */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		BB8F91B0A8D0936CA34A1033 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				211842926C591F28A58A81D5 /* AppSettings.swift in Sources */,
+				B753F262EC77180CF0A4E5D0 /* Cards.swift in Sources */,
+				2A9072EF706DEFE65EA02398 /* DidaService.swift in Sources */,
+				CCAAFBF6F56DECE1F2E419E2 /* InboxItem.swift in Sources */,
+				D1436F1C8D387FB2E7E76106 /* Ingestor.swift in Sources */,
+				E32CD62F4A5289EDEFF2D6D0 /* ListViews.swift in Sources */,
+				428BDC49572EB4F2911B4FD9 /* OCRService.swift in Sources */,
+				2B6169C091832764B753F49C /* OmnyApp.swift in Sources */,
+				DD739467D78B00097E1C3EFD /* OmnyIntents.swift in Sources */,
+				4A8E8F6479DE99F5E30D7A05 /* RootView.swift in Sources */,
+				3B6643656985F33192C0B1BC /* Secrets.swift in Sources */,
+				3B55C4A7C51CACDF76C6ED90 /* SettingsView.swift in Sources */,
+				E5FE10AEF8923B1C7F6A70EE /* Theme.swift in Sources */,
+				402F23D9EC330177DF3D2AFB /* TodayView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		26A578FC0AE66C4C2CB579E3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Omny;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = xin.codgi.omny;
+				PRODUCT_NAME = Omny;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		3B202D460D5F84076E3F842F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		7F950FEDB416695BAD826E66 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		88D02A358405E8AA86ECF52D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Omny;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = xin.codgi.omny;
+				PRODUCT_NAME = Omny;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		66B26116A2B7C8BE696753AD /* Build configuration list for PBXNativeTarget "Omny" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				26A578FC0AE66C4C2CB579E3 /* Debug */,
+				88D02A358405E8AA86ECF52D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		8AE6D1128207ED3386F8E357 /* Build configuration list for PBXProject "Omny" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7F950FEDB416695BAD826E66 /* Debug */,
+				3B202D460D5F84076E3F842F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		4B0910CD23FD5BE05EE6603C /* XCLocalSwiftPackageReference "../OmnyCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../OmnyCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		B38BBAD844DE7BB40C46030C /* OmnyCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = OmnyCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = C9B7B61DBAC495B899BC8D07 /* Project object */;
+}

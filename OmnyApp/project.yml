@@ -1,0 +1,30 @@
+name: Omny
+options:
+  bundleIdPrefix: xin.codgi
+  deploymentTarget:
+    iOS: "17.0"
+packages:
+  OmnyCore:
+    path: ../OmnyCore
+targets:
+  Omny:
+    type: application
+    platform: iOS
+    sources:
+      - Omny
+    dependencies:
+      - package: OmnyCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: xin.codgi.omny
+        PRODUCT_NAME: Omny
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Omny
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"

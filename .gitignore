@@ -1,0 +1,14 @@
+# 密钥，禁止提交
+Secrets.local.json
+OmnyApp/Omny/Services/Secrets.swift
+
+# 构建产物
+OmnyCore/.build/
+DerivedData/
+
+# Xcode 用户状态
+xcuserdata/
+*.xcuserstate
+
+# macOS
+.DS_Store
