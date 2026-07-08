@@ -10,6 +10,9 @@ final class DidaService: ObservableObject {
     @Published var syncing = false
     @Published var lastError: String?
 
+    /// 上次发起同步的时间，用于前台切换时的防抖
+    private var lastAttempt: Date?
+
     private init() {}
 
     // MARK: 绑定
@@ -53,10 +56,17 @@ final class DidaService: ObservableObject {
 
     // MARK: 同步
 
+    /// 前台回来时调用：距上次发起同步不足 minInterval 则跳过，避免频繁切换反复拉取。
+    func syncOnForeground(context: ModelContext, minInterval: TimeInterval = 30) async {
+        if let last = lastAttempt, Date().timeIntervalSince(last) < minInterval { return }
+        await syncNow(context: context)
+    }
+
     func syncNow(context: ModelContext) async {
         let settings = AppSettings.shared
         guard let token = settings.didaAccessToken, let projectID = settings.didaProjectID,
               !syncing else { return }
+        lastAttempt = .now
         syncing = true
         lastError = nil
         defer { syncing = false }
@@ -93,7 +103,9 @@ final class SwiftDataTodoStore: TodoSyncStore {
 
     func localTodos() async throws -> [SyncableTodo] {
         try fetchTodos()
-            .filter { !$0.needsReview } // 截图识别待确认的先不参与同步
+            // 只有滴答来源的待办参与同步：本地新建/截图/短信来源的待办纯本地，不推送也不受拉取影响。
+            // needsReview（截图识别待确认）的也先不参与。
+            .filter { $0.isDidaSynced && !$0.needsReview }
             .map { item in
                 SyncableTodo(localID: item.id, didaTaskID: item.didaTaskID,
                              title: item.todoTitle ?? item.rawText,
@@ -123,9 +135,9 @@ final class SwiftDataTodoStore: TodoSyncStore {
         try context.save()
     }
 
-    func markCompletedFromRemote(didaTaskID: String) async throws {
+    func deleteFromRemote(didaTaskID: String) async throws {
         guard let item = try fetchTodos().first(where: { $0.didaTaskID == didaTaskID }) else { return }
-        item.todoCompleted = true
+        context.delete(item)
         try context.save()
     }
 

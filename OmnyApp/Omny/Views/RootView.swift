@@ -3,6 +3,7 @@ import SwiftData
 
 struct RootView: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var dida: DidaService
     @Query(filter: #Predicate<InboxItem> { $0.needsReview && !$0.deletedLocally })
     private var reviewItems: [InboxItem]
@@ -25,6 +26,11 @@ struct RootView: View {
         .task {
             // 启动时后台同步一次滴答
             await dida.syncNow(context: context)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // 从后台回到前台时自动同步（带防抖，避免频繁切换反复拉取）
+            guard phase == .active else { return }
+            Task { await dida.syncOnForeground(context: context) }
         }
     }
 }

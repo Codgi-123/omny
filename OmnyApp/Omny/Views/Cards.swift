@@ -167,13 +167,18 @@ struct TodoRow: View {
     @Bindable var item: InboxItem
     @Environment(\.modelContext) private var context
     @EnvironmentObject private var dida: DidaService
+    @State private var editing = false
+
+    private var isLocal: Bool { item.canEditLocally }
 
     var body: some View {
         HStack(spacing: 11) {
             Button {
                 item.todoCompleted.toggle()
-                item.needsPush = true
-                Task { await dida.syncNow(context: context) }
+                // 滴答待办：完成/取消完成要标脏并回写滴答；本地待办纯本地，只存不同步
+                if item.isDidaSynced { item.needsPush = true }
+                try? context.save()
+                if item.isDidaSynced { Task { await dida.syncNow(context: context) } }
             } label: {
                 Image(systemName: item.todoCompleted ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 22))
@@ -182,10 +187,14 @@ struct TodoRow: View {
             .buttonStyle(.plain)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(item.todoTitle ?? item.rawText)
-                    .font(.system(size: 15, weight: .semibold))
-                    .strikethrough(item.todoCompleted)
-                    .foregroundStyle(item.todoCompleted ? Theme.sub : Theme.text)
+                HStack(spacing: 6) {
+                    Text(item.todoTitle ?? item.rawText)
+                        .font(.system(size: 15, weight: .semibold))
+                        .strikethrough(item.todoCompleted)
+                        .foregroundStyle(item.todoCompleted ? Theme.sub : Theme.text)
+                    Badge(text: isLocal ? "本地" : "滴答",
+                          color: isLocal ? Theme.slate : Theme.accent)
+                }
                 Text(syncMeta)
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.sub)
@@ -198,16 +207,27 @@ struct TodoRow: View {
             }
         }
         .cardStyle()
+        // 本地待办：点按编辑、长按删除；滴答待办只读（仅完成勾选可用）
+        .contentShape(Rectangle())
+        .onTapGesture { if isLocal { editing = true } }
+        .contextMenu {
+            if isLocal {
+                Button { editing = true } label: { Label("编辑", systemImage: "pencil") }
+                Button(role: .destructive) { delete() } label: { Label("删除", systemImage: "trash") }
+            }
+        }
+        .sheet(isPresented: $editing) { TodoEditSheet(item: item, onDelete: delete) }
+    }
+
+    private func delete() {
+        // 本地待办不涉及同步，直接删除
+        context.delete(item)
+        try? context.save()
     }
 
     private var syncMeta: String {
-        var parts = ["来自\(item.source.rawValue)"]
-        if item.didaTaskID != nil && !item.needsPush {
-            parts.append("已同步滴答")
-        } else if item.needsPush {
-            parts.append("待同步")
-        }
-        return parts.joined(separator: " · ")
+        guard item.isDidaSynced else { return "仅本地" }
+        return item.needsPush ? "待同步" : "已同步滴答"
     }
 
     private func dueLabel(_ date: Date) -> String {
@@ -219,5 +239,64 @@ struct TodoRow: View {
 
     private func isToday(_ date: Date) -> Bool {
         Calendar.current.isDateInToday(date)
+    }
+}
+
+// MARK: - 本地待办编辑弹窗（改标题/截止时间 + 删除）。仅用于本地来源待办。
+
+struct TodoEditSheet: View {
+    @Bindable var item: InboxItem
+    let onDelete: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+
+    @State private var title: String
+    @State private var hasDue: Bool
+    @State private var due: Date
+
+    init(item: InboxItem, onDelete: @escaping () -> Void) {
+        self.item = item
+        self.onDelete = onDelete
+        _title = State(initialValue: item.todoTitle ?? item.rawText)
+        _hasDue = State(initialValue: item.todoDue != nil)
+        _due = State(initialValue: item.todoDue ?? Date())
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("内容") {
+                    TextField("标题", text: $title)
+                }
+                Section("截止时间") {
+                    Toggle("设置截止时间", isOn: $hasDue.animation())
+                    if hasDue {
+                        DatePicker("截止", selection: $due)
+                    }
+                }
+                Section {
+                    Button("删除待办", role: .destructive) {
+                        onDelete()
+                        dismiss()
+                    }
+                }
+            }
+            .navigationTitle("编辑待办")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") {
+                        let trimmed = title.trimmingCharacters(in: .whitespaces)
+                        item.todoTitle = trimmed.isEmpty ? item.rawText : trimmed
+                        item.todoDue = hasDue ? due : nil
+                        try? context.save()
+                        dismiss()
+                    }
+                }
+            }
+        }
     }
 }

@@ -198,11 +198,10 @@ struct TodoView: View {
         guard !title.isEmpty else { return }
         let item = InboxItem(kind: .todo, source: .manual, rawText: title)
         item.todoTitle = title
-        item.needsPush = true
         context.insert(item)
         try? context.save()
         newTodoTitle = ""
-        Task { await dida.syncNow(context: context) }
+        // 本地待办不与滴答同步
     }
 }
 

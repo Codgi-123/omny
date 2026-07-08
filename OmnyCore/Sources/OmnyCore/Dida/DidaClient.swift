@@ -114,9 +114,15 @@ public struct DidaClient: Sendable {
         try await request("GET", path: "project")
     }
 
-    /// 拉取一个清单的全部未完成任务 —— 拉取方向的同步就靠它（Open API 无增量接口）
+    /// 拉取一个清单的全部未完成任务 —— 拉取方向的主力（Open API 无增量接口）
     public func projectData(projectID: String) async throws -> DidaProjectData {
         try await request("GET", path: "project/\(projectID)/data")
+    }
+
+    /// 拉取单个任务（不论完成与否）。projectData 只返回未完成任务，
+    /// 已完成任务要靠这个接口核实：能拿到 → 读它的真实状态/内容；404 → 远端已删除。
+    public func getTask(projectID: String, taskID: String) async throws -> DidaTask {
+        try await request("GET", path: "project/\(projectID)/task/\(taskID)")
     }
 
     public func createProject(name: String) async throws -> DidaProject {

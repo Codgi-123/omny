@@ -27,7 +27,7 @@
 /* Begin PBXFileReference section */
 		37F66C226030118977E6ED59 /* InboxItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxItem.swift; sourceTree = "<group>"; };
 		4455F6F7EC03910790C400B0 /* OmnyCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = OmnyCore; path = ../OmnyCore; sourceTree = SOURCE_ROOT; };
-		487983E7453EA416476B5FA9 /* Omny.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Omny.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		487983E7453EA416476B5FA9 /* Omny.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Omny.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		4EE20B2F349C81A0B7136CA6 /* Cards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Cards.swift; sourceTree = "<group>"; };
 		4F11CE0A32B974AB527A89BD /* OmnyIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OmnyIntents.swift; sourceTree = "<group>"; };
 		6CF59AADF0299C174979693B /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -223,6 +223,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 46SC6UDH48;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Omny;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -367,6 +368,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 46SC6UDH48;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Omny;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

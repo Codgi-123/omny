@@ -4,9 +4,14 @@ import WebKit
 import OmnyCore
 
 struct SettingsView: View {
+    /// 「解析文本」完整流程的 iCloud 分享链接。
+    /// 在快捷指令 App 里打开该流程 → 分享 → 拷贝 iCloud 链接，替换下面这行即可。
+    static let shortcutImportURL = URL(string: "https://www.icloud.com/shortcuts/REPLACE_ME")!
+
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var dida: DidaService
     @Environment(\.modelContext) private var context
+    @Environment(\.openURL) private var openURL
     @State private var showDidaAuth = false
     @State private var didaBindError: String?
 
@@ -56,6 +61,22 @@ struct SettingsView: View {
 
             Section("行程") {
                 Toggle("自动写入系统日历", isOn: $settings.autoAddToCalendar)
+            }
+
+            Section {
+                Button {
+                    openURL(Self.shortcutImportURL)
+                } label: {
+                    Label("导入「解析文本」快捷指令", systemImage: "square.and.arrow.down")
+                }
+            } header: {
+                Text("快捷指令")
+            } footer: {
+                Text("""
+                第 1 步：点上方按钮，在弹出的页面点「添加快捷指令」，整套流程即导入你的快捷指令库。
+                第 2 步：打开快捷指令 App →「自动化」→ 新建 →「信息」→ 收到信息时「立即运行」→ 运行刚导入的「解析文本」，输入选「信息内容」。
+                之后每条短信自动解析入库，无需手动操作。
+                """)
             }
 
             Section("数据") {

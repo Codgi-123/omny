@@ -51,11 +51,9 @@ actor InMemoryTodoStore: TodoSyncStore {
         }
     }
 
-    func markCompletedFromRemote(didaTaskID: String) async throws {
+    func deleteFromRemote(didaTaskID: String) async throws {
         guard let existing = todos.values.first(where: { $0.didaTaskID == didaTaskID }) else { return }
-        var updated = existing
-        updated.isCompleted = true
-        todos[existing.localID] = updated
+        todos[existing.localID] = nil
     }
 
     func markPushed(localID: UUID, didaTaskID: String) async throws {
@@ -141,6 +139,12 @@ final class DidaSyncEngineTests: XCTestCase {
                 return (Data(), 200)
             case ("DELETE", "/open/v1/project/p1/task/dida-3"):
                 return (Data(), 200)
+            case ("GET", "/open/v1/project/p1/task/dida-2"):
+                // 本地刚勾选完成并推送 → 未完成列表里没有它，逐个核实拿到已完成态
+                return (Data(#"{"id":"dida-2","projectId":"p1","title":"买菜","status":2}"#.utf8), 200)
+            case ("GET", "/open/v1/project/p1/task/dida-5"):
+                // 在滴答侧被完成 → 核实拿到已完成态
+                return (Data(#"{"id":"dida-5","projectId":"p1","title":"在滴答里完成的","status":2}"#.utf8), 200)
             case ("GET", "/open/v1/project/p1/data"):
                 // 远端未完成列表：dida-4 改了标题；dida-6 是滴答侧新建的；dida-5 消失（已在滴答完成）
                 let json = #"""
@@ -206,6 +210,64 @@ final class DidaSyncEngineTests: XCTestCase {
         try await engine.sync()
         let result = await store.snapshot()
         XCTAssertTrue(result.isEmpty, "远端 404 也应完成本地清理")
+    }
+
+    /// 用户在滴答里改了一个"已完成"任务：它不在未完成列表里，靠逐个 GET 核实把改动拉回本地
+    func testRemoteEditOfCompletedTaskIsPulled() async throws {
+        let localID = UUID()
+        let store = InMemoryTodoStore([
+            SyncableTodo(localID: localID, didaTaskID: "dida-1", title: "旧标题",
+                         isCompleted: true, needsPush: false),
+        ])
+        let transport = MockTransport { request in
+            switch (request.httpMethod!, request.url!.path) {
+            case ("GET", "/open/v1/project/p1/data"):
+                // 已完成任务不在未完成列表里
+                return (Data(#"{"project":{"id":"p1","name":"Omny"},"tasks":[]}"#.utf8), 200)
+            case ("GET", "/open/v1/project/p1/task/dida-1"):
+                // 逐个核实：远端把标题改了，仍是已完成
+                return (Data(#"{"id":"dida-1","projectId":"p1","title":"滴答里改的新标题","status":2}"#.utf8), 200)
+            default:
+                XCTFail("意外请求: \(request.httpMethod!) \(request.url!.path)")
+                return (Data(), 500)
+            }
+        }
+        let engine = DidaSyncEngine(
+            client: DidaClient(accessToken: "t", transport: transport),
+            store: store, projectID: "p1")
+        try await engine.sync()
+
+        let result = await store.snapshot()
+        let todo = result.first { $0.didaTaskID == "dida-1" }
+        XCTAssertEqual(todo?.title, "滴答里改的新标题", "已完成任务的远端改动应被拉回")
+        XCTAssertEqual(todo?.isCompleted, true)
+    }
+
+    /// 已同步任务在滴答侧被删除：单任务 GET 返回 404 → 本地删除（而非误判为已完成）
+    func testRemoteDeleteRemovesLocal() async throws {
+        let localID = UUID()
+        let store = InMemoryTodoStore([
+            SyncableTodo(localID: localID, didaTaskID: "dida-1", title: "会被删除的",
+                         needsPush: false),
+        ])
+        let transport = MockTransport { request in
+            switch (request.httpMethod!, request.url!.path) {
+            case ("GET", "/open/v1/project/p1/data"):
+                return (Data(#"{"project":{"id":"p1","name":"Omny"},"tasks":[]}"#.utf8), 200)
+            case ("GET", "/open/v1/project/p1/task/dida-1"):
+                return (Data(#"{}"#.utf8), 404)
+            default:
+                XCTFail("意外请求: \(request.httpMethod!) \(request.url!.path)")
+                return (Data(), 500)
+            }
+        }
+        let engine = DidaSyncEngine(
+            client: DidaClient(accessToken: "t", transport: transport),
+            store: store, projectID: "p1")
+        try await engine.sync()
+
+        let result = await store.snapshot()
+        XCTAssertTrue(result.isEmpty, "远端删除应让本地一并删除")
     }
 
     func testUnauthorizedSurfacesAsDidaError() async throws {

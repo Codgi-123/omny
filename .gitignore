@@ -5,6 +5,7 @@ OmnyApp/Omny/Services/Secrets.swift
 # 构建产物
 OmnyCore/.build/
 DerivedData/
+build/
 
 # Xcode 用户状态
 xcuserdata/

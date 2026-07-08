@@ -67,6 +67,11 @@ final class InboxItem {
     var kind: ItemKind { ItemKind(rawValue: kindRaw) ?? .unclassified }
     var source: ItemSource { ItemSource(rawValue: sourceRaw) ?? .manual }
 
+    /// 是否与滴答清单同步：仅滴答来源的待办参与同步（只读展示 + 完成状态回写）
+    var isDidaSynced: Bool { source == .dida }
+    /// 是否可在本地完整编辑（增删改）：非滴答来源即本地待办，纯本地、不同步
+    var canEditLocally: Bool { !isDidaSynced }
+
     var packageStatus: PackageStatus {
         get { PackageStatus(rawValue: packageStatusRaw) ?? .inTransit }
         set { packageStatusRaw = newValue.rawValue }
