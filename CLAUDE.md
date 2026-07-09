@@ -33,7 +33,8 @@ xcrun devicectl device install app --device <设备ID> \
 
 - **codesign 报 `resource fork, Finder information, or similar detritus not allowed`**：根因是项目位于 `~/Desktop`（被 iCloud 同步接管，同步服务写 `com.apple.FinderInfo` 扩展属性）。解法：编译产物用 `-derivedDataPath` 指到同步目录外（如 `~/OmnyBuild`）。
 - 免费 Apple ID 签名 7 天过期，重新 ⌘R / 重装即可。
-- `OmnyApp/` 只能在 macOS 编译（Apple 限制）；`OmnyCore/` 在 macOS / Linux / WSL 均可开发测试。
+- `OmnyApp/` 只能在 macOS 编译（Apple 限制）；`OmnyCore/` 在 macOS / Linux / WSL 均可开发测试（WSL 环境踩坑见 `docs/dev-notes-windows.md`）。
+- Linux 上 `URLRequest`/`URLSession`/`HTTPURLResponse` 在 `FoundationNetworking` 模块：用到网络类型的文件（含测试）都要加 `#if canImport(FoundationNetworking) import FoundationNetworking #endif`，否则 macOS 编译过、CI 的 Linux job 挂。
 
 ## 架构
 
@@ -45,12 +46,12 @@ xcrun devicectl device install app --device <设备ID> \
 ### 数据流（读多个文件才能看清的主线）
 
 1. **统一模型**：所有入口的信息都落成同一个 SwiftData 实体 `InboxItem`（`OmnyApp/Omny/Models/InboxItem.swift`，扁平结构、各类型字段可空共存）。五个 tab 页面都是按 `kind` 过滤的视图。
-2. **解析管线**：`OmnyCore` 的 `ParserPipeline`（`Parser.swift`）实现"规则优先、LLM 兜底"——`RuleParser`（正则，免费离线）置信度 ≥0.8 直接采用，否则交给 LLM；LLM 失败（断网/未配 Key）降级用规则结果，不让入口链路整体失败。
+2. **解析管线**：「分类靠正则、结构化靠 LLM」（详见 `docs/parsing-architecture.md`）。组装点在 `AppSettings.parserPipeline`：配了 LLM 时 primary 是 `LLMStructuredParser`（`RuleParser.classify` 正则判类型 → 快递/行程字段交 LLM 抽取，收藏走正则抠 URL，快递状态词仍用正则 `detectStatus`），fallback 是 `LLMTodoParser`；未配 LLM 时 primary 退回纯正则 `RuleParser`，保证无 Key/断网时链路可用。`RuleParser` 的结构化代码（`extractPackage`/`extractTrip`）不删——是降级路径，也是 `RealSMSTests` 的测试基线。
 3. **入库汇聚点**：`OmnyApp/Omny/Services/Ingestor.swift` 是所有入口（短信快捷指令、截图 OCR、分享、手动）的唯一入库通道。关键行为：快递按单号/尾号合并且状态只前进不回退；低置信度或未识别条目标记 `needsReview` 进"需处理"；收藏入库后异步补标题再 LLM 打标（顺序影响打标准确率）。
 4. **分享扩展中转**：扩展进程受限，`OmnyShare` 只把内容写进 App Group 的 JSON 队列（`Shared/SharedInbox.swift`，编入两个 target），解析入库全部回主 App 前台时 drain 完成。
 5. **快捷指令入口**：`OmnyApp/Omny/Intents/OmnyIntents.swift` 的 App Intents（「解析文本」「识别待办」）是短信自动化和截图流程的进入点。
 6. **滴答同步**：`OmnyCore/Sources/OmnyCore/Dida/` 的 `DidaSyncEngine` 以 `SyncableTodo` 快照与 SwiftData 解耦（App 层转换）。策略：本地脏标记（`needsPush`/`deletedLocally`）优先推送，其余以远端为准；Open API 无增量接口，拉取为绑定清单的全量轮询。仅 `source == .dida` 的待办参与同步。
-7. **LLM 层**：`OmnyCore/Sources/OmnyCore/LLM/` 支持 Claude / OpenAI 兼容两种协议切换（设置页配置）。`LLMTagClassifier` 用 enum schema 限制 LLM 只能从用户 tag 池里挑选。
+7. **LLM 层**：`OmnyCore/Sources/OmnyCore/LLM/` 支持 Claude / OpenAI 兼容两种协议切换（设置页配置）。`LLMClient` 是唯一的请求底座（协议分派、结构化输出参数 400 时自动降级重试、代码围栏剥离、宽容的 ISO 日期解析），三个调用方 `LLMStructuredParser` / `LLMTodoParser` / `LLMTagClassifier` 只提供各自的提示词与 JSON Schema。`LLMTagClassifier` 用 enum schema 限制 LLM 只能从用户 tag 池里挑选。
 
 ## 分支与 CI
 
@@ -59,7 +60,7 @@ xcrun devicectl device install app --device <设备ID> \
 
 ## 设计原则（改代码时遵守）
 
-- 所有入口的信息先落成同一个 `InboxItem`；解析尽量走规则（免费、离线、即时），语义理解才用 LLM。
+- 所有入口的信息先落成同一个 `InboxItem`；判断「是什么」靠正则（免费、离线、可穷举），抽取「具体字段」靠 LLM（格式变体不可穷举）；未配 LLM 时整体退回纯正则。
 - 新增短信解析规则时，把真实短信脱敏后作为测试用例加进 `OmnyCore/Tests/OmnyCoreTests/`（参考 `RealSMSTests.swift`）。
 - 快递状态由短信措辞推断（在途→派送中→待取→已签收），不接物流查询 API。
 - `TODO.md` 记录当前进行中的任务与设计定论，动手前先看。

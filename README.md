@@ -15,11 +15,13 @@
 
 ```
 OmnyCore/   纯 Swift 逻辑包，跨平台（macOS / Linux / WSL 均可开发测试）
-  ├─ RuleParser        规则解析引擎（快递/行程/链接，正则，零成本离线）
-  ├─ ParserPipeline    规则优先、LLM 兜底的解析管线
-  ├─ LLMTodoParser     LLM 待办提取（Claude / OpenAI 兼容协议可切换）
-  ├─ LLMTagClassifier  LLM 收藏打标（从用户 tag 池挑选，enum schema 防越界）
-  └─ Dida*             滴答清单 OAuth + 任务 CRUD + 双向同步引擎
+  ├─ RuleParser           正则引擎：类型分类 + 无 LLM 时的降级结构化（零成本离线）
+  ├─ ParserPipeline       primary / fallback 两级解析管线
+  ├─ LLMClient            LLM 调用公共底座（Claude / OpenAI 兼容协议可切换，结构化输出降级重试）
+  ├─ LLMStructuredParser  分类靠正则、结构化靠 LLM（快递/行程字段抽取，管线 primary）
+  ├─ LLMTodoParser        LLM 待办提取（管线 fallback）
+  ├─ LLMTagClassifier     LLM 收藏打标（从用户 tag 池挑选，enum schema 防越界）
+  └─ Dida*                滴答清单 OAuth + 任务 CRUD + 双向同步引擎
 
 OmnyApp/    SwiftUI 壳（仅 macOS 可编译），XcodeGen 管理工程
   ├─ Omny/             主 App target
@@ -31,7 +33,7 @@ OmnyApp/    SwiftUI 壳（仅 macOS 可编译），XcodeGen 管理工程
   └─ Shared/           两个 target 共用：SharedInbox（App Group 中转队列）
 ```
 
-设计原则：**所有入口的信息先落成同一个 `InboxItem`，解析尽量走规则（免费、离线、即时），语义理解才用 LLM**。
+设计原则：**所有入口的信息先落成同一个 `InboxItem`；判类型靠正则（免费、离线、可穷举），抽字段靠 LLM（应对无穷的格式变体），未配 LLM 时退回纯正则**。解析架构的完整说明见 [docs/parsing-architecture.md](docs/parsing-architecture.md)。
 
 ## macOS 开发（完整开发）
 
@@ -54,7 +56,7 @@ cd OmnyApp && xcodegen generate && open Omny.xcodeproj
 
 ## Windows 参与开发指南
 
-iOS 的 UI 层（`OmnyApp/`）只能在 macOS 编译，这是 Apple 的限制。但本项目的核心逻辑全部在跨平台的 `OmnyCore/`，Windows 上可以完整地开发、测试它，并通过 CI 验证 App 层、通过侧载在自己的 iPhone 上运行最新版。
+iOS 的 UI 层（`OmnyApp/`）只能在 macOS 编译，这是 Apple 的限制。但本项目的核心逻辑全部在跨平台的 `OmnyCore/`，Windows 上可以完整地开发、测试它，并通过 CI 验证 App 层、通过侧载在自己的 iPhone 上运行最新版。环境踩坑与排障记录见 [docs/dev-notes-windows.md](docs/dev-notes-windows.md)。
 
 ### 1. 环境搭建（WSL2）
 

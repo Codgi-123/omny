@@ -1,16 +1,5 @@
 # TODO
 
-## 2026-07-10 — 快捷指令导入接线
-
-### 我（用户）要做
-- [x] 编辑好「解析文本」快捷指令流程 → 分享 → 拷贝 iCloud 链接
-- [x] 编辑好「截图记忆 / 识别待办」快捷指令流程（最简：截屏 → 识别待办 → 显示结果，**不加菜单选择补充方式**）→ 拷贝 iCloud 链接
-- [x] 把两条链接发给 Claude
-
-### Claude 拿到链接后要做
-- [x] 用「解析文本」链接替换 `OmnyApp/Omny/Views/SettingsView.swift` 里的占位 `shortcutImportURL`（`78b9cbce584647c293b7e2b61c8d0f37`）
-- [x] 为「识别待办」加第二个导入按钮 + 手动触发引导（背面轻点 / 控制中心，**iOS 无"截屏就运行"自动化触发器**），链接 `f37dc8b6ef9f4569a38f1abdad4f5a8b`
-
 ## 2026-07-10 — 公司电脑装机测试
 
 ### 我（用户）要做
@@ -35,9 +24,15 @@ xcrun devicectl device install app --device <设备ID> \
 ---
 
 ### 已完成
+- [x] 快捷指令导入接线（2026-07-10）：「解析文本」（`78b9cbce…`）与「截图识别待办」（`f37dc8b6…`）两条 iCloud 链接接入 SettingsView，各有导入按钮 + 图文引导；后者手动触发（背面轻点 / 控制中心，iOS 无"截屏就运行"触发器）
 - [x] SettingsView 加「快捷指令」Section：「解析文本」导入按钮（占位链接）+ 两步图文引导
+- [x] LLM 调用收敛到 `LLMClient` 公共底座（2026-07-09）：结构化输出 400 降级重试、围栏剥离、maxTokens 统一进底座，删 `LLMResponseParsing.swift`
+- [x] 修复 CI Linux 编译失败（2026-07-09）：`DidaSyncTests` 补 `FoundationNetworking` 条件导入；此前 main/dev-kiwi 线的 core-linux 一直是红的
 
 ### 设计定论（备忘）
 - App Intent 当「收纳箱」，快捷指令用内置动作抓上下文。
 - 截图流程参考 Yore App（`c.team.Yore.SaveYore`）：快捷指令内置 `截屏` 抓当前屏 → 喂 `RecognizeTodoIntent`，无需用户先手动截图。
 - `RecognizeTodoIntent` 保留 `image` 参数即可；`note` 参数已决定不加。
+
+### 候选方向（已调研、未拍板）
+- **记账**（2026-07-09 调研）：定位「捕获层 + 轻账本」，新增 `expense` kind 复用现有管线，不做账户体系/预算/报表。三层入口：① 银行动账短信走现有快捷指令通道（常用卡提醒建议开成短信，可覆盖大部分绑卡支付）；② 支付成功页截图 OCR（同 Yore 式截屏流程，钱迹 iOS 同款方案）；③ 微信/支付宝官方 CSV 账单导入兜底全量（唯一含零钱/花呗的权威数据源，官方交易单号做合并主键，吸收前两层的重复条目）。消费分类复用 `LLMTagClassifier` 的 enum-schema 思路。注意：iOS 拿不到微信/支付宝实时支付数据是系统级限制，全行业无解，不必追求 Android 式全自动。UI 侧 5 个 tab 已满，倾向快递+行程合并腾位。
