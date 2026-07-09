@@ -17,10 +17,10 @@ jobs:
         working-directory: OmnyCore
         run: swift test
 
-  # App 编译 + 未签名 ipa：只在 dev-zyx 分支（Windows 协作者的分支）push 时跑，
+  # App 编译 + 未签名 ipa：只在 dev-zhanghaha 分支（Windows 协作者的分支）push 时跑，
   # 或手动触发。main 上的日常提交不消耗 macOS 分钟数（Mac 本地开发不需要 CI 出包）。
   app-macos:
-    if: github.ref == 'refs/heads/dev-zyx' || github.event_name == 'workflow_dispatch'
+    if: github.ref == 'refs/heads/dev-zhanghaha' || github.event_name == 'workflow_dispatch'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4

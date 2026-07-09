@@ -72,13 +72,13 @@ swift test          # 全绿说明环境就绪
 
 ### 3. 分支与 CI 约定
 
-- 维护者在 `main`；Windows 协作者在 **`dev-zyx`** 分支开发（首次：`git checkout -b dev-zyx && git push -u origin dev-zyx`）。
-- 每次 push：所有分支都自动跑 OmnyCore 测试（Linux）；**只有 `dev-zyx` 分支**额外在 macOS 上编译 App 并产出未签名 ipa（避免浪费 macOS 计费分钟）。其他分支需要出包时，在 Actions 页面手动 Run workflow。
+- 维护者在 `main`；Windows 协作者在 **`dev-zhanghaha`** 分支开发（首次：`git checkout -b dev-zhanghaha && git push -u origin dev-zhanghaha`）。
+- 每次 push：所有分支都自动跑 OmnyCore 测试（Linux）；**只有 `dev-zhanghaha` 分支**额外在 macOS 上编译 App 并产出未签名 ipa（避免浪费 macOS 计费分钟）。其他分支需要出包时，在 Actions 页面手动 Run workflow。
 - 合并回 `main` 走 Pull Request。
 
 ### 4. 把最新版装进自己的 iPhone（无需 Mac）
 
-1. GitHub 仓库 → **Actions** → 选最新一次 `dev-zyx` 分支的运行 → 下载 **Omny-unsigned-ipa**。
+1. GitHub 仓库 → **Actions** → 选最新一次 `dev-zhanghaha` 分支的运行 → 下载 **Omny-unsigned-ipa**。
 2. Windows 上安装 [Sideloadly](https://sideloadly.io/)，iPhone 数据线连电脑。
 3. 把 ipa 拖进 Sideloadly，填**自己的 Apple ID**（免费账号即可），Start——它会用你的证书重签并安装。
 4. 手机上：设置 → 通用 → VPN与设备管理 → 信任自己的开发者证书。
@@ -93,7 +93,7 @@ swift test          # 全绿说明环境就绪
 | Job | 触发 | 干什么 |
 |---|---|---|
 | `core-linux` | 所有 push / PR | Ubuntu 容器跑 OmnyCore 全量测试 |
-| `app-macos` | `dev-zyx` 分支 push / 手动触发 | macOS 上编译 App + 产出未签名 ipa（artifact 保留 14 天） |
+| `app-macos` | `dev-zhanghaha` 分支 push / 手动触发 | macOS 上编译 App + 产出未签名 ipa（artifact 保留 14 天） |
 
 ## 已知约定与取舍
 
