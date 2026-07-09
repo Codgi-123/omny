@@ -50,6 +50,8 @@ enum Ingestor {
             item.urlString = info.url.absoluteString
             item.bookmarkTitle = info.title
             context.insert(item)
+            // 补标题和打标不阻塞入库（短信快捷指令等入口要求即时返回）
+            Task { await enrichBookmark(item, context: context) }
             items = [item]
         }
 
@@ -58,6 +60,86 @@ enum Ingestor {
         }
         try? context.save()
         return items
+    }
+
+    // MARK: 收藏：分享/手动入口固定落成收藏，不走解析管线
+
+    /// 分享面板与收藏页手动添加进来的内容，定位就是收藏：
+    /// 带链接的抽出 URL + 标题，纯文本原样保存，随后交给 LLM 自动打标。
+    @discardableResult
+    static func ingestBookmark(text: String, urlString: String? = nil,
+                               source: ItemSource, context: ModelContext) async -> InboxItem {
+        var combined = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let urlString, !combined.contains(urlString) {
+            combined = combined.isEmpty ? urlString : combined + "\n" + urlString
+        }
+
+        let item = InboxItem(kind: .bookmark, source: source, rawText: combined)
+        if let info = RuleParser.extractBookmark(combined) {
+            item.urlString = info.url.absoluteString
+            item.bookmarkTitle = info.title
+        } else {
+            item.urlString = urlString
+        }
+        context.insert(item)
+        try? context.save()
+        await enrichBookmark(item, context: context)
+        return item
+    }
+
+    /// 收藏的入库后处理：先补标题（分享面板常只给裸链接，X/微博等尤其），再 LLM 打标。
+    /// 顺序有讲究：标题抓回来能明显提高打标准确率。
+    static func enrichBookmark(_ item: InboxItem, context: ModelContext,
+                               refetchTitle: Bool = false) async {
+        if refetchTitle || (item.bookmarkTitle ?? "").isEmpty,
+           let urlString = item.urlString, let url = URL(string: urlString),
+           let title = await LinkTitleFetcher().fetchTitle(for: url) {
+            item.bookmarkTitle = title
+            try? context.save()
+        }
+        await autoTag(item, context: context)
+    }
+
+    /// LLM 自动打标：从设置页配置的 tag 列表里挑选。
+    /// 失败时返回错误描述（nil = 请求成功，但模型可能认为都不贴切、保持无标签），
+    /// 供「AI 重新打标」和设置页测试按钮展示，不再静默吞错。
+    @discardableResult
+    static func autoTag(_ item: InboxItem, context: ModelContext) async -> String? {
+        guard let config = AppSettings.shared.llmConfig else {
+            return "未配置 LLM：请在设置里填入 API Key"
+        }
+        let candidates = AppSettings.shared.bookmarkTags
+        guard !candidates.isEmpty else { return "标签列表为空：请在设置 → 收藏标签里添加" }
+
+        let content = [item.bookmarkTitle, item.rawText, item.urlString]
+            .compactMap { $0 }
+            .joined(separator: "\n")
+        let classifier = LLMTagClassifier(config: config)
+        do {
+            let tags = try await classifier.classify(content, candidates: candidates)
+            if !tags.isEmpty {
+                item.tags = tags
+                try? context.save()
+            }
+            return nil
+        } catch {
+            return describeLLMError(error)
+        }
+    }
+
+    /// 把 LLM 层的错误翻译成用户能定位问题的文案
+    static func describeLLMError(_ error: Error) -> String {
+        switch error {
+        case LLMParseError.httpError(let status, let body):
+            let detail = String(body.prefix(200))
+            return "HTTP \(status)\(detail.isEmpty ? "" : "：\(detail)")"
+        case LLMParseError.malformedResponse:
+            return "响应格式无法解析：端点可能与所选协议不匹配（Claude / OpenAI 兼容）"
+        case let urlError as URLError:
+            return "网络错误：\(urlError.localizedDescription)"
+        default:
+            return error.localizedDescription
+        }
     }
 
     // MARK: 快递合并：同一包裹多条短信，状态只前进不回退

@@ -39,6 +39,14 @@ final class AppSettings: ObservableObject {
                        fallback: llmConfig.map { LLMTodoParser(config: $0) })
     }
 
+    // MARK: 收藏 tag（预置一批，设置页可增删改；LLM 打标只从这里选）
+
+    static let defaultBookmarkTags = ["技术", "资讯", "视频", "购物", "美食", "旅行", "灵感", "工具", "娱乐"]
+
+    @Published var bookmarkTags: [String] {
+        didSet { defaults.set(bookmarkTags, forKey: "bookmark.tags") }
+    }
+
     // MARK: 滴答清单绑定状态
 
     @Published var didaAccessToken: String? {
@@ -67,6 +75,7 @@ final class AppSettings: ObservableObject {
         llmBaseURL = defaults.string(forKey: "llm.baseURL") ?? "https://api.anthropic.com"
         llmAPIKey = defaults.string(forKey: "llm.apiKey") ?? ""
         llmModel = defaults.string(forKey: "llm.model") ?? "claude-opus-4-8"
+        bookmarkTags = defaults.stringArray(forKey: "bookmark.tags") ?? Self.defaultBookmarkTags
         didaAccessToken = defaults.string(forKey: "dida.accessToken")
         didaProjectID = defaults.string(forKey: "dida.projectID")
         didaProjectName = defaults.string(forKey: "dida.projectName")

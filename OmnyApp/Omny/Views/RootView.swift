@@ -24,13 +24,25 @@ struct RootView: View {
         }
         .tint(Theme.accent)
         .task {
-            // 启动时后台同步一次滴答
+            // 启动时先收分享队列，再后台同步一次滴答
+            await drainShareQueue()
             await dida.syncNow(context: context)
         }
         .onChange(of: scenePhase) { _, phase in
             // 从后台回到前台时自动同步（带防抖，避免频繁切换反复拉取）
             guard phase == .active else { return }
-            Task { await dida.syncOnForeground(context: context) }
+            Task {
+                await drainShareQueue()
+                await dida.syncOnForeground(context: context)
+            }
+        }
+    }
+
+    /// 收走分享扩展排队的内容：落成收藏 + LLM 打标
+    private func drainShareQueue() async {
+        for shared in SharedInbox.drain() {
+            await Ingestor.ingestBookmark(text: shared.text, urlString: shared.urlString,
+                                          source: .share, context: context)
         }
     }
 }

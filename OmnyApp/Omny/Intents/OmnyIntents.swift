@@ -57,7 +57,7 @@ extension InboxItem {
             return "\(carrier ?? "快递")\(code)"
         case .trip: return "行程 \(tripNumber ?? "")"
         case .todo: return "待办 \(todoTitle ?? "")"
-        case .bookmark: return "收藏"
+        case .bookmark: return "收藏 \(bookmarkTitle ?? urlString ?? "")"
         case .unclassified: return "未分类（需确认）"
         }
     }

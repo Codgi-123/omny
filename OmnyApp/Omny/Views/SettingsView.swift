@@ -14,6 +14,9 @@ struct SettingsView: View {
     @Environment(\.openURL) private var openURL
     @State private var showDidaAuth = false
     @State private var didaBindError: String?
+    @State private var llmTesting = false
+    @State private var llmTestSucceeded = false
+    @State private var llmTestResult: String?
 
     var body: some View {
         Form {
@@ -30,10 +33,25 @@ struct SettingsView: View {
                 TextField("模型", text: $settings.llmModel)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                Button {
+                    testLLM()
+                } label: {
+                    HStack {
+                        Label("测试连通性", systemImage: "bolt")
+                        if llmTesting { Spacer(); ProgressView().controlSize(.small) }
+                    }
+                }
+                .disabled(llmTesting || settings.llmConfig == nil)
             } header: {
                 Text("LLM 解析引擎")
             } footer: {
-                Text("用于截图待办提取。填域名即可，路径按协议自动补全（Claude → /v1/messages，OpenAI → /v1/chat/completions）。留空 Key 则只用规则引擎。")
+                VStack(alignment: .leading, spacing: 4) {
+                    if let result = llmTestResult {
+                        Text(result)
+                            .foregroundStyle(llmTestSucceeded ? Theme.green : Theme.red)
+                    }
+                    Text("用于截图待办提取和收藏自动打标。填域名即可，路径按协议自动补全（Claude → /v1/messages，OpenAI → /v1/chat/completions）。留空 Key 则只用规则引擎。")
+                }
             }
 
             Section {
@@ -64,6 +82,18 @@ struct SettingsView: View {
             }
 
             Section {
+                NavigationLink {
+                    TagManageView()
+                } label: {
+                    LabeledContent("收藏标签", value: "\(settings.bookmarkTags.count) 个")
+                }
+            } header: {
+                Text("收藏")
+            } footer: {
+                Text("分享进来的内容由上方配置的 LLM 从这批标签里自动挑选打标；未配置 LLM 时收藏照常入库，标签手动补。")
+            }
+
+            Section {
                 Button {
                     openURL(Self.shortcutImportURL)
                 } label: {
@@ -89,15 +119,43 @@ struct SettingsView: View {
         }
         .navigationTitle("设置")
         .sheet(isPresented: $showDidaAuth) {
-            DidaAuthSheet { code in
-                showDidaAuth = false
-                Task {
-                    do {
-                        try await dida.completeBinding(code: code)
-                        didaBindError = nil
-                    } catch {
-                        didaBindError = "绑定失败：\(error.localizedDescription)"
-                    }
+            didaAuthSheet
+        }
+    }
+
+    /// LLM 连通性测试：跑一次和收藏打标完全相同的请求链路，
+    /// 成功给出试打标结果，失败原样展示 HTTP 状态/响应（方便定位 Key、URL、协议问题）。
+    private func testLLM() {
+        guard let config = settings.llmConfig else { return }
+        llmTesting = true
+        llmTestResult = nil
+        Task {
+            let candidates = settings.bookmarkTags.isEmpty
+                ? AppSettings.defaultBookmarkTags : settings.bookmarkTags
+            do {
+                let tags = try await LLMTagClassifier(config: config)
+                    .classify("一篇介绍 SwiftUI 动画实现技巧的技术博客文章", candidates: candidates)
+                llmTestSucceeded = true
+                llmTestResult = tags.isEmpty
+                    ? "✓ 连接正常（模型未选出标签）"
+                    : "✓ 连接正常，试打标结果：\(tags.joined(separator: "、"))"
+            } catch {
+                llmTestSucceeded = false
+                llmTestResult = "✗ \(Ingestor.describeLLMError(error))"
+            }
+            llmTesting = false
+        }
+    }
+
+    private var didaAuthSheet: some View {
+        DidaAuthSheet { code in
+            showDidaAuth = false
+            Task {
+                do {
+                    try await dida.completeBinding(code: code)
+                    didaBindError = nil
+                } catch {
+                    didaBindError = "绑定失败：\(error.localizedDescription)"
                 }
             }
         }

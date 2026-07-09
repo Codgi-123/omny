@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0349D0D5504B544C66EB3208 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D45BF39A16836BC3A781E046 /* Assets.xcassets */; };
+		1776CEA9C7DB230AB8158921 /* SharedInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6286E75E2350A9610F07F50 /* SharedInbox.swift */; };
 		211842926C591F28A58A81D5 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CC21DA2A336C3F18CBD4472 /* AppSettings.swift */; };
 		2A9072EF706DEFE65EA02398 /* DidaService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CF741249636C17F15890CB8 /* DidaService.swift */; };
 		2B6169C091832764B753F49C /* OmnyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8AA264B58ADFB671485DEE6 /* OmnyApp.swift */; };
@@ -15,31 +17,68 @@
 		402F23D9EC330177DF3D2AFB /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5765578C5CF868977175F47 /* TodayView.swift */; };
 		428BDC49572EB4F2911B4FD9 /* OCRService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5BE3B107B134EB9418AC588 /* OCRService.swift */; };
 		4A8E8F6479DE99F5E30D7A05 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE835B50414B0383DD7772DA /* RootView.swift */; };
+		755B2262C6761AC0CBE4DB22 /* OmnyShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2F8DAA5F39FB955E53DF0154 /* OmnyShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		80443BC94F5EC375ECDD4461 /* SharedInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6286E75E2350A9610F07F50 /* SharedInbox.swift */; };
 		B753F262EC77180CF0A4E5D0 /* Cards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EE20B2F349C81A0B7136CA6 /* Cards.swift */; };
+		C60436FB46947A9AC0EE3529 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7EE04CE4A538273114ED55 /* ShareViewController.swift */; };
 		CCAAFBF6F56DECE1F2E419E2 /* InboxItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37F66C226030118977E6ED59 /* InboxItem.swift */; };
 		D1436F1C8D387FB2E7E76106 /* Ingestor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A42FEA9C1D69A760D542AE4D /* Ingestor.swift */; };
+		DC3DB29ED2552FC97C9D54FA /* TagManageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49499EEAD615EA2186C49C44 /* TagManageView.swift */; };
 		DD739467D78B00097E1C3EFD /* OmnyIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F11CE0A32B974AB527A89BD /* OmnyIntents.swift */; };
 		E32CD62F4A5289EDEFF2D6D0 /* ListViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9D19D7FE0FC7B0F439834DC /* ListViews.swift */; };
 		E5FE10AEF8923B1C7F6A70EE /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7B355A202BA7EB4EFADE8BB /* Theme.swift */; };
+		EBD461EB2EBDC910F893DF4D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D45BF39A16836BC3A781E046 /* Assets.xcassets */; };
 		FC67BC38603BFF996C6616EE /* OmnyCore in Frameworks */ = {isa = PBXBuildFile; productRef = B38BBAD844DE7BB40C46030C /* OmnyCore */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		6D3B436CE5635C8AB5ACFAB3 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C9B7B61DBAC495B899BC8D07 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 159E6BCE502194224DC4AD29;
+			remoteInfo = OmnyShare;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		720D7D9D363C29D5E8FD79C1 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				755B2262C6761AC0CBE4DB22 /* OmnyShare.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		2F8DAA5F39FB955E53DF0154 /* OmnyShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = OmnyShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		37F66C226030118977E6ED59 /* InboxItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxItem.swift; sourceTree = "<group>"; };
 		4455F6F7EC03910790C400B0 /* OmnyCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = OmnyCore; path = ../OmnyCore; sourceTree = SOURCE_ROOT; };
 		487983E7453EA416476B5FA9 /* Omny.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Omny.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		49499EEAD615EA2186C49C44 /* TagManageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagManageView.swift; sourceTree = "<group>"; };
 		4EE20B2F349C81A0B7136CA6 /* Cards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Cards.swift; sourceTree = "<group>"; };
 		4F11CE0A32B974AB527A89BD /* OmnyIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OmnyIntents.swift; sourceTree = "<group>"; };
 		6CF59AADF0299C174979693B /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		6CF741249636C17F15890CB8 /* DidaService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DidaService.swift; sourceTree = "<group>"; };
 		7CC21DA2A336C3F18CBD4472 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		85454E4F6E16C8854FE43A6B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		9A7EE04CE4A538273114ED55 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		A42FEA9C1D69A760D542AE4D /* Ingestor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ingestor.swift; sourceTree = "<group>"; };
 		A9D19D7FE0FC7B0F439834DC /* ListViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListViews.swift; sourceTree = "<group>"; };
 		B8AA264B58ADFB671485DEE6 /* OmnyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OmnyApp.swift; sourceTree = "<group>"; };
 		BE835B50414B0383DD7772DA /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		C5765578C5CF868977175F47 /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
+		D0A174314D834C4ABEE5BC20 /* OmnyShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OmnyShare.entitlements; sourceTree = "<group>"; };
+		D45BF39A16836BC3A781E046 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		DC5FBDA57ACF5835BD05840A /* Omny.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Omny.entitlements; sourceTree = "<group>"; };
 		EDA3EC43CC114A3BA3AAE2CD /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		F5BE3B107B134EB9418AC588 /* OCRService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRService.swift; sourceTree = "<group>"; };
+		F6286E75E2350A9610F07F50 /* SharedInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedInbox.swift; sourceTree = "<group>"; };
 		F7B355A202BA7EB4EFADE8BB /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -70,6 +109,7 @@
 				A9D19D7FE0FC7B0F439834DC /* ListViews.swift */,
 				BE835B50414B0383DD7772DA /* RootView.swift */,
 				6CF59AADF0299C174979693B /* SettingsView.swift */,
+				49499EEAD615EA2186C49C44 /* TagManageView.swift */,
 				F7B355A202BA7EB4EFADE8BB /* Theme.swift */,
 				C5765578C5CF868977175F47 /* TodayView.swift */,
 			);
@@ -88,8 +128,19 @@
 			isa = PBXGroup;
 			children = (
 				487983E7453EA416476B5FA9 /* Omny.app */,
+				2F8DAA5F39FB955E53DF0154 /* OmnyShare.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		78AF1A694197B422E36B558E /* OmnyShare */ = {
+			isa = PBXGroup;
+			children = (
+				85454E4F6E16C8854FE43A6B /* Info.plist */,
+				D0A174314D834C4ABEE5BC20 /* OmnyShare.entitlements */,
+				9A7EE04CE4A538273114ED55 /* ShareViewController.swift */,
+			);
+			path = OmnyShare;
 			sourceTree = "<group>";
 		};
 		875CA79802AE908934DBB758 /* Packages */ = {
@@ -104,7 +155,9 @@
 			isa = PBXGroup;
 			children = (
 				9F636D359A57439C54F8C4BF /* Omny */,
+				78AF1A694197B422E36B558E /* OmnyShare */,
 				875CA79802AE908934DBB758 /* Packages */,
+				C0D498399ECC9E4B086E2A3E /* Shared */,
 				723DACB923F5A59F9583F47D /* Products */,
 			);
 			sourceTree = "<group>";
@@ -112,6 +165,7 @@
 		9F636D359A57439C54F8C4BF /* Omny */ = {
 			isa = PBXGroup;
 			children = (
+				DC5FBDA57ACF5835BD05840A /* Omny.entitlements */,
 				B8AA264B58ADFB671485DEE6 /* OmnyApp.swift */,
 				27D9BEF99F17B9F95BFC8152 /* Intents */,
 				66C82CDC1FF5E811F4EF5ED0 /* Models */,
@@ -133,19 +187,49 @@
 			path = Services;
 			sourceTree = "<group>";
 		};
+		C0D498399ECC9E4B086E2A3E /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				D45BF39A16836BC3A781E046 /* Assets.xcassets */,
+				F6286E75E2350A9610F07F50 /* SharedInbox.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		159E6BCE502194224DC4AD29 /* OmnyShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DE878AF6451D13A6D74170C2 /* Build configuration list for PBXNativeTarget "OmnyShare" */;
+			buildPhases = (
+				DF9D380EC56679E2CB91CA77 /* Sources */,
+				6DCDAF37330454243A4BA099 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = OmnyShare;
+			packageProductDependencies = (
+			);
+			productName = OmnyShare;
+			productReference = 2F8DAA5F39FB955E53DF0154 /* OmnyShare.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		70A731F55022E37FDB13C5D8 /* Omny */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 66B26116A2B7C8BE696753AD /* Build configuration list for PBXNativeTarget "Omny" */;
 			buildPhases = (
 				BB8F91B0A8D0936CA34A1033 /* Sources */,
+				37CFA5073D78674C4C33B7DF /* Resources */,
 				662D6E8C3916519D64A4FBDE /* Frameworks */,
+				720D7D9D363C29D5E8FD79C1 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				643DA6C978D976D39293183C /* PBXTargetDependency */,
 			);
 			name = Omny;
 			packageProductDependencies = (
@@ -164,6 +248,9 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					159E6BCE502194224DC4AD29 = {
+						ProvisioningStyle = Automatic;
+					};
 					70A731F55022E37FDB13C5D8 = {
 						ProvisioningStyle = Automatic;
 					};
@@ -187,9 +274,29 @@
 			projectRoot = "";
 			targets = (
 				70A731F55022E37FDB13C5D8 /* Omny */,
+				159E6BCE502194224DC4AD29 /* OmnyShare */,
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		37CFA5073D78674C4C33B7DF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EBD461EB2EBDC910F893DF4D /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6DCDAF37330454243A4BA099 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0349D0D5504B544C66EB3208 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		BB8F91B0A8D0936CA34A1033 /* Sources */ = {
@@ -208,18 +315,38 @@
 				4A8E8F6479DE99F5E30D7A05 /* RootView.swift in Sources */,
 				3B6643656985F33192C0B1BC /* Secrets.swift in Sources */,
 				3B55C4A7C51CACDF76C6ED90 /* SettingsView.swift in Sources */,
+				1776CEA9C7DB230AB8158921 /* SharedInbox.swift in Sources */,
+				DC3DB29ED2552FC97C9D54FA /* TagManageView.swift in Sources */,
 				E5FE10AEF8923B1C7F6A70EE /* Theme.swift in Sources */,
 				402F23D9EC330177DF3D2AFB /* TodayView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DF9D380EC56679E2CB91CA77 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C60436FB46947A9AC0EE3529 /* ShareViewController.swift in Sources */,
+				80443BC94F5EC375ECDD4461 /* SharedInbox.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		643DA6C978D976D39293183C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 159E6BCE502194224DC4AD29 /* OmnyShare */;
+			targetProxy = 6D3B436CE5635C8AB5ACFAB3 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		26A578FC0AE66C4C2CB579E3 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Omny/Omny.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -365,6 +492,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Omny/Omny.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -387,6 +515,56 @@
 			};
 			name = Release;
 		};
+		8B7FDC5481ECB89FF7738312 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = OmnyShare/OmnyShare.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 46SC6UDH48;
+				INFOPLIST_FILE = OmnyShare/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = xin.codgi.omny.share;
+				PRODUCT_NAME = OmnyShare;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		B7AE95DA288D039A3E89E9B9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = OmnyShare/OmnyShare.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 46SC6UDH48;
+				INFOPLIST_FILE = OmnyShare/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = xin.codgi.omny.share;
+				PRODUCT_NAME = OmnyShare;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -404,6 +582,15 @@
 			buildConfigurations = (
 				7F950FEDB416695BAD826E66 /* Debug */,
 				3B202D460D5F84076E3F842F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		DE878AF6451D13A6D74170C2 /* Build configuration list for PBXNativeTarget "OmnyShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B7AE95DA288D039A3E89E9B9 /* Debug */,
+				8B7FDC5481ECB89FF7738312 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

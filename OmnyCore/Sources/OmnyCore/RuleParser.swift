@@ -200,7 +200,8 @@ public struct RuleParser: Parser {
 
     // MARK: - 收藏
 
-    static func extractBookmark(_ text: String) -> BookmarkInfo? {
+    /// 公开给 App 层直接用：分享/手动入口固定落成收藏，不走整条解析管线
+    public static func extractBookmark(_ text: String) -> BookmarkInfo? {
         guard let m = text.firstMatch(of: /https?:\/\/[^\s，。＂"'<>）)]+/),
               let url = URL(string: String(m.output))
         else { return nil }

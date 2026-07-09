@@ -12,12 +12,21 @@ targets:
     platform: iOS
     sources:
       - Omny
+      - Shared
     dependencies:
       - package: OmnyCore
+      - target: OmnyShare
+        embed: true
+    entitlements:
+      path: Omny/Omny.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.xin.codgi.omny
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: xin.codgi.omny
         PRODUCT_NAME: Omny
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         MARKETING_VERSION: 0.1.0
         CURRENT_PROJECT_VERSION: 1
         GENERATE_INFOPLIST_FILE: YES
@@ -28,3 +37,39 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic
         IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+
+  # 分享扩展：其他 App 分享面板里的「Omny」入口，见 OmnyShare/ShareViewController.swift
+  OmnyShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - OmnyShare
+      - Shared
+    info:
+      path: OmnyShare/Info.plist
+      properties:
+        CFBundleDisplayName: Omny
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+              NSExtensionActivationSupportsText: true
+    entitlements:
+      path: OmnyShare/OmnyShare.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.xin.codgi.omny
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: xin.codgi.omny.share
+        PRODUCT_NAME: OmnyShare
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        SKIP_INSTALL: YES

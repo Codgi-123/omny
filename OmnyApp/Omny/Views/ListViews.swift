@@ -208,38 +208,59 @@ struct TodoView: View {
     }
 }
 
-// MARK: - 收藏页
+// MARK: - 收藏页：tag 筛选 + 链接/文本卡片 + 手动添加
 
 struct BookmarkView: View {
+    /// 筛选状态：全部 / 某个 tag / 未打标
+    private enum TagFilter: Equatable {
+        case all, tag(String), untagged
+    }
+
+    @Environment(\.modelContext) private var context
+    @EnvironmentObject private var settings: AppSettings
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var items: [InboxItem]
+    @State private var filter: TagFilter = .all
+    @State private var showAddSheet = false
+    @State private var editingItem: InboxItem?
 
     private var bookmarks: [InboxItem] { items.filter { $0.kind == .bookmark } }
+
+    private var filtered: [InboxItem] {
+        switch filter {
+        case .all: bookmarks
+        case .tag(let tag): bookmarks.filter { $0.tags.contains(tag) }
+        case .untagged: bookmarks.filter { $0.tags.isEmpty }
+        }
+    }
+
+    /// 筛选栏展示的 tag：设置页的列表 + 存量条目上已有但被删掉的 tag
+    private var visibleTags: [String] {
+        var tags = settings.bookmarkTags
+        for item in bookmarks {
+            for tag in item.tags where !tags.contains(tag) { tags.append(tag) }
+        }
+        return tags
+    }
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 10) {
+                if !bookmarks.isEmpty { tagFilterBar }
                 if bookmarks.isEmpty {
                     ContentUnavailableView("暂无收藏", systemImage: "bookmark",
-                                           description: Text("在任意 App 里分享链接给 Omny"))
+                                           description: Text("在任意 App 里点分享 → 选 Omny，链接和文字都能收"))
                         .padding(.top, 80)
+                } else if filtered.isEmpty {
+                    ContentUnavailableView("该标签下暂无收藏", systemImage: "tag")
+                        .padding(.top, 60)
                 }
-                ForEach(bookmarks) { item in
-                    Link(destination: URL(string: item.urlString ?? "") ?? URL(string: "https://example.com")!) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Text(item.bookmarkTitle ?? "链接")
-                                    .font(.system(size: 14.5, weight: .bold))
-                                    .foregroundStyle(Theme.text)
-                                    .lineLimit(2)
-                                Spacer()
-                                Badge(text: "链接", color: Theme.accent)
-                            }
-                            Text(URL(string: item.urlString ?? "")?.host() ?? item.urlString ?? "")
-                                .font(.system(size: 12.5))
-                                .foregroundStyle(Theme.sub)
-                        }
-                        .cardStyle()
-                    }
+                ForEach(filtered) { item in
+                    BookmarkCard(item: item,
+                                 onEditTags: { editingItem = item },
+                                 onDelete: {
+                                     context.delete(item)
+                                     try? context.save()
+                                 })
                 }
             }
             .padding(.horizontal, 16)
@@ -247,7 +268,269 @@ struct BookmarkView: View {
         }
         .background(Theme.screen)
         .navigationTitle("收藏")
-        .toolbar { NavActions() }
+        .toolbar {
+            HStack(spacing: 8) {
+                Button {
+                    showAddSheet = true
+                } label: {
+                    Image(systemName: "plus")
+                        .foregroundStyle(Theme.accent)
+                }
+                NavActions()
+            }
+        }
+        .sheet(isPresented: $showAddSheet) { BookmarkAddSheet() }
+        .sheet(item: $editingItem) { item in
+            BookmarkTagSheet(item: item)
+                .presentationDetents([.medium])
+        }
+    }
+
+    private var tagFilterBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                filterChip("全部", .all)
+                ForEach(visibleTags, id: \.self) { tag in
+                    filterChip(tag, .tag(tag))
+                }
+                if bookmarks.contains(where: { $0.tags.isEmpty }) {
+                    filterChip("未打标", .untagged)
+                }
+            }
+            .padding(.horizontal, 2)
+            .padding(.vertical, 4)
+        }
+    }
+
+    private func filterChip(_ label: String, _ value: TagFilter) -> some View {
+        let selected = filter == value
+        return Button {
+            filter = value
+        } label: {
+            Text(label)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(selected ? Theme.card : Theme.sub)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(selected ? Theme.accent : Theme.card)
+                .clipShape(Capsule())
+                .overlay(Capsule().strokeBorder(Theme.line, lineWidth: selected ? 0 : 1))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// 收藏卡片：链接收藏可点开，纯文本收藏展示原文；下方一排 tag
+struct BookmarkCard: View {
+    @Environment(\.openURL) private var openURL
+    @Environment(\.modelContext) private var context
+    let item: InboxItem
+    var onEditTags: () -> Void
+    var onDelete: () -> Void
+
+    private var url: URL? { item.urlString.flatMap(URL.init(string:)) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top) {
+                Text(title)
+                    .font(.system(size: 14.5, weight: .bold))
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                Spacer()
+                Badge(text: url != nil ? "链接" : "文本",
+                      color: url != nil ? Theme.accent : Theme.slate)
+            }
+            if let url {
+                Text(url.host() ?? url.absoluteString)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Theme.sub)
+                    .lineLimit(1)
+            } else if item.rawText != title {
+                Text(item.rawText)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Theme.sub)
+                    .lineLimit(3)
+            }
+            HStack(spacing: 6) {
+                if item.tags.isEmpty {
+                    Text("未打标")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.sub.opacity(0.7))
+                } else {
+                    ForEach(item.tags, id: \.self) { Badge(text: $0, color: Theme.green) }
+                }
+                Spacer()
+                Text(item.createdAt.formatted(.relative(presentation: .named)))
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Theme.sub)
+            }
+        }
+        .cardStyle()
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if let url { openURL(url) } else { onEditTags() }
+        }
+        .contextMenu {
+            if let url {
+                Button { openURL(url) } label: { Label("打开链接", systemImage: "safari") }
+                Button {
+                    Task { await Ingestor.enrichBookmark(item, context: context, refetchTitle: true) }
+                } label: {
+                    Label("重新抓取标题", systemImage: "arrow.clockwise")
+                }
+            }
+            Button(action: onEditTags) { Label("编辑标签", systemImage: "tag") }
+            Button(role: .destructive, action: onDelete) { Label("删除", systemImage: "trash") }
+        }
+    }
+
+    private var title: String {
+        if let bookmarkTitle = item.bookmarkTitle, !bookmarkTitle.isEmpty { return bookmarkTitle }
+        // 没抓到标题的链接退回显示域名
+        if let url { return url.host() ?? "链接" }
+        // 纯文本收藏用首行当标题
+        return item.rawText.components(separatedBy: .newlines).first ?? item.rawText
+    }
+}
+
+/// 手动添加收藏：粘贴链接或输入一段文字
+struct BookmarkAddSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+    @State private var text = ""
+    @State private var saving = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("粘贴链接，或输入要收藏的文字…", text: $text, axis: .vertical)
+                        .lineLimit(4...10)
+                        .textInputAutocapitalization(.never)
+                } footer: {
+                    Text("带链接的会自动抽出网址和标题；配置了 LLM 时入库后自动打标。")
+                }
+            }
+            .navigationTitle("添加收藏")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") { save() }
+                        .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || saving)
+                }
+            }
+        }
+    }
+
+    private func save() {
+        saving = true
+        let content = text
+        Task {
+            await Ingestor.ingestBookmark(text: content, source: .manual, context: context)
+            dismiss()
+        }
+    }
+}
+
+/// 编辑单条收藏的标签：从设置页的 tag 列表里勾选，支持 AI 重新打标
+struct BookmarkTagSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+    @EnvironmentObject private var settings: AppSettings
+    let item: InboxItem
+    @State private var retagging = false
+    @State private var retagMessage: String?
+    @State private var retagFailed = false
+
+    /// 可勾选的 tag：设置页列表 + 该条目已有但列表里没有的（不吞掉存量）
+    private var candidates: [String] {
+        var tags = settings.bookmarkTags
+        for tag in item.tags where !tags.contains(tag) { tags.append(tag) }
+        return tags
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    ForEach(candidates, id: \.self) { tag in
+                        Button {
+                            toggle(tag)
+                        } label: {
+                            HStack {
+                                Text(tag).foregroundStyle(Theme.text)
+                                Spacer()
+                                if item.tags.contains(tag) {
+                                    Image(systemName: "checkmark").foregroundStyle(Theme.accent)
+                                }
+                            }
+                        }
+                    }
+                } header: {
+                    Text("标签")
+                } footer: {
+                    Text("标签列表在 设置 → 收藏标签 里管理。")
+                }
+                if settings.llmConfig != nil {
+                    Section {
+                        Button {
+                            retag()
+                        } label: {
+                            HStack {
+                                Label("AI 重新打标", systemImage: "sparkles")
+                                if retagging { Spacer(); ProgressView().controlSize(.small) }
+                            }
+                        }
+                        .disabled(retagging)
+                    } footer: {
+                        if let message = retagMessage {
+                            Text(message)
+                                .foregroundStyle(retagFailed ? Theme.red : Theme.green)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("编辑标签")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private func toggle(_ tag: String) {
+        if let index = item.tags.firstIndex(of: tag) {
+            item.tags.remove(at: index)
+        } else {
+            item.tags.append(tag)
+        }
+        try? context.save()
+    }
+
+    private func retag() {
+        retagging = true
+        retagMessage = nil
+        Task {
+            let error = await Ingestor.autoTag(item, context: context)
+            if let error {
+                retagFailed = true
+                retagMessage = "打标失败：\(error)"
+            } else if item.tags.isEmpty {
+                retagFailed = false
+                retagMessage = "AI 认为候选标签里没有贴切的，可手动勾选"
+            } else {
+                retagFailed = false
+                retagMessage = "已打标：\(item.tags.joined(separator: "、"))"
+            }
+            retagging = false
+        }
     }
 }
 

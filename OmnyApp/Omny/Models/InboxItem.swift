@@ -57,6 +57,8 @@ final class InboxItem {
     // 收藏
     var urlString: String?
     var bookmarkTitle: String?
+    /// 收藏标签：LLM 从设置页的 tag 列表里自动挑选，也可手动编辑
+    var tags: [String] = []
 
     init(kind: ItemKind, source: ItemSource, rawText: String) {
         self.kindRaw = kind.rawValue
