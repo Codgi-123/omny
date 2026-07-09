@@ -96,10 +96,13 @@ public struct RuleParser: Parser {
             info.pickupCode = String(m.output.1)
         }
 
-        // 存放点两种句式："已到/放在 + 地点后缀" 和 "凭码到XX店取"
+        // 存放点两种句式：
+        // ①「已到/放在 + 地点后缀」——无强边界，靠后缀白名单圈定终点
+        // ②「凭码到 X 取/领」——「到…取/领」本身是一对天然边界，不需后缀白名单，
+        //   直接取中间内容（店名后缀是开放集合，白名单必漏，如"XX米业""XX农资"）
         if let m = text.firstMatch(of: /(?:已到|存放至|已?放至|已?放在|已投递至)([^，。,！!；;\s]{2,30}?(?:驿站|快递超市|快递柜|智能柜|门卫|物业|代收点|自提点|便利店|门市|超市|店|柜))/) {
             info.station = String(m.output.1)
-        } else if let m = text.firstMatch(of: /凭[\d\-]+\s*到([^，。,！!；;\s]{2,30}?(?:驿站|便利店|门市|超市|店|柜|点))[取领]/) {
+        } else if let m = text.firstMatch(of: /凭[\d\-]+\s*到([^，。,！!；;\s]{2,30}?)[取领]/) {
             info.station = String(m.output.1)
         }
 

@@ -3,13 +3,13 @@
 ## 2026-07-10 — 快捷指令导入接线
 
 ### 我（用户）要做
-- [ ] 编辑好「解析文本」快捷指令流程 → 分享 → 拷贝 iCloud 链接
-- [ ] 编辑好「截图记忆 / 识别待办」快捷指令流程（最简：截屏 → 识别待办 → 显示结果，**不加菜单选择补充方式**）→ 拷贝 iCloud 链接
-- [ ] 把两条链接发给 Claude
+- [x] 编辑好「解析文本」快捷指令流程 → 分享 → 拷贝 iCloud 链接
+- [x] 编辑好「截图记忆 / 识别待办」快捷指令流程（最简：截屏 → 识别待办 → 显示结果，**不加菜单选择补充方式**）→ 拷贝 iCloud 链接
+- [x] 把两条链接发给 Claude
 
 ### Claude 拿到链接后要做
-- [ ] 用「解析文本」链接替换 `OmnyApp/Omny/Views/SettingsView.swift` 里的占位 `shortcutImportURL`（当前 `https://www.icloud.com/shortcuts/REPLACE_ME`）
-- [ ] 为「识别待办」加第二个导入按钮 + 手动触发引导（背面轻点 / 控制中心，**iOS 无"截屏就运行"自动化触发器**）
+- [x] 用「解析文本」链接替换 `OmnyApp/Omny/Views/SettingsView.swift` 里的占位 `shortcutImportURL`（`78b9cbce584647c293b7e2b61c8d0f37`）
+- [x] 为「识别待办」加第二个导入按钮 + 手动触发引导（背面轻点 / 控制中心，**iOS 无"截屏就运行"自动化触发器**），链接 `f37dc8b6ef9f4569a38f1abdad4f5a8b`
 
 ## 2026-07-10 — 公司电脑装机测试
 
