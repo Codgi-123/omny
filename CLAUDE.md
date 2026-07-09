@@ -1,0 +1,65 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## 项目概况
+
+Omny：个人信息收件箱 iOS App（自用，不上架）。把短信、截图、系统分享里的信息解析成结构化条目（快递/行程/待办/收藏）统一管理。代码注释与 UI 均为中文。
+
+## 常用命令
+
+```sh
+# 核心层测试（唯一的测试套件，跨平台可跑）
+cd OmnyCore && swift test
+
+# 跑单个测试类 / 单个测试方法
+swift test --filter RuleParserTests
+swift test --filter RuleParserTests/testSomething
+
+# 生成 Xcode 工程（project.pbxproj 是 XcodeGen 生成物；改 target 配置要改 project.yml 后重新生成）
+cd OmnyApp && xcodegen generate
+
+# 命令行编译 + 真机安装（注意 -derivedDataPath 必须指到 iCloud 同步目录之外，见下文陷阱）
+xcodebuild -project OmnyApp/Omny.xcodeproj -scheme Omny -configuration Debug \
+  -sdk iphoneos -derivedDataPath ~/OmnyBuild build
+xcrun devicectl list devices
+xcrun devicectl device install app --device <设备ID> \
+  ~/OmnyBuild/Build/Products/Debug-iphoneos/Omny.app
+```
+
+首次搭建需要密钥：`cp OmnyApp/Secrets.swift.example OmnyApp/Omny/Services/Secrets.swift`（滴答清单 client_id/secret，向维护者索要）。`Secrets.swift` 和根目录 `Secrets.local.json` 已被 .gitignore 排除，禁止提交。LLM API Key 不进代码，运行时在 App 设置页填。
+
+## 已知陷阱
+
+- **codesign 报 `resource fork, Finder information, or similar detritus not allowed`**：根因是项目位于 `~/Desktop`（被 iCloud 同步接管，同步服务写 `com.apple.FinderInfo` 扩展属性）。解法：编译产物用 `-derivedDataPath` 指到同步目录外（如 `~/OmnyBuild`）。
+- 免费 Apple ID 签名 7 天过期，重新 ⌘R / 重装即可。
+- `OmnyApp/` 只能在 macOS 编译（Apple 限制）；`OmnyCore/` 在 macOS / Linux / WSL 均可开发测试。
+
+## 架构
+
+两层分离是本项目的核心结构：
+
+- **`OmnyCore/`** — 纯 Swift 逻辑包（SwiftPM，无 UI 依赖，跨平台）。所有解析、LLM 调用、滴答同步逻辑都在这里，配套全量单测。
+- **`OmnyApp/`** — SwiftUI 壳（XcodeGen 管理），含主 App target `Omny` 和分享扩展 target `OmnyShare`，通过 App Group `group.xin.codgi.omny` 共享数据。
+
+### 数据流（读多个文件才能看清的主线）
+
+1. **统一模型**：所有入口的信息都落成同一个 SwiftData 实体 `InboxItem`（`OmnyApp/Omny/Models/InboxItem.swift`，扁平结构、各类型字段可空共存）。五个 tab 页面都是按 `kind` 过滤的视图。
+2. **解析管线**：`OmnyCore` 的 `ParserPipeline`（`Parser.swift`）实现"规则优先、LLM 兜底"——`RuleParser`（正则，免费离线）置信度 ≥0.8 直接采用，否则交给 LLM；LLM 失败（断网/未配 Key）降级用规则结果，不让入口链路整体失败。
+3. **入库汇聚点**：`OmnyApp/Omny/Services/Ingestor.swift` 是所有入口（短信快捷指令、截图 OCR、分享、手动）的唯一入库通道。关键行为：快递按单号/尾号合并且状态只前进不回退；低置信度或未识别条目标记 `needsReview` 进"需处理"；收藏入库后异步补标题再 LLM 打标（顺序影响打标准确率）。
+4. **分享扩展中转**：扩展进程受限，`OmnyShare` 只把内容写进 App Group 的 JSON 队列（`Shared/SharedInbox.swift`，编入两个 target），解析入库全部回主 App 前台时 drain 完成。
+5. **快捷指令入口**：`OmnyApp/Omny/Intents/OmnyIntents.swift` 的 App Intents（「解析文本」「识别待办」）是短信自动化和截图流程的进入点。
+6. **滴答同步**：`OmnyCore/Sources/OmnyCore/Dida/` 的 `DidaSyncEngine` 以 `SyncableTodo` 快照与 SwiftData 解耦（App 层转换）。策略：本地脏标记（`needsPush`/`deletedLocally`）优先推送，其余以远端为准；Open API 无增量接口，拉取为绑定清单的全量轮询。仅 `source == .dida` 的待办参与同步。
+7. **LLM 层**：`OmnyCore/Sources/OmnyCore/LLM/` 支持 Claude / OpenAI 兼容两种协议切换（设置页配置）。`LLMTagClassifier` 用 enum schema 限制 LLM 只能从用户 tag 池里挑选。
+
+## 分支与 CI
+
+- 维护者在 `main`，合并走 PR；Windows 协作者固定用 `dev-zhanghaha` 分支。
+- CI（`.github/workflows/ci.yml`）：所有 push 都在 Linux 跑 OmnyCore 测试；只有 `dev-zhanghaha` push 才在 macOS 编译 App 并出未签名 ipa（省 macOS 分钟数），其他分支要出包需手动 Run workflow。
+
+## 设计原则（改代码时遵守）
+
+- 所有入口的信息先落成同一个 `InboxItem`；解析尽量走规则（免费、离线、即时），语义理解才用 LLM。
+- 新增短信解析规则时，把真实短信脱敏后作为测试用例加进 `OmnyCore/Tests/OmnyCoreTests/`（参考 `RealSMSTests.swift`）。
+- 快递状态由短信措辞推断（在途→派送中→待取→已签收），不接物流查询 API。
+- `TODO.md` 记录当前进行中的任务与设计定论，动手前先看。
