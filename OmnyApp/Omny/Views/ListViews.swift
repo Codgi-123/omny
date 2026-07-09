@@ -158,7 +158,10 @@ struct TodoView: View {
         .background(Theme.screen)
         .navigationTitle("待办")
         .toolbar { NavActions() }
-        .refreshable { await dida.syncNow(context: context) }
+        // 包一层非结构化 Task：.refreshable 的任务绑定在刷新手势上，视图刷新时会被
+        // SwiftUI 取消并把取消传给 URLSession（表现为"同步失败：cancelled"）。
+        // Task {} 不继承外层取消，await .value 让菊花转到同步真正结束。
+        .refreshable { await Task { await dida.syncNow(context: context) }.value }
     }
 
     private var syncBanner: some View {

@@ -80,6 +80,10 @@ final class DidaService: ObservableObject {
             settings.didaLastSync = .now
         } catch DidaError.unauthorized {
             lastError = "授权已过期，请在设置中重新绑定滴答清单"
+        } catch is CancellationError {
+            // 下拉手势结束/视图刷新导致的任务取消是正常事件，不算失败
+        } catch let error as URLError where error.code == .cancelled {
+            // 同上：URLSession 层的取消
         } catch {
             lastError = "同步失败：\(error.localizedDescription)"
         }

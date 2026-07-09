@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  # 需要临时出包时可在 Actions 页面对任意分支手动触发
+  workflow_dispatch:
+
+jobs:
+  # OmnyCore 测试：所有分支都跑（Linux 便宜，和 Windows 协作者的 WSL 环境一致）
+  core-linux:
+    runs-on: ubuntu-latest
+    container: swift:6.0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run OmnyCore tests
+        working-directory: OmnyCore
+        run: swift test
+
+  # App 编译 + 未签名 ipa：只在 dev-zyx 分支（Windows 协作者的分支）push 时跑，
+  # 或手动触发。main 上的日常提交不消耗 macOS 分钟数（Mac 本地开发不需要 CI 出包）。
+  app-macos:
+    if: github.ref == 'refs/heads/dev-zyx' || github.event_name == 'workflow_dispatch'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          cp OmnyApp/Secrets.swift.example OmnyApp/Omny/Services/Secrets.swift
+          cd OmnyApp && xcodegen generate
+      - name: Run OmnyCore tests (macOS)
+        working-directory: OmnyCore
+        run: swift test
+      - name: Build unsigned device binary
+        working-directory: OmnyApp
+        run: |
+          xcodebuild -project Omny.xcodeproj -scheme Omny \
+            -destination 'generic/platform=iOS' \
+            -configuration Release \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            -derivedDataPath build build
+      - name: Package unsigned ipa
+        working-directory: OmnyApp
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/Omny.app Payload/
+          zip -r Omny-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Omny-unsigned-ipa
+          path: OmnyApp/Omny-unsigned.ipa
+          retention-days: 14
