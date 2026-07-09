@@ -12,6 +12,9 @@ public struct LLMTagClassifier: Sendable {
     /// 最多打几个标签，收藏场景 1~3 个足够
     public var maxTags: Int
 
+    /// 请求构造/发送/响应解析的公共底座
+    var client: LLMClient { LLMClient(config: config, transport: transport) }
+
     public init(config: LLMConfig, transport: any HTTPTransport = URLSessionTransport(),
                 maxTags: Int = 3) {
         self.config = config
@@ -31,26 +34,19 @@ public struct LLMTagClassifier: Sendable {
     }
 
     /// 返回命中的候选 tag（已按候选列表过滤、去重）。都不贴切时返回空数组。
-    /// 先带结构化输出参数请求（json_schema / json_object）；端点不支持该参数（400）时
-    /// 自动降级重试一次纯提示词约束的请求——中转/自建端点对新参数的支持参差不齐。
+    /// 结构化输出参数不被端点支持时的降级重试由 LLMClient 统一处理。
     public func classify(_ content: String, candidates: [String]) async throws -> [String] {
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !candidates.isEmpty else { return [] }
 
-        var (data, response) = try await transport.send(
-            makeRequest(content: trimmed, candidates: candidates, structured: true))
-        if response.statusCode == 400 {
-            (data, response) = try await transport.send(
-                makeRequest(content: trimmed, candidates: candidates, structured: false))
-        }
-        guard response.statusCode == 200 else {
-            throw LLMParseError.httpError(status: response.statusCode,
-                                          body: String(decoding: data, as: UTF8.self))
-        }
-
-        let jsonText = try config.apiProtocol.extractContentText(from: data)
-        let extracted = try JSONDecoder().decode(
-            ClassifiedTags.self, from: Data(Self.stripCodeFences(jsonText).utf8))
+        let system = Self.systemPrompt
+            .replacingOccurrences(of: "{MAX}", with: String(maxTags))
+            .replacingOccurrences(of: "{TAGS}", with: candidates.joined(separator: "、"))
+        let jsonText = try await client.send(
+            system: system, user: trimmed,
+            schema: Self.claudeOutputSchema(candidates: candidates, maxTags: maxTags),
+            maxTokens: 256)
+        let extracted = try JSONDecoder().decode(ClassifiedTags.self, from: Data(jsonText.utf8))
 
         // 防模型越界：过滤掉不在候选列表里的、重复的，截断到 maxTags
         var seen = Set<String>()
@@ -58,67 +54,6 @@ public struct LLMTagClassifier: Sendable {
             .filter { candidates.contains($0) && seen.insert($0).inserted }
             .prefix(maxTags)
             .map { $0 }
-    }
-
-    // MARK: 请求构造（按协议分派）
-
-    /// structured = false 时不带结构化输出参数（json_schema / json_object），
-    /// 只靠系统提示词约束输出格式——给不支持这些参数的端点用。
-    func makeRequest(content: String, candidates: [String], structured: Bool = true) -> URLRequest {
-        var request = URLRequest(url: config.endpoint)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        let system = Self.systemPrompt
-            .replacingOccurrences(of: "{MAX}", with: String(maxTags))
-            .replacingOccurrences(of: "{TAGS}", with: candidates.joined(separator: "、"))
-
-        var body: [String: Any]
-        switch config.apiProtocol {
-        case .claude:
-            request.setValue(config.apiKey, forHTTPHeaderField: "x-api-key")
-            request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-            body = [
-                "model": config.model,
-                "max_tokens": 256,
-                "system": system,
-                "messages": [["role": "user", "content": content]],
-            ]
-            if structured {
-                body["output_config"] = [
-                    "format": ["type": "json_schema",
-                               "schema": Self.claudeOutputSchema(candidates: candidates,
-                                                                 maxTags: maxTags)],
-                ]
-            }
-        case .openai:
-            request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
-            body = [
-                "model": config.model,
-                "max_tokens": 256,
-                "messages": [
-                    ["role": "system", "content": system],
-                    ["role": "user", "content": content],
-                ],
-            ]
-            if structured {
-                body["response_format"] = ["type": "json_object"]
-            }
-        }
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        return request
-    }
-
-    /// 不带结构化输出约束时，模型可能把 JSON 包在 markdown 代码围栏里
-    static func stripCodeFences(_ text: String) -> String {
-        var result = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if result.hasPrefix("```") {
-            result = result
-                .replacing(/^```[a-zA-Z]*\s*/, with: "")
-                .replacing(/```\s*$/, with: "")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        return result
     }
 
     /// Claude structured outputs：用 enum 把可选值锁死在候选 tag 列表内
