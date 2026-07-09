@@ -33,10 +33,14 @@ final class AppSettings: ObservableObject {
         return LLMConfig(apiProtocol: llmProtocol, baseURL: url, apiKey: llmAPIKey, model: llmModel)
     }
 
-    /// 解析管线：规则优先，配置了 LLM 就带兜底
+    /// 解析管线：配了 LLM 就"分类靠正则、结构化靠 LLM"（快递/行程走 LLM 抽字段），
+    /// 兜底仍用 LLMTodoParser 抽自由文本里的待办；没配 LLM 则纯规则降级。
     var parserPipeline: ParserPipeline {
-        ParserPipeline(primary: RuleParser(),
-                       fallback: llmConfig.map { LLMTodoParser(config: $0) })
+        guard let llmConfig else {
+            return ParserPipeline(primary: RuleParser())
+        }
+        return ParserPipeline(primary: LLMStructuredParser(config: llmConfig),
+                              fallback: LLMTodoParser(config: llmConfig))
     }
 
     // MARK: 滴答清单绑定状态

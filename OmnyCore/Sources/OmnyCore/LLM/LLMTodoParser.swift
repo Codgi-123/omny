@@ -55,6 +55,9 @@ public struct LLMTodoParser: Parser {
     public var config: LLMConfig
     public var transport: any HTTPTransport
 
+    /// 请求构造/发送/响应解析的公共底座
+    var client: LLMClient { LLMClient(config: config, transport: transport) }
+
     public init(config: LLMConfig, transport: any HTTPTransport = URLSessionTransport()) {
         self.config = config
         self.transport = transport
@@ -83,61 +86,17 @@ public struct LLMTodoParser: Parser {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
-        let (data, response) = try await transport.send(makeRequest(text: trimmed, now: Date()))
-        guard response.statusCode == 200 else {
-            throw LLMParseError.httpError(status: response.statusCode,
-                                          body: String(decoding: data, as: UTF8.self))
-        }
-
-        let jsonText = try extractContentText(from: data)
+        let system = Self.systemPrompt.replacingOccurrences(
+            of: "{TODAY}", with: ISO8601DateFormatter().string(from: Date()))
+        let jsonText = try await client.send(system: system, user: trimmed,
+                                             schema: Self.claudeOutputSchema)
         let extracted = try JSONDecoder().decode(ExtractedTodos.self, from: Data(jsonText.utf8))
         guard !extracted.todos.isEmpty else { return nil }
 
         let todos = extracted.todos.map { item in
-            TodoInfo(title: item.title, due: item.due.flatMap(Self.dateComponents(fromISO:)))
+            TodoInfo(title: item.title, due: item.due.flatMap(LLMClient.dateComponents(fromISO:)))
         }
         return ParseResult(payload: .todos(todos), confidence: 0.85, rawText: trimmed)
-    }
-
-    // MARK: 请求构造（按协议分派）
-
-    func makeRequest(text: String, now: Date) -> URLRequest {
-        var request = URLRequest(url: config.endpoint)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        let system = Self.systemPrompt.replacingOccurrences(
-            of: "{TODAY}", with: ISO8601DateFormatter().string(from: now))
-
-        let body: [String: Any]
-        switch config.apiProtocol {
-        case .claude:
-            request.setValue(config.apiKey, forHTTPHeaderField: "x-api-key")
-            request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-            body = [
-                "model": config.model,
-                "max_tokens": 2048,
-                "system": system,
-                "messages": [["role": "user", "content": text]],
-                "output_config": [
-                    "format": ["type": "json_schema", "schema": Self.claudeOutputSchema],
-                ],
-            ]
-        case .openai:
-            request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
-            body = [
-                "model": config.model,
-                "max_tokens": 2048,
-                "messages": [
-                    ["role": "system", "content": system],
-                    ["role": "user", "content": text],
-                ],
-                // json_object 比 json_schema 兼容面广，各家中转/自建端点基本都支持
-                "response_format": ["type": "json_object"],
-            ]
-        }
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        return request
     }
 
     /// Claude structured outputs 的 JSON Schema（响应保证合法且符合结构）
@@ -160,31 +119,4 @@ public struct LLMTodoParser: Parser {
         "required": ["todos"],
         "additionalProperties": false,
     ] }
-
-    // MARK: 响应解析（按协议分派）
-
-    func extractContentText(from data: Data) throws -> String {
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw LLMParseError.malformedResponse
-        }
-        switch config.apiProtocol {
-        case .claude:
-            guard let content = json["content"] as? [[String: Any]],
-                  let text = content.first(where: { $0["type"] as? String == "text" })?["text"] as? String
-            else { throw LLMParseError.malformedResponse }
-            return text
-        case .openai:
-            guard let choices = json["choices"] as? [[String: Any]],
-                  let message = choices.first?["message"] as? [String: Any],
-                  let text = message["content"] as? String
-            else { throw LLMParseError.malformedResponse }
-            return text
-        }
-    }
-
-    static func dateComponents(fromISO string: String) -> DateComponents? {
-        guard let date = ISO8601DateFormatter().date(from: string) else { return nil }
-        return Calendar(identifier: .gregorian)
-            .dateComponents([.year, .month, .day, .hour, .minute], from: date)
-    }
 }
