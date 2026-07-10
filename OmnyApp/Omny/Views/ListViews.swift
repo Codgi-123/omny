@@ -573,6 +573,8 @@ private struct ReviewCard: View {
     @Environment(\.modelContext) private var context
     @EnvironmentObject private var dida: DidaService
     @State private var expanded = false
+    @State private var retrying = false
+    @State private var retryError: String?
 
     private var fullText: String {
         item.kind == .todo ? (item.todoTitle ?? item.rawText) : item.rawText
@@ -609,6 +611,9 @@ private struct ReviewCard: View {
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .opacity(0.9)
             }
+            if let error = retryError {
+                Text(error).font(.system(size: 12)).foregroundStyle(Theme.red)
+            }
             HStack(spacing: 8) {
                 if item.kind == .todo {
                     Button("确认入库") {
@@ -619,15 +624,54 @@ private struct ReviewCard: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(Theme.accent)
+                } else {
+                    // 未分类/低置信条目：用原文重新走解析（偶发 LLM 抖动导致没识别出的，重试常能成）
+                    Button {
+                        retry()
+                    } label: {
+                        if retrying { ProgressView().controlSize(.small) }
+                        else { Text("重新识别") }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Theme.accent)
+                    .disabled(retrying)
                 }
                 Button("删除", role: .destructive) {
                     context.delete(item)
                     try? context.save()
                 }
                 .buttonStyle(.bordered)
+                .disabled(retrying)
             }
             .controlSize(.small)
         }
         .cardStyle()
+    }
+
+    /// 重新识别：用原文按来源重跑解析管线，成功则删掉这条未分类项、新结果入对应分类。
+    private func retry() {
+        retrying = true
+        retryError = nil
+        let raw = item.rawText
+        let source = item.source
+        Task {
+            // 截图来源走截图专用解析器，其余走默认管线
+            let parser: (any Parser)? = source == .screenshot ? AppSettings.shared.screenParser : nil
+            let newItems = await Ingestor.ingest(text: raw, source: source,
+                                                 parser: parser, context: context)
+            retrying = false
+            // 新结果里有明确分类（非未分类）才算识别成功；否则删掉 ingest 可能新建的未分类项，避免重复
+            let recognized = newItems.filter { $0.kind != .unclassified }
+            if recognized.isEmpty {
+                // 清理本次 ingest 可能产生的新未分类项（保留原条目让用户手动处理）
+                for n in newItems where n.id != item.id { context.delete(n) }
+                try? context.save()
+                retryError = "仍无法识别，可保留手动处理或删除"
+            } else {
+                // 识别成功 → 删掉旧的未分类项（新结果已各自入库/进对应 Tab）
+                context.delete(item)
+                try? context.save()
+            }
+        }
     }
 }
