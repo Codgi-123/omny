@@ -6,6 +6,7 @@ import OmnyCore
 
 struct PackageCard: View {
     @Bindable var item: InboxItem
+    @Environment(\.modelContext) private var context
     @State private var copied = false
 
     var body: some View {
@@ -75,6 +76,17 @@ struct PackageCard: View {
                 .foregroundStyle(Theme.sub)
         }
         .cardStyle()
+        .contextMenu {
+            if let code = item.pickupCode {
+                Button {
+                    UIPasteboard.general.string = code
+                } label: { Label("复制取件码", systemImage: "doc.on.doc") }
+            }
+            Button(role: .destructive) {
+                context.delete(item)
+                try? context.save()
+            } label: { Label("删除", systemImage: "trash") }
+        }
     }
 
     private var statusBadge: some View {
@@ -91,6 +103,7 @@ struct PackageCard: View {
 
 struct TripCard: View {
     let item: InboxItem
+    @Environment(\.modelContext) private var context
 
     var body: some View {
         VStack(spacing: 14) {
@@ -151,6 +164,13 @@ struct TripCard: View {
             }
         }
         .cardStyle(warm: true)
+        .contextMenu {
+            Button(role: .destructive) {
+                // TODO: 日历写入功能实现后，此处按 calendarEventID 联动删除系统日历事件
+                context.delete(item)
+                try? context.save()
+            } label: { Label("删除", systemImage: "trash") }
+        }
     }
 
     private func countdown(to date: Date) -> String {

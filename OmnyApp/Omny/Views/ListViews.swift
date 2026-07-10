@@ -46,6 +46,7 @@ struct ExpressView: View {
 // MARK: - 行程页：即将出行 / 历史
 
 struct TripView: View {
+    @Environment(\.modelContext) private var context
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var items: [InboxItem]
 
     private var trips: [InboxItem] { items.filter { $0.kind == .trip } }
@@ -88,6 +89,12 @@ struct TripView: View {
                         }
                         .cardStyle()
                         .opacity(0.62)
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                context.delete(item)
+                                try? context.save()
+                            } label: { Label("删除", systemImage: "trash") }
+                        }
                     }
                 }
             }

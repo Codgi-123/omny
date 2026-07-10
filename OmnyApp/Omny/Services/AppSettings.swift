@@ -86,4 +86,19 @@ final class AppSettings: ObservableObject {
         didaLastSync = defaults.object(forKey: "dida.lastSync") as? Date
         autoAddToCalendar = defaults.object(forKey: "trip.autoCalendar") as? Bool ?? true
     }
+
+    /// 恢复出厂：LLM 配置、滴答绑定、收藏标签全部重置为默认。
+    /// （不含条目数据——那由 DataMaintenance 清 SwiftData。）赋值经各自 didSet 落回 UserDefaults。
+    func resetToDefaults() {
+        llmProtocol = .claude
+        llmBaseURL = "https://api.anthropic.com"
+        llmAPIKey = ""
+        llmModel = "claude-opus-4-8"
+        bookmarkTags = Self.defaultBookmarkTags
+        didaAccessToken = nil
+        didaProjectID = nil
+        didaProjectName = nil
+        didaLastSync = nil
+        autoAddToCalendar = true
+    }
 }

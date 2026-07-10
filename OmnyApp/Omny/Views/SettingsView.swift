@@ -20,6 +20,9 @@ struct SettingsView: View {
     @State private var llmTesting = false
     @State private var llmTestSucceeded = false
     @State private var llmTestResult: String?
+    @State private var showClearItemsConfirm = false
+    @State private var showResetConfirm = false
+    @State private var maintenanceResult: String?
 
     var body: some View {
         Form {
@@ -128,8 +131,26 @@ struct SettingsView: View {
                 """)
             }
 
-            Section("数据") {
+            Section {
                 NavigationLink("需处理内容") { ReviewView() }
+                Button(role: .destructive) {
+                    showClearItemsConfirm = true
+                } label: {
+                    Label("清空所有条目", systemImage: "trash")
+                }
+                Button(role: .destructive) {
+                    showResetConfirm = true
+                } label: {
+                    Label("恢复出厂设置", systemImage: "arrow.counterclockwise")
+                }
+            } header: {
+                Text("数据")
+            } footer: {
+                if let result = maintenanceResult {
+                    Text(result).foregroundStyle(Theme.green)
+                } else {
+                    Text("「清空所有条目」删除全部快递/行程/待办/收藏/未分类数据，保留 LLM、滴答、标签配置；「恢复出厂设置」在清空条目的基础上再重置所有配置。")
+                }
             }
 
             Section("关于") {
@@ -137,6 +158,18 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("设置")
+        .confirmationDialog("清空所有条目？", isPresented: $showClearItemsConfirm, titleVisibility: .visible) {
+            Button("清空", role: .destructive) { clearAllItems() }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("将删除全部快递、行程、待办、收藏及未处理内容，不可恢复。LLM / 滴答 / 标签配置保留。")
+        }
+        .confirmationDialog("恢复出厂设置？", isPresented: $showResetConfirm, titleVisibility: .visible) {
+            Button("恢复出厂", role: .destructive) { resetEverything() }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("将删除全部条目并重置 LLM、滴答绑定、收藏标签等所有配置，不可恢复。")
+        }
         .sheet(isPresented: $showDidaAuth) {
             didaAuthSheet
         }
@@ -164,6 +197,27 @@ struct SettingsView: View {
             }
             llmTesting = false
         }
+    }
+
+    /// 删除全部 InboxItem，返回删除条数。保留所有配置。
+    @discardableResult
+    private func deleteAllItems() -> Int {
+        let all = (try? context.fetch(FetchDescriptor<InboxItem>())) ?? []
+        for item in all { context.delete(item) }
+        try? context.save()
+        return all.count
+    }
+
+    private func clearAllItems() {
+        let count = deleteAllItems()
+        maintenanceResult = "已清空 \(count) 条数据"
+    }
+
+    private func resetEverything() {
+        let count = deleteAllItems()
+        settings.resetToDefaults()
+        llmTestResult = nil
+        maintenanceResult = "已恢复出厂：清空 \(count) 条数据并重置配置"
     }
 
     private var didaAuthSheet: some View {
