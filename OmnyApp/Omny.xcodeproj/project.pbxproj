@@ -56,10 +56,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		2F8DAA5F39FB955E53DF0154 /* OmnyShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = OmnyShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		2F8DAA5F39FB955E53DF0154 /* OmnyShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = OmnyShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		37F66C226030118977E6ED59 /* InboxItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxItem.swift; sourceTree = "<group>"; };
 		4455F6F7EC03910790C400B0 /* OmnyCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = OmnyCore; path = ../OmnyCore; sourceTree = SOURCE_ROOT; };
-		487983E7453EA416476B5FA9 /* Omny.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Omny.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		487983E7453EA416476B5FA9 /* Omny.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Omny.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		49499EEAD615EA2186C49C44 /* TagManageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagManageView.swift; sourceTree = "<group>"; };
 		4EE20B2F349C81A0B7136CA6 /* Cards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Cards.swift; sourceTree = "<group>"; };
 		4F11CE0A32B974AB527A89BD /* OmnyIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OmnyIntents.swift; sourceTree = "<group>"; };
@@ -249,9 +249,11 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					159E6BCE502194224DC4AD29 = {
+						DevelopmentTeam = 46SC6UDH48;
 						ProvisioningStyle = Automatic;
 					};
 					70A731F55022E37FDB13C5D8 = {
+						DevelopmentTeam = 46SC6UDH48;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -349,8 +351,7 @@
 				CODE_SIGN_ENTITLEMENTS = Omny/Omny.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 46SC6UDH48;
+				CURRENT_PROJECT_VERSION = 3;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Omny;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
@@ -498,8 +499,7 @@
 				CODE_SIGN_ENTITLEMENTS = Omny/Omny.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 46SC6UDH48;
+				CURRENT_PROJECT_VERSION = 3;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Omny;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
@@ -525,8 +525,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = OmnyShare/OmnyShare.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 46SC6UDH48;
+				CURRENT_PROJECT_VERSION = 3;
 				INFOPLIST_FILE = OmnyShare/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -550,8 +549,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = OmnyShare/OmnyShare.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 46SC6UDH48;
+				CURRENT_PROJECT_VERSION = 3;
 				INFOPLIST_FILE = OmnyShare/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (

@@ -25,6 +25,8 @@ xcodebuild -project OmnyApp/Omny.xcodeproj -scheme Omny -configuration Debug \
 xcrun devicectl list devices
 xcrun devicectl device install app --device <设备ID> \
   ~/OmnyBuild/Build/Products/Debug-iphoneos/Omny.app
+
+# 打包上传 TestFlight（命令行全流程，含 ASC API Key 配置与踩坑）见 docs/testflight-release.md
 ```
 
 首次搭建需要密钥：`cp OmnyApp/Secrets.swift.example OmnyApp/Omny/Services/Secrets.swift`（滴答清单 client_id/secret，向维护者索要）。`Secrets.swift` 和根目录 `Secrets.local.json` 已被 .gitignore 排除，禁止提交。LLM API Key 不进代码，运行时在 App 设置页填。
