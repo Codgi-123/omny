@@ -35,7 +35,8 @@ enum Ingestor {
             item.needsReview = true
             item.sourceImage = sourceImage
             context.insert(item)
-            try? context.save()
+            // save 失败要如实反映：回滚插入并返回空，避免上层误报"已存入待处理"却查无此条
+            guard saveOrRollback([item], context: context) else { return [] }
             return [item]
         }
 
@@ -69,8 +70,22 @@ enum Ingestor {
         for item in items where result.confidence < 0.8 {
             item.needsReview = true
         }
-        try? context.save()
+        // save 失败要如实反映：回滚本次插入并返回空，避免上层误报"已入库"却查无此条
+        guard saveOrRollback(items, context: context) else { return [] }
         return items
+    }
+
+    /// 保存，失败时回滚本次未提交的更改。返回是否保存成功。
+    /// 用 context.rollback() 撤销所有未保存的 insert/update（本次入库尚未 save，回滚即清空这批新条目），
+    /// 避免把"半落库"状态留给用户——上层据返回值如实提示，不再出现"提示已存入却查无此条"。
+    private static func saveOrRollback(_ items: [InboxItem], context: ModelContext) -> Bool {
+        do {
+            try context.save()
+            return true
+        } catch {
+            context.rollback()
+            return false
+        }
     }
 
     // MARK: 收藏：分享/手动入口固定落成收藏，不走解析管线
