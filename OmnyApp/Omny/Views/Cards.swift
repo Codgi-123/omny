@@ -90,6 +90,10 @@ struct PackageCard: View {
                     Label("复制取件码", systemImage: "doc.on.doc")
                 }
             }
+            Button(role: .destructive) {
+                context.delete(item)
+                try? context.save()
+            } label: { Label("删除", systemImage: "trash") }
         }
     }
 
@@ -144,6 +148,7 @@ struct PackageCard: View {
 
 struct TripCard: View {
     let item: InboxItem
+    @Environment(\.modelContext) private var context
 
     private var isFlight: Bool { item.tripKindRaw == "flight" }
 

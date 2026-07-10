@@ -145,7 +145,7 @@ final class IngestFilterTests: XCTestCase {
 
         XCTAssertEqual(result?.payload.itemType, .todo)
         XCTAssertTrue(passesFilter(result, allowedTypes: nil),
-                      "全放行入口（如截图识别待办）应放行待办")
+                      "全放行入口（如屏幕识别/截图）应放行待办")
     }
 
     func testNilWhitelistKeepsUnclassified() async throws {

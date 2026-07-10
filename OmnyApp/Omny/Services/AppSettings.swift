@@ -43,6 +43,12 @@ final class AppSettings: ObservableObject {
                               fallback: LLMTodoParser(config: llmConfig))
     }
 
+    /// 截图 OCR 专用解析器：一屏多条多类一次抽取（快递/行程/待办），忽略噪声。
+    /// 未配 LLM 时 ScreenParser 内部按行走规则降级，故 config 传 nil 也可用。
+    var screenParser: ScreenParser {
+        ScreenParser(config: llmConfig)
+    }
+
     // MARK: 收藏 tag（预置一批，设置页可增删改；LLM 打标只从这里选）
 
     static let defaultBookmarkTags = ["技术", "资讯", "视频", "购物", "美食", "旅行", "灵感", "工具", "娱乐"]
@@ -85,5 +91,20 @@ final class AppSettings: ObservableObject {
         didaProjectName = defaults.string(forKey: "dida.projectName")
         didaLastSync = defaults.object(forKey: "dida.lastSync") as? Date
         autoAddToCalendar = defaults.object(forKey: "trip.autoCalendar") as? Bool ?? true
+    }
+
+    /// 恢复出厂：LLM 配置、滴答绑定、收藏标签全部重置为默认。
+    /// （不含条目数据——那由 DataMaintenance 清 SwiftData。）赋值经各自 didSet 落回 UserDefaults。
+    func resetToDefaults() {
+        llmProtocol = .claude
+        llmBaseURL = "https://api.anthropic.com"
+        llmAPIKey = ""
+        llmModel = "claude-opus-4-8"
+        bookmarkTags = Self.defaultBookmarkTags
+        didaAccessToken = nil
+        didaProjectID = nil
+        didaProjectName = nil
+        didaLastSync = nil
+        autoAddToCalendar = true
     }
 }

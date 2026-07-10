@@ -10,43 +10,70 @@ enum Ingestor {
     /// 入库。`allowedTypes` 为类型白名单：解析出的类型不在其中则丢弃（不落库）。
     /// nil 表示全放行（截图/分享/手动等入口用）；「解析文本」快捷指令传 [.package, .trip, .todo]，
     /// 短信里混进的收藏（链接）不入库。
+    /// 入库。`allowedTypes` 为类型白名单：解析出的类型不在其中则丢弃（不落库）。
+    /// nil 表示全放行（截图/分享/手动等入口用）；「解析文本」快捷指令传 [.package, .trip, .todo]，
+    /// 短信里混进的收藏（链接）不入库。
+    /// `parser` 为空时用默认 parserPipeline（短信/分享等，整段归一类）；
+    /// 截图入口传 screenParser（一屏多条多类，返回 .mixed）。
     @discardableResult
     static func ingest(text: String, source: ItemSource,
                        sourceImage: Data? = nil,
                        allowedTypes: Set<ItemType>? = nil,
+                       parser: (any Parser)? = nil,
                        context: ModelContext) async -> [InboxItem] {
         let result: ParseResult?
         do {
-            result = try await AppSettings.shared.parserPipeline.parse(text)
+            let p = parser ?? AppSettings.shared.parserPipeline
+            result = try await p.parse(text)
         } catch {
             result = nil
-        }
-
-        // 类型白名单过滤：解析结果类型不在白名单内直接丢弃，不落库、不进"需处理"
-        if let allowedTypes, let result, !allowedTypes.contains(result.payload.itemType) {
-            return []
         }
 
         guard let result else {
             // 带白名单的入口（解析文本）没认出目标类型时不留未分类项，直接丢弃
             if allowedTypes != nil { return [] }
-            // 规则和 LLM 都没认出来 → 未分类，进"需处理"
+            // 规则和 LLM 都没认出来 → 未分类，进"需处理"（截图脏文本降级失败时也走这里，原文不丢）
             let item = InboxItem(kind: .unclassified, source: source, rawText: text)
             item.needsReview = true
             item.sourceImage = sourceImage
             context.insert(item)
-            try? context.save()
+            // save 失败要如实反映：回滚插入并返回空，避免上层误报"已存入待处理"却查无此条
+            guard saveOrRollback([item], context: context) else { return [] }
             return [item]
         }
 
-        let items: [InboxItem]
-        switch result.payload {
+        // 展平多条多类（mixed）为逐条单类载荷；非 mixed 就是单元素
+        var payloads = result.payload.flattened
+        // 类型白名单过滤：只保留白名单内的类型（截图入口 allowedTypes=nil 不过滤）
+        if let allowedTypes {
+            payloads = payloads.filter { allowedTypes.contains($0.itemType) }
+        }
+        guard !payloads.isEmpty else { return [] }
+
+        var items: [InboxItem] = []
+        for payload in payloads {
+            items.append(contentsOf: ingestPayload(payload, text: text, source: source,
+                                                    sourceImage: sourceImage, context: context))
+        }
+
+        for item in items where result.confidence < 0.8 {
+            item.needsReview = true
+        }
+        // save 失败要如实反映：回滚本次插入并返回空，避免上层误报"已入库"却查无此条
+        guard saveOrRollback(items, context: context) else { return [] }
+        return items
+    }
+
+    /// 单条载荷 → InboxItem（快递按单号合并；一条 .todos 可能展开成多条）。
+    private static func ingestPayload(_ payload: ParsedPayload, text: String, source: ItemSource,
+                                      sourceImage: Data?, context: ModelContext) -> [InboxItem] {
+        switch payload {
         case .package(let info):
-            items = [ingestPackage(info, text: text, source: source, context: context)]
+            return [ingestPackage(info, text: text, source: source, context: context)]
         case .trip(let info):
-            items = [ingestTrip(info, text: text, source: source, context: context)]
+            return [ingestTrip(info, text: text, source: source, context: context)]
         case .todos(let todos):
-            items = todos.map { todo in
+            return todos.map { todo in
                 let item = InboxItem(kind: .todo, source: source, rawText: text)
                 item.todoTitle = todo.title
                 item.todoDue = resolveDate(todo.due)
@@ -63,14 +90,25 @@ enum Ingestor {
             context.insert(item)
             // 补标题和打标不阻塞入库（短信快捷指令等入口要求即时返回）
             Task { await enrichBookmark(item, context: context) }
-            items = [item]
+            return [item]
+        case .mixed(let inner):
+            // 理论上已被 flattened 展开，防御性再展一层
+            return inner.flatMap { ingestPayload($0, text: text, source: source,
+                                                 sourceImage: sourceImage, context: context) }
         }
+    }
 
-        for item in items where result.confidence < 0.8 {
-            item.needsReview = true
+    /// 保存，失败时回滚本次未提交的更改。返回是否保存成功。
+    /// 用 context.rollback() 撤销所有未保存的 insert/update（本次入库尚未 save，回滚即清空这批新条目），
+    /// 避免把"半落库"状态留给用户——上层据返回值如实提示，不再出现"提示已存入却查无此条"。
+    private static func saveOrRollback(_ items: [InboxItem], context: ModelContext) -> Bool {
+        do {
+            try context.save()
+            return true
+        } catch {
+            context.rollback()
+            return false
         }
-        try? context.save()
-        return items
     }
 
     // MARK: 收藏：分享/手动入口固定落成收藏，不走解析管线

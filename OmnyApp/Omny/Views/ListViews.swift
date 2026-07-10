@@ -71,6 +71,7 @@ struct ExpressView: View {
 // MARK: - 行程页：即将出行 / 历史
 
 struct TripView: View {
+    @Environment(\.modelContext) private var context
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var items: [InboxItem]
 
     private var trips: [InboxItem] { items.filter { $0.kind == .trip } }
@@ -105,6 +106,12 @@ struct TripView: View {
                         }
                         .opacity(0.7)
                         .cardCell()
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                context.delete(item)
+                                try? context.save()
+                            } label: { Label("删除", systemImage: "trash") }
+                        }
                     }
                 } header: {
                     tripHeader("历史行程")
@@ -568,26 +575,19 @@ struct BookmarkTagSheet: View {
 // MARK: - 需修正页（截图待办确认 + 未分类）
 
 struct ReviewView: View {
-    @Environment(\.modelContext) private var context
-    @EnvironmentObject private var dida: DidaService
     @Query(filter: #Predicate<InboxItem> { $0.needsReview && !$0.deletedLocally },
            sort: \InboxItem.createdAt, order: .reverse)
     private var reviewItems: [InboxItem]
 
     var body: some View {
-        List {
-            ForEach(reviewItems) { item in
-                reviewCard(item)
-                    .cardCell()
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        Button(role: .destructive) {
-                            context.delete(item)
-                            try? context.save()
-                        } label: {
-                            Label("删除", systemImage: "trash")
-                        }
-                    }
+        ScrollView {
+            LazyVStack(spacing: 10) {
+                ForEach(reviewItems) { item in
+                    ReviewCard(item: item)
+                        .padding(.horizontal, Theme.Space.page)
+                }
             }
+            .padding(.vertical, 8)
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
@@ -599,21 +599,44 @@ struct ReviewView: View {
         }
         .navigationTitle("需处理")
     }
+}
 
-    @ViewBuilder
-    private func reviewCard(_ item: InboxItem) -> some View {
+/// 需处理单条卡片：点击正文可展开/收起全文（默认截断，长文本给提示）。
+private struct ReviewCard: View {
+    @Bindable var item: InboxItem
+    @Environment(\.modelContext) private var context
+    @EnvironmentObject private var dida: DidaService
+    @State private var expanded = false
+    @State private var retrying = false
+    @State private var retryError: String?
+
+    private var fullText: String {
+        item.kind == .todo ? (item.todoTitle ?? item.rawText) : item.rawText
+    }
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Badge(text: item.kind == .todo ? "截图待办" : "未分类",
                       color: item.kind == .todo ? Theme.green : Theme.sub)
                 Spacer()
-                Text(item.createdAt.formatted(.relative(presentation: .named).locale(Locale(identifier: "zh_CN"))))
-                    .font(.caption)
+                Text(item.createdAt.formatted(.relative(presentation: .named)))
+                    .font(.system(size: 12))
                     .foregroundStyle(Theme.sub)
             }
-            Text(item.kind == .todo ? (item.todoTitle ?? item.rawText) : item.rawText)
-                .font(.body)
-                .lineLimit(4)
+            Text(fullText)
+                .font(.system(size: 14.5, weight: item.kind == .todo ? .bold : .regular))
+                .lineLimit(expanded ? nil : 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture { withAnimation { expanded.toggle() } }
+            // 文本较长时给个展开/收起提示（粗略按长度判断，够用）
+            if fullText.count > 60 {
+                Text(expanded ? "收起" : "展开全文")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.accent)
+                    .onTapGesture { withAnimation { expanded.toggle() } }
+            }
             if let imageData = item.sourceImage, let image = UIImage(data: imageData) {
                 Image(uiImage: image)
                     .resizable()
@@ -621,6 +644,9 @@ struct ReviewView: View {
                     .frame(height: 90)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .opacity(0.9)
+            }
+            if let error = retryError {
+                Text(error).font(.system(size: 12)).foregroundStyle(Theme.red)
             }
             HStack(spacing: 8) {
                 if item.kind == .todo {
@@ -632,15 +658,54 @@ struct ReviewView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(Theme.accent)
+                } else {
+                    // 未分类/低置信条目：用原文重新走解析（偶发 LLM 抖动导致没识别出的，重试常能成）
+                    Button {
+                        retry()
+                    } label: {
+                        if retrying { ProgressView().controlSize(.small) }
+                        else { Text("重新识别") }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Theme.accent)
+                    .disabled(retrying)
                 }
                 Button("删除", role: .destructive) {
                     context.delete(item)
                     try? context.save()
                 }
                 .buttonStyle(.bordered)
+                .disabled(retrying)
             }
             .controlSize(.small)
-            .padding(.top, 2)
+        }
+        .cardStyle()
+    }
+
+    /// 重新识别：用原文按来源重跑解析管线，成功则删掉这条未分类项、新结果入对应分类。
+    private func retry() {
+        retrying = true
+        retryError = nil
+        let raw = item.rawText
+        let source = item.source
+        Task {
+            // 截图来源走截图专用解析器，其余走默认管线
+            let parser: (any Parser)? = source == .screenshot ? AppSettings.shared.screenParser : nil
+            let newItems = await Ingestor.ingest(text: raw, source: source,
+                                                 parser: parser, context: context)
+            retrying = false
+            // 新结果里有明确分类（非未分类）才算识别成功；否则删掉 ingest 可能新建的未分类项，避免重复
+            let recognized = newItems.filter { $0.kind != .unclassified }
+            if recognized.isEmpty {
+                // 清理本次 ingest 可能产生的新未分类项（保留原条目让用户手动处理）
+                for n in newItems where n.id != item.id { context.delete(n) }
+                try? context.save()
+                retryError = "仍无法识别，可保留手动处理或删除"
+            } else {
+                // 识别成功 → 删掉旧的未分类项（新结果已各自入库/进对应 Tab）
+                context.delete(item)
+                try? context.save()
+            }
         }
     }
 }

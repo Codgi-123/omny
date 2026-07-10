@@ -105,6 +105,9 @@ public enum ParsedPayload: Equatable, Sendable {
     /// 一段文本里可能识别出多条待办（截图 OCR 场景）
     case todos([TodoInfo])
     case bookmark(BookmarkInfo)
+    /// 一屏多条多类（截图 OCR 场景）：一次识别里同时含快递/行程/待办等不同类型。
+    /// 下游 Ingestor 递归展开逐条落库。不应再嵌套 .mixed。
+    case mixed([ParsedPayload])
 
     public var itemType: ItemType {
         switch self {
@@ -112,6 +115,18 @@ public enum ParsedPayload: Equatable, Sendable {
         case .trip: .trip
         case .todos: .todo
         case .bookmark: .bookmark
+        // mixed 无单一类型：取首个子载荷的类型（仅用于白名单粗筛等场景；
+        // 真正落库靠 Ingestor 递归展开，不依赖这里）。空则回退 todo。
+        case .mixed(let payloads): payloads.first?.itemType ?? .todo
+        }
+    }
+
+    /// 展平成单类载荷列表：非 mixed 返回自身，mixed 返回其子载荷（一层，不递归嵌套）。
+    /// 供 Ingestor 统一遍历落库。
+    public var flattened: [ParsedPayload] {
+        switch self {
+        case .mixed(let payloads): payloads.flatMap { $0.flattened }
+        default: [self]
         }
     }
 }

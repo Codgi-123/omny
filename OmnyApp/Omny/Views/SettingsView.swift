@@ -6,10 +6,10 @@ import OmnyCore
 struct SettingsView: View {
     /// 「解析文本」完整流程的 iCloud 分享链接。
     /// 在快捷指令 App 里打开该流程 → 分享 → 拷贝 iCloud 链接，替换下面这行即可。
-    static let shortcutImportURL = URL(string: "https://www.icloud.com/shortcuts/e8e226e0783b45798e073496bcb24055")!
+    static let shortcutImportURL = URL(string: "https://www.icloud.com/shortcuts/e2a443a47159409f8c2856f3f208e4f1")!
 
-    /// 「截图记忆 / 识别待办」流程的 iCloud 分享链接。
-    static let screenshotShortcutImportURL = URL(string: "https://www.icloud.com/shortcuts/86cc3863169a47a39b1b9b42c02af568")!
+    /// 「截图记忆 / 屏幕识别」流程的 iCloud 分享链接。
+    static let screenshotShortcutImportURL = URL(string: "https://www.icloud.com/shortcuts/bb110a85ef5b44489ab20bf808265084")!
 
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var dida: DidaService
@@ -20,6 +20,9 @@ struct SettingsView: View {
     @State private var llmTesting = false
     @State private var llmTestSucceeded = false
     @State private var llmTestResult: String?
+    @State private var showClearItemsConfirm = false
+    @State private var showResetConfirm = false
+    @State private var maintenanceResult: String?
 
     var body: some View {
         Form {
@@ -53,7 +56,7 @@ struct SettingsView: View {
                         Text(result)
                             .foregroundStyle(llmTestSucceeded ? Theme.green : Theme.red)
                     }
-                    Text("用于截图待办提取和收藏自动打标。填域名即可，路径按协议自动补全（Claude → /v1/messages，OpenAI → /v1/chat/completions）。留空 Key 则只用规则引擎。")
+                    Text("用于屏幕识别（快递/行程/待办结构化）和收藏自动打标。填域名即可，路径按协议自动补全（Claude → /v1/messages，OpenAI → /v1/chat/completions）。留空 Key 则只用规则引擎。")
                 }
             }
 
@@ -116,20 +119,38 @@ struct SettingsView: View {
                 Button {
                     openURL(Self.screenshotShortcutImportURL)
                 } label: {
-                    Label("导入「识别待办」快捷指令", systemImage: "square.and.arrow.down")
+                    Label("导入「屏幕识别」快捷指令", systemImage: "square.and.arrow.down")
                 }
             } header: {
-                Text("快捷指令 · 识别待办")
+                Text("快捷指令 · 屏幕识别")
             } footer: {
                 Text("""
-                第 1 步：点上方按钮，在弹出的页面点「添加快捷指令」。流程内已包含「截屏 → 识别图像文本 → 识别待办」，OCR 在快捷指令侧完成。
+                第 1 步：点上方按钮，在弹出的页面点「添加快捷指令」。流程内已包含「截屏 → 识别图像文本 → 屏幕识别」，OCR 在快捷指令侧完成。
                 第 2 步：手动触发运行——推荐设为「轻点背面两下」（设置 → 辅助功能 → 触控 → 轻点背面）或加进控制中心。iOS 没有「截屏即运行」的自动化触发器，需手动唤起。
-                运行后自动截屏、识别文字并提取待办，结果进「需处理内容」等你确认。
+                运行后自动截屏、识别文字并归类（快递 / 行程 / 待办 / 收藏），其中待办进「需处理内容」等你确认，其余直接入对应分类。
                 """)
             }
 
-            Section("数据") {
+            Section {
                 NavigationLink("需处理内容") { ReviewView() }
+                Button(role: .destructive) {
+                    showClearItemsConfirm = true
+                } label: {
+                    Label("清空所有条目", systemImage: "trash")
+                }
+                Button(role: .destructive) {
+                    showResetConfirm = true
+                } label: {
+                    Label("恢复出厂设置", systemImage: "arrow.counterclockwise")
+                }
+            } header: {
+                Text("数据")
+            } footer: {
+                if let result = maintenanceResult {
+                    Text(result).foregroundStyle(Theme.green)
+                } else {
+                    Text("「清空所有条目」删除全部快递/行程/待办/收藏/未分类数据，保留 LLM、滴答、标签配置；「恢复出厂设置」在清空条目的基础上再重置所有配置。")
+                }
             }
 
             Section("关于") {
@@ -137,6 +158,18 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("设置")
+        .confirmationDialog("清空所有条目？", isPresented: $showClearItemsConfirm, titleVisibility: .visible) {
+            Button("清空", role: .destructive) { clearAllItems() }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("将删除全部快递、行程、待办、收藏及未处理内容，不可恢复。LLM / 滴答 / 标签配置保留。")
+        }
+        .confirmationDialog("恢复出厂设置？", isPresented: $showResetConfirm, titleVisibility: .visible) {
+            Button("恢复出厂", role: .destructive) { resetEverything() }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("将删除全部条目并重置 LLM、滴答绑定、收藏标签等所有配置，不可恢复。")
+        }
         .sheet(isPresented: $showDidaAuth) {
             didaAuthSheet
         }
@@ -164,6 +197,27 @@ struct SettingsView: View {
             }
             llmTesting = false
         }
+    }
+
+    /// 删除全部 InboxItem，返回删除条数。保留所有配置。
+    @discardableResult
+    private func deleteAllItems() -> Int {
+        let all = (try? context.fetch(FetchDescriptor<InboxItem>())) ?? []
+        for item in all { context.delete(item) }
+        try? context.save()
+        return all.count
+    }
+
+    private func clearAllItems() {
+        let count = deleteAllItems()
+        maintenanceResult = "已清空 \(count) 条数据"
+    }
+
+    private func resetEverything() {
+        let count = deleteAllItems()
+        settings.resetToDefaults()
+        llmTestResult = nil
+        maintenanceResult = "已恢复出厂：清空 \(count) 条数据并重置配置"
     }
 
     private var didaAuthSheet: some View {

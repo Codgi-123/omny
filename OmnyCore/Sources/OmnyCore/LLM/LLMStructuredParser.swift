@@ -40,7 +40,7 @@ public struct LLMStructuredParser: Parser {
 
     // MARK: - 快递
 
-    private func parsePackage(_ text: String) async throws -> ParseResult {
+    private func parsePackage(_ text: String) async throws -> ParseResult? {
         let jsonText = try await client.send(
             system: Self.packageSystemPrompt, user: text, schema: Self.packageSchema)
         let extracted = try JSONDecoder().decode(ExtractedPackage.self, from: Data(jsonText.utf8))
@@ -51,9 +51,17 @@ public struct LLMStructuredParser: Parser {
             trackingTail: extracted.trackingTail?.nilIfEmpty,
             pickupCode: extracted.pickupCode?.nilIfEmpty,
             station: extracted.station?.nilIfEmpty)
+
+        // LLM 抽取失败(字段全空)时返回 nil，交给管线兜底/降级，不产出"空快递卡"。
+        // 强标识字段(取件码/单号/尾号)有则高置信；只有弱字段(公司/驿站)则低置信 → 下游标 needsReview 让用户确认。
+        let hasStrongField = info.pickupCode != nil || info.trackingNumber != nil || info.trackingTail != nil
+        let hasAnyField = hasStrongField || info.carrier != nil || info.station != nil
+        guard hasAnyField else { return nil }
+
         // 状态词可穷举，正则判得又准又稳，不交给 LLM
         info.status = RuleParser.detectStatus(text, info: info)
-        return ParseResult(payload: .package(info), confidence: 0.9, rawText: text)
+        let confidence = hasStrongField ? 0.9 : 0.6
+        return ParseResult(payload: .package(info), confidence: confidence, rawText: text)
     }
 
     struct ExtractedPackage: Decodable {
