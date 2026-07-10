@@ -5,6 +5,7 @@ import OmnyCore
 // MARK: - 快递页：待取 / 在途 / 已签收
 
 struct ExpressView: View {
+    @Environment(\.modelContext) private var context
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var items: [InboxItem]
 
     private var packages: [InboxItem] { items.filter { $0.kind == .package } }
@@ -35,7 +36,24 @@ struct ExpressView: View {
     private func group(_ title: String, _ list: [InboxItem], dimmed: Bool = false) -> some View {
         if !list.isEmpty {
             Section {
-                ForEach(list) { PackageCard(item: $0).opacity(dimmed ? 0.55 : 1).cardCell() }
+                ForEach(list) { pkg in
+                    PackageCard(item: pkg).opacity(dimmed ? 0.55 : 1).cardCell()
+                        // 整条右滑完成/撤销（提醒事项式）
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            if pkg.packageStatus == .pickedUp {
+                                Button {
+                                    withAnimation(.snappy) { pkg.packageStatus = .awaitingPickup }
+                                    try? context.save()
+                                } label: { Label("撤销", systemImage: "arrow.uturn.left") }
+                            } else {
+                                Button {
+                                    withAnimation(.snappy) { pkg.packageStatus = .pickedUp }
+                                    try? context.save()
+                                } label: { Label("已取", systemImage: "checkmark") }
+                                    .tint(Theme.green)
+                            }
+                        }
+                }
             } header: {
                 sectionHeader(title)
             }

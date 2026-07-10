@@ -90,6 +90,12 @@ extension View {
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: 5, leading: Theme.Space.page, bottom: 5, trailing: Theme.Space.page))
     }
+
+    /// 按开关决定是否挂长按菜单：首页卡片传 false 关掉长按抬起效果
+    @ViewBuilder
+    func contextMenuIf<M: View>(_ enabled: Bool, @ViewBuilder menu: () -> M) -> some View {
+        if enabled { self.contextMenu(menuItems: menu) } else { self }
+    }
 }
 
 /// 分类图标块：渐变分类色 + 白色 SF Symbol（Settings / App Store 式），给卡片加强识别色。

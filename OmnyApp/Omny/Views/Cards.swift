@@ -2,11 +2,20 @@ import SwiftUI
 import SwiftData
 import OmnyCore
 
+// 让取件勾选圈只跟「大号取件码数字」的垂直中心对齐（而非含上方小标签的整块居中）
+extension VerticalAlignment {
+    private enum CodeCenter: AlignmentID {
+        static func defaultValue(in d: ViewDimensions) -> CGFloat { d[VerticalAlignment.center] }
+    }
+    static let codeCenter = VerticalAlignment(CodeCenter.self)
+}
+
 // MARK: - 快递卡（取件码大字 + 复制 + 标记已取）
 // 卡片本体不带背景——作为 List 单元格时由分组表提供表面；作首页轮播时外层加 .cardStyle()。
 
 struct PackageCard: View {
     @Bindable var item: InboxItem
+    var showsContextMenu = true          // 首页传 false 关闭长按菜单
     @Environment(\.modelContext) private var context
     @State private var copied = false
 
@@ -29,8 +38,8 @@ struct PackageCard: View {
                 statusTag
             }
 
-            // 主体：取件码（点按复制）/ 单号，右侧「已取」按钮
-            HStack(alignment: .bottom, spacing: 12) {
+            // 主体：取件码（点按复制）/ 单号，右侧取件勾选圈（圈与数字中心对齐）
+            HStack(alignment: .codeCenter, spacing: 12) {
                 if let code = item.pickupCode {
                     Button {
                         UIPasteboard.general.string = code
@@ -42,9 +51,11 @@ struct PackageCard: View {
                                 .font(.caption)
                                 .foregroundStyle(copied ? Theme.green : Theme.sub)
                             Text(code)
-                                .font(.system(size: 34, weight: .bold))
+                                // SF Rounded：原生圆润数字，比默认更柔和；用文本样式随 Dynamic Type 缩放
+                                .font(.system(.largeTitle, design: .rounded).weight(.bold))
                                 .monospacedDigit()
                                 .foregroundStyle(Theme.express)
+                                .alignmentGuide(.codeCenter) { $0[VerticalAlignment.center] }
                         }
                     }
                     .buttonStyle(.plain)
@@ -55,13 +66,14 @@ struct PackageCard: View {
                             .font(.caption)
                             .foregroundStyle(Theme.sub)
                         Text(number)
-                            .font(.title3)
-                            .fontWeight(.semibold)
+                            .font(.system(.title3, design: .rounded).weight(.semibold))
                             .monospacedDigit()
+                            .alignmentGuide(.codeCenter) { $0[VerticalAlignment.center] }
                     }
                 }
                 Spacer(minLength: 8)
                 pickupButton
+                    .alignmentGuide(.codeCenter) { $0[VerticalAlignment.center] }
             }
 
             // 底部：收件时间
@@ -70,7 +82,7 @@ struct PackageCard: View {
                 .foregroundStyle(Theme.sub)
         }
         .contentShape(Rectangle())
-        .contextMenu {
+        .contextMenuIf(showsContextMenu) {
             if let code = item.pickupCode {
                 Button {
                     UIPasteboard.general.string = code
@@ -91,34 +103,30 @@ struct PackageCard: View {
         )
     }
 
-    // 取件按钮：未取时是明确的动作 CTA「确认取件」（实心蓝，避免 ✅ 误解为已完成）；
-    // 已取后变成浅绿确认态「已取件」，再点可撤销
+    // 取件勾选圈（提醒事项式）：空心圈 → 绿色实心对勾，symbol 替换动画 + 成功触感。
+    // 直接操作、就地切换，横向轮播/竖向列表都适用，不与横滑冲突。
     private var pickupButton: some View {
         let done = item.packageStatus == .pickedUp
-        return Button {
-            item.packageStatus = done ? .awaitingPickup : .pickedUp
-            try? context.save()
-        } label: {
-            Group {
-                if done {
-                    Label("已取件", systemImage: "checkmark.circle.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Theme.green)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)          // 高度 ≥44pt 触控目标
-                        .background(Theme.green.opacity(0.15), in: Capsule())
-                } else {
-                    Text("确认取件")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 10)
-                        .background(Theme.express, in: Capsule())
-                }
-            }
+        return Button(action: togglePickup) {
+            Image(systemName: done ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 27))
+                .foregroundStyle(done ? Theme.green : Theme.express.opacity(0.85))
+                .contentTransition(.symbolEffect(.replace))
+                .frame(width: 44, height: 44)          // ≥44pt 触控目标
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(done ? "撤销取件" : "确认取件")
+        .sensoryFeedback(trigger: item.packageStatus) { _, new in
+            new == .pickedUp ? .success : nil
+        }
+    }
+
+    private func togglePickup() {
+        withAnimation(.snappy) {
+            item.packageStatus = item.packageStatus == .pickedUp ? .awaitingPickup : .pickedUp
+        }
+        try? context.save()
     }
 
     private var statusTag: some View {
@@ -205,6 +213,7 @@ struct TripCard: View {
 
 struct TodoRow: View {
     @Bindable var item: InboxItem
+    var showsContextMenu = true          // 首页传 false 关闭长按菜单
     @Environment(\.modelContext) private var context
     @EnvironmentObject private var dida: DidaService
     @State private var editing = false
@@ -256,7 +265,7 @@ struct TodoRow: View {
                     .tint(Theme.slate)
             }
         }
-        .contextMenu {
+        .contextMenuIf(showsContextMenu) {
             if isLocal {
                 Button { editing = true } label: { Label("编辑", systemImage: "pencil") }
                 Button(role: .destructive) { delete() } label: { Label("删除", systemImage: "trash") }

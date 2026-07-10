@@ -45,7 +45,7 @@ struct TodayView: View {
                     CarouselSection(icon: "shippingbox.fill", tint: Theme.express, title: "快递",
                                     count: "\(awaitingPackages.filter { $0.packageStatus == .awaitingPickup }.count) 件待取",
                                     items: awaitingPackages, margin: margin) {
-                        PackageCard(item: $0).cardStyle()
+                        PackageCard(item: $0, showsContextMenu: false).cardStyle()
                     }
                 }
 
@@ -54,7 +54,7 @@ struct TodayView: View {
                         SectionHeader(icon: "checkmark.circle.fill", tint: Theme.todo, title: "待办",
                                       count: "\(openTodos.count) 项未完成")
                         VStack(spacing: 10) {
-                            ForEach(openTodos.prefix(5)) { TodoRow(item: $0).cardStyle() }
+                            ForEach(openTodos.prefix(5)) { TodoRow(item: $0, showsContextMenu: false).cardStyle() }
                         }
                     }
                     .padding(.horizontal, margin)
