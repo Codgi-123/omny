@@ -6,10 +6,10 @@ import OmnyCore
 struct SettingsView: View {
     /// 「解析文本」完整流程的 iCloud 分享链接。
     /// 在快捷指令 App 里打开该流程 → 分享 → 拷贝 iCloud 链接，替换下面这行即可。
-    static let shortcutImportURL = URL(string: "https://www.icloud.com/shortcuts/e8e226e0783b45798e073496bcb24055")!
+    static let shortcutImportURL = URL(string: "https://www.icloud.com/shortcuts/e2a443a47159409f8c2856f3f208e4f1")!
 
     /// 「截图记忆 / 屏幕识别」流程的 iCloud 分享链接。
-    static let screenshotShortcutImportURL = URL(string: "https://www.icloud.com/shortcuts/86cc3863169a47a39b1b9b42c02af568")!
+    static let screenshotShortcutImportURL = URL(string: "https://www.icloud.com/shortcuts/bb110a85ef5b44489ab20bf808265084")!
 
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var dida: DidaService
