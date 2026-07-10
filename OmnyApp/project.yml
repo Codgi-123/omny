@@ -6,6 +6,10 @@ options:
 packages:
   OmnyCore:
     path: ../OmnyCore
+# 项目级签名：Team ID 写在这里，避免每次 xcodegen generate 后丢失（两个 target 都继承）
+settings:
+  base:
+    DEVELOPMENT_TEAM: "46SC6UDH48"
 targets:
   Omny:
     type: application
@@ -33,6 +37,8 @@ targets:
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_CFBundleDisplayName: Omny
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        # 导出合规：仅用 HTTPS（LLM/滴答），属豁免加密，声明后 TestFlight 上传不再追问出口合规
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic
