@@ -8,7 +8,7 @@ struct SettingsView: View {
     /// 在快捷指令 App 里打开该流程 → 分享 → 拷贝 iCloud 链接，替换下面这行即可。
     static let shortcutImportURL = URL(string: "https://www.icloud.com/shortcuts/e8e226e0783b45798e073496bcb24055")!
 
-    /// 「截图记忆 / 识别待办」流程的 iCloud 分享链接。
+    /// 「截图记忆 / 屏幕识别」流程的 iCloud 分享链接。
     static let screenshotShortcutImportURL = URL(string: "https://www.icloud.com/shortcuts/86cc3863169a47a39b1b9b42c02af568")!
 
     @EnvironmentObject private var settings: AppSettings
@@ -53,7 +53,7 @@ struct SettingsView: View {
                         Text(result)
                             .foregroundStyle(llmTestSucceeded ? Theme.green : Theme.red)
                     }
-                    Text("用于截图待办提取和收藏自动打标。填域名即可，路径按协议自动补全（Claude → /v1/messages，OpenAI → /v1/chat/completions）。留空 Key 则只用规则引擎。")
+                    Text("用于屏幕识别（快递/行程/待办结构化）和收藏自动打标。填域名即可，路径按协议自动补全（Claude → /v1/messages，OpenAI → /v1/chat/completions）。留空 Key 则只用规则引擎。")
                 }
             }
 
@@ -116,15 +116,15 @@ struct SettingsView: View {
                 Button {
                     openURL(Self.screenshotShortcutImportURL)
                 } label: {
-                    Label("导入「识别待办」快捷指令", systemImage: "square.and.arrow.down")
+                    Label("导入「屏幕识别」快捷指令", systemImage: "square.and.arrow.down")
                 }
             } header: {
-                Text("快捷指令 · 识别待办")
+                Text("快捷指令 · 屏幕识别")
             } footer: {
                 Text("""
-                第 1 步：点上方按钮，在弹出的页面点「添加快捷指令」。流程内已包含「截屏 → 识别图像文本 → 识别待办」，OCR 在快捷指令侧完成。
+                第 1 步：点上方按钮，在弹出的页面点「添加快捷指令」。流程内已包含「截屏 → 识别图像文本 → 屏幕识别」，OCR 在快捷指令侧完成。
                 第 2 步：手动触发运行——推荐设为「轻点背面两下」（设置 → 辅助功能 → 触控 → 轻点背面）或加进控制中心。iOS 没有「截屏即运行」的自动化触发器，需手动唤起。
-                运行后自动截屏、识别文字并提取待办，结果进「需处理内容」等你确认。
+                运行后自动截屏、识别文字并归类（快递 / 行程 / 待办 / 收藏），其中待办进「需处理内容」等你确认，其余直接入对应分类。
                 """)
             }
 

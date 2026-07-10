@@ -26,12 +26,13 @@ struct ParseTextIntent: AppIntent {
     }
 }
 
-/// 快捷指令动作 ②：识别待办（截屏 → 快捷指令内置 OCR → 文本传入）
-/// iOS 快捷指令自带「识别图像文本」动作，OCR 在快捷指令侧完成，
-/// 本动作直接收文本，Omny 内部只做 LLM 待办提取。识别出的待办标记"待确认"，打开 App 勾选入库。
+/// 快捷指令动作 ②：屏幕识别（截屏 → 快捷指令内置 OCR → 文本传入）
+/// iOS 快捷指令自带「识别图像文本」动作，OCR 在快捷指令侧完成，本动作直接收文本，
+/// 走完整解析管线通用识别（快递/行程/待办/收藏四类都支持），按识别结果落到对应分类。
+/// （struct 名沿用 RecognizeTodoIntent 以保持已导入快捷指令的绑定不失效。）
 struct RecognizeTodoIntent: AppIntent {
-    static let title: LocalizedStringResource = "识别待办"
-    static let description = IntentDescription("对截图 OCR 出的文本用 LLM 提取待办事项。")
+    static let title: LocalizedStringResource = "屏幕识别"
+    static let description = IntentDescription("对截图 OCR 出的文本做识别入库（快递、行程、待办、收藏）。")
     static let openAppWhenRun = false
 
     @Parameter(title: "文本")
@@ -45,12 +46,15 @@ struct RecognizeTodoIntent: AppIntent {
         }
         let context = OmnyApp.sharedModelContainer.mainContext
         // OCR 由快捷指令完成，故无原图；sourceImage 传 nil（后续走内置 OCR 时再带原图）
+        // 全放行：四类都可识别入库；按实际识别到的类型如实汇总，不再谎报"待办"
         let items = await Ingestor.ingest(text: trimmed, source: .screenshot, context: context)
-        let todoCount = items.filter { $0.kind == .todo }.count
-        if todoCount > 0 {
-            return .result(dialog: IntentDialog(stringLiteral: "识别到 \(todoCount) 条待办，打开 Omny 确认"))
+        guard !items.isEmpty else {
+            return .result(dialog: "没有识别到内容")
         }
-        return .result(dialog: "没有识别到待办，原文已存入待处理")
+        let summary = items.map(\.intentSummary).joined(separator: "；")
+        // 截图识别的待办标了待确认，提示去 App 勾选；其余类型直接入对应分类
+        let suffix = items.contains { $0.needsReview } ? "，打开 Omny 确认" : ""
+        return .result(dialog: IntentDialog(stringLiteral: "已识别：\(summary)\(suffix)"))
     }
 }
 
@@ -74,7 +78,7 @@ struct OmnyShortcuts: AppShortcutsProvider {
                     phrases: ["用 \(.applicationName) 解析文本"],
                     shortTitle: "解析文本", systemImageName: "text.viewfinder")
         AppShortcut(intent: RecognizeTodoIntent(),
-                    phrases: ["用 \(.applicationName) 识别待办"],
-                    shortTitle: "识别待办", systemImageName: "checklist")
+                    phrases: ["用 \(.applicationName) 屏幕识别"],
+                    shortTitle: "屏幕识别", systemImageName: "text.viewfinder")
     }
 }

@@ -51,7 +51,7 @@ xcrun devicectl device install app --device <设备ID> \
 2. **解析管线**：「分类靠正则、结构化靠 LLM」（详见 `docs/parsing-architecture.md`）。组装点在 `AppSettings.parserPipeline`：配了 LLM 时 primary 是 `LLMStructuredParser`（`RuleParser.classify` 正则判类型 → 快递/行程字段交 LLM 抽取，收藏走正则抠 URL，快递状态词仍用正则 `detectStatus`），fallback 是 `LLMTodoParser`；未配 LLM 时 primary 退回纯正则 `RuleParser`，保证无 Key/断网时链路可用。`RuleParser` 的结构化代码（`extractPackage`/`extractTrip`）不删——是降级路径，也是 `RealSMSTests` 的测试基线。
 3. **入库汇聚点**：`OmnyApp/Omny/Services/Ingestor.swift` 是所有入口（短信快捷指令、截图 OCR、分享、手动）的唯一入库通道。关键行为：快递按单号/尾号合并且状态只前进不回退；低置信度或未识别条目标记 `needsReview` 进"需处理"；收藏入库后异步补标题再 LLM 打标（顺序影响打标准确率）。
 4. **分享扩展中转**：扩展进程受限，`OmnyShare` 只把内容写进 App Group 的 JSON 队列（`Shared/SharedInbox.swift`，编入两个 target），解析入库全部回主 App 前台时 drain 完成。
-5. **快捷指令入口**：`OmnyApp/Omny/Intents/OmnyIntents.swift` 的 App Intents（「解析文本」「识别待办」）是短信自动化和截图流程的进入点。
+5. **快捷指令入口**：`OmnyApp/Omny/Intents/OmnyIntents.swift` 的 App Intents（「解析文本」「屏幕识别」，后者 struct 名仍为 `RecognizeTodoIntent`，通用识别四类）是短信自动化和截图流程的进入点。
 6. **滴答同步**：`OmnyCore/Sources/OmnyCore/Dida/` 的 `DidaSyncEngine` 以 `SyncableTodo` 快照与 SwiftData 解耦（App 层转换）。策略：本地脏标记（`needsPush`/`deletedLocally`）优先推送，其余以远端为准；Open API 无增量接口，拉取为绑定清单的全量轮询。仅 `source == .dida` 的待办参与同步。
 7. **LLM 层**：`OmnyCore/Sources/OmnyCore/LLM/` 支持 Claude / OpenAI 兼容两种协议切换（设置页配置）。`LLMClient` 是唯一的请求底座（协议分派、结构化输出参数 400 时自动降级重试、代码围栏剥离、宽容的 ISO 日期解析），三个调用方 `LLMStructuredParser` / `LLMTodoParser` / `LLMTagClassifier` 只提供各自的提示词与 JSON Schema。`LLMTagClassifier` 用 enum schema 限制 LLM 只能从用户 tag 池里挑选。
 

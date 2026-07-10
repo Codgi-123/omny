@@ -27,7 +27,7 @@ OmnyApp/    SwiftUI 壳（仅 macOS 可编译），XcodeGen 管理工程
   ├─ Omny/             主 App target
   │   ├─ InboxItem     统一条目模型（SwiftData），页面都是按类型过滤的视图
   │   ├─ Ingestor      入库服务：入口 → 解析管线 → 落库（快递按单号合并、收藏自动打标）
-  │   ├─ OmnyIntents   App Intents：「解析文本」「识别待办」（快捷指令入口）
+  │   ├─ OmnyIntents   App Intents：「解析文本」「屏幕识别」（快捷指令入口）
   │   └─ Views/        五个 tab + 设置 + 需处理 + 收藏标签管理
   ├─ OmnyShare/        分享扩展 target：分享面板抓链接/文本 → App Group 队列
   └─ Shared/           两个 target 共用：SharedInbox（App Group 中转队列）
