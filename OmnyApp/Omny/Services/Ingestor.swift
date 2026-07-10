@@ -7,9 +7,13 @@ import OmnyCore
 @MainActor
 enum Ingestor {
 
+    /// 入库。`allowedTypes` 为类型白名单：解析出的类型不在其中则丢弃（不落库）。
+    /// nil 表示全放行（截图/分享/手动等入口用）；「解析文本」快捷指令传 [.package, .trip, .todo]，
+    /// 短信里混进的收藏（链接）不入库。
     @discardableResult
     static func ingest(text: String, source: ItemSource,
                        sourceImage: Data? = nil,
+                       allowedTypes: Set<ItemType>? = nil,
                        context: ModelContext) async -> [InboxItem] {
         let result: ParseResult?
         do {
@@ -18,7 +22,14 @@ enum Ingestor {
             result = nil
         }
 
+        // 类型白名单过滤：解析结果类型不在白名单内直接丢弃，不落库、不进"需处理"
+        if let allowedTypes, let result, !allowedTypes.contains(result.payload.itemType) {
+            return []
+        }
+
         guard let result else {
+            // 带白名单的入口（解析文本）没认出目标类型时不留未分类项，直接丢弃
+            if allowedTypes != nil { return [] }
             // 规则和 LLM 都没认出来 → 未分类，进"需处理"
             let item = InboxItem(kind: .unclassified, source: source, rawText: text)
             item.needsReview = true
