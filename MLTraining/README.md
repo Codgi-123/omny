@@ -24,8 +24,7 @@
 # 1. 导出自己的全部历史短信（分布最匹配的数据；终端需要完全磁盘访问权限）
 ./export_sms.sh sms_raw.txt
 
-# 2.（补充 other/junk 样本量）从 80w 公开垃圾短信数据集抽几千条
-#    https://github.com/ysh329/spam-msg-classifier 或天池 https://tianchi.aliyun.com/dataset/6480
+# 2.（补充样本量）公开数据集见下方「公开数据集清单」，按类目配方抽样
 
 # 3. LLM 批量打标（读一行一条的 txt，输出 text,label 两列的 CSV）
 export LLM_PROTOCOL=claude LLM_BASE_URL=https://api.anthropic.com \
@@ -37,6 +36,19 @@ python3 label_with_llm.py sms_raw.txt labeled.csv
 # 5. 训练（Apple Silicon 上几千条样本约 1~3 分钟）
 xcrun swift train_classifier.swift labeled.csv TextKindClassifier.mlmodel
 ```
+
+## 公开数据集清单（2026-07 调研，中文短信语料全集）
+
+| 数据集 | 内容 | 用途 |
+|---|---|---|
+| [80w 带标签垃圾短信](https://github.com/ysh329/spam-msg-classifier)（[天池镜像](https://tianchi.aliyun.com/dataset/6480)） | 72w 正常 + 8w 垃圾，2015 年，二分类 | other 主力样本源 |
+| [NUS SMS Corpus 中文子集](https://github.com/WING-NUS/nus-sms-corpus) | 31,465 条真人日常聊天短信（新加坡华语，2011~2015） | todo 聊天体底料 + 截屏 OCR 分布近似；夹杂英语，无 package/trip |
+| [天池电信诈骗五分类](https://tianchi.aliyun.com/dataset/201837) | 诈骗短信按类型标注 | other 诈骗子类（对抗冒充快递/银行的话术） |
+
+三者原标签体系都对不上四分类，统一用 `label_with_llm.py` 重打标。
+类目配方：package/trip 正样本只能来自自己的真实短信（公开世界不存在）；
+todo = 自己短信（还款/缴费/预约）+ NUS 聊天体挖掘；other = 80w 抽样 + 诈骗集 + 自己短信其余。
+公开语料年代偏老（无驿站短信、营销话术过时），other 也要掺真实短信防分布漂移。
 
 ## 评估标准（比总准确率重要）
 
