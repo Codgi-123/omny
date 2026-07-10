@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import PhotosUI
 import OmnyCore
 
 // MARK: - 快递页：待取 / 在途 / 已签收
@@ -252,16 +253,25 @@ struct BookmarkView: View {
     @EnvironmentObject private var settings: AppSettings
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var items: [InboxItem]
     @State private var filter: TagFilter = .all
+    @State private var query = ""
     @State private var showAddSheet = false
     @State private var editingItem: InboxItem?
 
     private var bookmarks: [InboxItem] { items.filter { $0.kind == .bookmark } }
 
     private var filtered: [InboxItem] {
+        let base: [InboxItem]
         switch filter {
-        case .all: bookmarks
-        case .tag(let tag): bookmarks.filter { $0.tags.contains(tag) }
-        case .untagged: bookmarks.filter { $0.tags.isEmpty }
+        case .all: base = bookmarks
+        case .tag(let tag): base = bookmarks.filter { $0.tags.contains(tag) }
+        case .untagged: base = bookmarks.filter { $0.tags.isEmpty }
+        }
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !q.isEmpty else { return base }
+        return base.filter { item in
+            let hay = [item.bookmarkTitle, item.urlString, item.rawText]
+                .compactMap { $0 }.joined(separator: " ").lowercased()
+            return hay.contains(q) || item.tags.contains { $0.lowercased().contains(q) }
         }
     }
 
@@ -288,6 +298,7 @@ struct BookmarkView: View {
                     NavActions()
                 }
             }
+            if !bookmarks.isEmpty { searchBar }
             List {
             if !bookmarks.isEmpty {
                 tagFilterBar.carouselRow()
@@ -308,9 +319,13 @@ struct BookmarkView: View {
         .overlay {
             if bookmarks.isEmpty {
                 ContentUnavailableView("暂无收藏", systemImage: "bookmark",
-                                       description: Text("在任意 App 里点分享 → 选 Omny，链接和文字都能收"))
+                                       description: Text("在任意 App 里点分享 → 选 Omny，链接、文字、图片都能收"))
             } else if filtered.isEmpty {
-                ContentUnavailableView("该标签下暂无收藏", systemImage: "tag")
+                if !query.trimmingCharacters(in: .whitespaces).isEmpty {
+                    ContentUnavailableView.search(text: query)
+                } else {
+                    ContentUnavailableView("该标签下暂无收藏", systemImage: "tag")
+                }
             }
         }
         .sheet(isPresented: $showAddSheet) { BookmarkAddSheet() }
@@ -321,6 +336,31 @@ struct BookmarkView: View {
         }
         .background(Theme.screen)
         .toolbar(.hidden, for: .navigationBar)
+    }
+
+    private var searchBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(Theme.sub)
+                .font(.subheadline)
+            TextField("搜索标题、链接、内容、标签", text: $query)
+                .textFieldStyle(.plain)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .submitLabel(.search)
+            if !query.isEmpty {
+                Button { query = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.sub)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(Theme.card, in: Capsule())
+        .padding(.horizontal, Theme.Space.page)
+        .padding(.top, 6)
+        .padding(.bottom, 2)
     }
 
     private var tagFilterBar: some View {
@@ -368,7 +408,16 @@ struct BookmarkCard: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            IconChip(symbol: url != nil ? "link" : "text.alignleft", color: Theme.bookmark, size: 38)
+            if let data = item.sourceImage, let ui = UIImage(data: data) {
+                // 图片收藏（分享截图等）：直接展示缩略图，比通用图标更好认
+                Image(uiImage: ui)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 38, height: 38)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            } else {
+                IconChip(symbol: url != nil ? "link" : "text.alignleft", color: Theme.bookmark, size: 38)
+            }
             VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.body)
@@ -437,18 +486,71 @@ struct BookmarkCard: View {
 struct BookmarkAddSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @EnvironmentObject private var settings: AppSettings
     @State private var text = ""
+    @State private var pickedItem: PhotosPickerItem?
+    @State private var imageData: Data?
+    @State private var selectedTags: [String] = []
     @State private var saving = false
+
+    private var candidateTags: [String] { settings.bookmarkTags }
+    private var canSave: Bool {
+        !(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && imageData == nil) && !saving
+    }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section {
+                Section("内容") {
                     TextField("粘贴链接，或输入要收藏的文字…", text: $text, axis: .vertical)
                         .lineLimit(4...10)
                         .textInputAutocapitalization(.never)
-                } footer: {
-                    Text("带链接的会自动抽出网址和标题；配置了 LLM 时入库后自动打标。")
+                }
+
+                Section("图片") {
+                    if let imageData, let ui = UIImage(data: imageData) {
+                        HStack(spacing: 12) {
+                            Image(uiImage: ui)
+                                .resizable().scaledToFill()
+                                .frame(width: 64, height: 64)
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            Text("已添加图片").font(.subheadline).foregroundStyle(Theme.sub)
+                            Spacer()
+                            Button(role: .destructive) {
+                                self.imageData = nil; pickedItem = nil
+                            } label: { Image(systemName: "trash") }
+                                .buttonStyle(.borderless)
+                        }
+                    }
+                    PhotosPicker(selection: $pickedItem, matching: .images) {
+                        Label(imageData == nil ? "添加图片" : "更换图片", systemImage: "photo.on.rectangle")
+                    }
+                }
+
+                if !candidateTags.isEmpty {
+                    Section {
+                        FlowLayout(spacing: 8) {
+                            ForEach(candidateTags, id: \.self) { tag in
+                                let on = selectedTags.contains(tag)
+                                Button {
+                                    if on { selectedTags.removeAll { $0 == tag } }
+                                    else { selectedTags.append(tag) }
+                                } label: {
+                                    Text(tag)
+                                        .font(.subheadline)
+                                        .foregroundStyle(on ? .white : Theme.text)
+                                        .padding(.horizontal, 12).padding(.vertical, 6)
+                                        .background(on ? Theme.accent : Theme.card, in: Capsule())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    } header: {
+                        Text("标签")
+                    } footer: {
+                        Text("不选则按内容自动打标（需配置 LLM）；标签在 设置 → 收藏标签 里管理。")
+                    }
                 }
             }
             .navigationTitle("添加收藏")
@@ -458,19 +560,55 @@ struct BookmarkAddSheet: View {
                     Button("取消") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") { save() }
-                        .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || saving)
+                    Button("保存") { save() }.disabled(!canSave)
                 }
+            }
+            .onChange(of: pickedItem) { _, newItem in
+                Task { imageData = try? await newItem?.loadTransferable(type: Data.self) }
             }
         }
     }
 
     private func save() {
         saving = true
-        let content = text
+        let content = text, image = imageData, tags = selectedTags
         Task {
-            await Ingestor.ingestBookmark(text: content, source: .manual, context: context)
+            await Ingestor.ingestBookmark(text: content, sourceImage: image,
+                                          manualTags: tags.isEmpty ? nil : tags,
+                                          source: .manual, context: context)
             dismiss()
+        }
+    }
+}
+
+/// 简易流式布局：标签胶囊按宽度自动换行（iOS 16+ Layout 协议）。
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x + size.width > maxWidth, x > 0 {
+                x = 0; y += rowHeight + spacing; rowHeight = 0
+            }
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+        return CGSize(width: proposal.width ?? x, height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX, y = bounds.minY, rowHeight: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x + size.width > bounds.maxX, x > bounds.minX {
+                x = bounds.minX; y += rowHeight + spacing; rowHeight = 0
+            }
+            view.place(at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
         }
     }
 }

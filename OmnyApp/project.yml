@@ -65,6 +65,7 @@ targets:
             NSExtensionActivationRule:
               NSExtensionActivationSupportsWebURLWithMaxCount: 1
               NSExtensionActivationSupportsText: true
+              NSExtensionActivationSupportsImageWithMaxCount: 10
     entitlements:
       path: OmnyShare/OmnyShare.entitlements
       properties:

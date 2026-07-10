@@ -46,11 +46,23 @@ struct RootView: View {
         }
     }
 
-    /// 收走分享扩展排队的内容：落成收藏 + LLM 打标
+    /// 收走分享扩展排队的内容：落成收藏 + LLM 打标。
+    /// 图片分享（截图等）在此 OCR，文本 + 原图一起存成收藏卡片。
     private func drainShareQueue() async {
         for shared in SharedInbox.drain() {
-            await Ingestor.ingestBookmark(text: shared.text, urlString: shared.urlString,
-                                          source: .share, context: context)
+            if let imageData = SharedInbox.imageData(for: shared) {
+                let ocr = (try? await OCRService.recognizeText(in: imageData)) ?? ""
+                let text = [shared.text, ocr]
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                    .joined(separator: "\n")
+                await Ingestor.ingestBookmark(text: text, urlString: shared.urlString,
+                                              sourceImage: imageData, source: .share, context: context)
+                SharedInbox.cleanupImage(for: shared)
+            } else {
+                await Ingestor.ingestBookmark(text: shared.text, urlString: shared.urlString,
+                                              source: .share, context: context)
+            }
         }
     }
 }
