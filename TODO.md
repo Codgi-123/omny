@@ -1,5 +1,21 @@
 # TODO
 
+## 2026-07-10 — 文本分类小模型（`feat/text-classifier` 分支）
+
+四分类 CoreML 端上模型（`trip` / `package` / `todo` / `other`）当解析漏斗第一级，
+分类免费、只有前三类才花 LLM 抽字段。训练工具链已就绪（`MLTraining/`）。
+
+- [ ] 我：`./MLTraining/export_sms.sh` 导出真实短信（终端需完全磁盘访问权限）
+- [ ] 从 80w 公开垃圾短信数据集抽样补 other 类样本
+- [ ] `label_with_llm.py` 批量打标 + 人工抽查 5%
+- [ ] `train_classifier.swift` 训练，盯 trip/package 召回（漏快递代价最高）
+- [ ] 集成：OmnyCore 定义 `TextKindClassifier` 协议（正则实现留 Core 做降级 + Linux 可测），App 层注入 CoreML 实现；推理带置信度阈值，低于阈值放行给正则兜底
+
+设计定论：package 覆盖快递全状态而非只取件码（合并链路依赖在途/签收短信）；
+todo 类样本要覆盖短信体（还款/缴费/预约）+ 聊天纪要体（截屏 OCR 入口）两种文风；
+提取模型不现在训——LLM 提取结果连同原文即天然标注对，攒够几千条后再蒸馏成
+按类型分置的 MLWordTagger，LLM 退居兜底（teacher-student 路线）。
+
 ## 2026-07-10 — 公司电脑装机测试
 
 ### 我（用户）要做
