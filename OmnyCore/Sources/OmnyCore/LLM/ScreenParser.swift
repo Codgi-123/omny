@@ -65,11 +65,18 @@ public struct ScreenParser: Parser {
             return ruleFallback(trimmed)
         }
 
-        let system = Self.systemPrompt.replacingOccurrences(
-            of: "{TODAY}", with: ISO8601DateFormatter().string(from: Date()))
-        let jsonText = try await client.send(system: system, user: trimmed,
-                                             schema: Self.outputSchema)
-        let extracted = try JSONDecoder().decode(Extracted.self, from: Data(jsonText.utf8))
+        // LLM 路径。任何环节失败（网络/端点/超时/响应格式）都回退到规则降级，
+        // 保证配了 LLM 但 LLM 暂时不可用时，纯净快递/行程仍能被规则抠出落库，而不是全丢进需处理。
+        let extracted: Extracted
+        do {
+            let system = Self.systemPrompt.replacingOccurrences(
+                of: "{TODAY}", with: ISO8601DateFormatter().string(from: Date()))
+            let jsonText = try await client.send(system: system, user: trimmed,
+                                                 schema: Self.outputSchema)
+            extracted = try JSONDecoder().decode(Extracted.self, from: Data(jsonText.utf8))
+        } catch {
+            return ruleFallback(trimmed)
+        }
 
         var payloads: [ParsedPayload] = []
 
@@ -106,6 +113,10 @@ public struct ScreenParser: Parser {
         }
         if !todos.isEmpty { payloads.append(.todos(todos)) }
 
+        // LLM 一条都没抽出来时，再用规则兜一次（LLM 可能漏掉规则能命中的快递/行程）
+        if payloads.isEmpty {
+            return ruleFallback(trimmed)
+        }
         return packResult(payloads, rawText: trimmed, confidence: 0.85)
     }
 

@@ -544,8 +544,6 @@ struct BookmarkTagSheet: View {
 // MARK: - 需修正页（截图待办确认 + 未分类）
 
 struct ReviewView: View {
-    @Environment(\.modelContext) private var context
-    @EnvironmentObject private var dida: DidaService
     @Query(filter: #Predicate<InboxItem> { $0.needsReview && !$0.deletedLocally },
            sort: \InboxItem.createdAt, order: .reverse)
     private var reviewItems: [InboxItem]
@@ -558,46 +556,7 @@ struct ReviewView: View {
                         .padding(.top, 80)
                 }
                 ForEach(reviewItems) { item in
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Badge(text: item.kind == .todo ? "截图待办" : "未分类",
-                                  color: item.kind == .todo ? Theme.green : Theme.sub)
-                            Spacer()
-                            Text(item.createdAt.formatted(.relative(presentation: .named)))
-                                .font(.system(size: 12))
-                                .foregroundStyle(Theme.sub)
-                        }
-                        Text(item.kind == .todo ? (item.todoTitle ?? item.rawText) : item.rawText)
-                            .font(.system(size: 14.5, weight: item.kind == .todo ? .bold : .regular))
-                            .lineLimit(4)
-                        if let imageData = item.sourceImage, let image = UIImage(data: imageData) {
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(height: 90)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                                .opacity(0.9)
-                        }
-                        HStack(spacing: 8) {
-                            if item.kind == .todo {
-                                Button("确认入库") {
-                                    item.needsReview = false
-                                    item.needsPush = true
-                                    try? context.save()
-                                    Task { await dida.syncNow(context: context) }
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .tint(Theme.accent)
-                            }
-                            Button("删除", role: .destructive) {
-                                context.delete(item)
-                                try? context.save()
-                            }
-                            .buttonStyle(.bordered)
-                        }
-                        .controlSize(.small)
-                    }
-                    .cardStyle()
+                    ReviewCard(item: item)
                 }
             }
             .padding(.horizontal, 16)
@@ -605,5 +564,70 @@ struct ReviewView: View {
         }
         .background(Theme.screen)
         .navigationTitle("需处理")
+    }
+}
+
+/// 需处理单条卡片：点击正文可展开/收起全文（默认截断，长文本给提示）。
+private struct ReviewCard: View {
+    @Bindable var item: InboxItem
+    @Environment(\.modelContext) private var context
+    @EnvironmentObject private var dida: DidaService
+    @State private var expanded = false
+
+    private var fullText: String {
+        item.kind == .todo ? (item.todoTitle ?? item.rawText) : item.rawText
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Badge(text: item.kind == .todo ? "截图待办" : "未分类",
+                      color: item.kind == .todo ? Theme.green : Theme.sub)
+                Spacer()
+                Text(item.createdAt.formatted(.relative(presentation: .named)))
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.sub)
+            }
+            Text(fullText)
+                .font(.system(size: 14.5, weight: item.kind == .todo ? .bold : .regular))
+                .lineLimit(expanded ? nil : 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture { withAnimation { expanded.toggle() } }
+            // 文本较长时给个展开/收起提示（粗略按长度判断，够用）
+            if fullText.count > 60 {
+                Text(expanded ? "收起" : "展开全文")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.accent)
+                    .onTapGesture { withAnimation { expanded.toggle() } }
+            }
+            if let imageData = item.sourceImage, let image = UIImage(data: imageData) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height: 90)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .opacity(0.9)
+            }
+            HStack(spacing: 8) {
+                if item.kind == .todo {
+                    Button("确认入库") {
+                        item.needsReview = false
+                        item.needsPush = true
+                        try? context.save()
+                        Task { await dida.syncNow(context: context) }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Theme.accent)
+                }
+                Button("删除", role: .destructive) {
+                    context.delete(item)
+                    try? context.save()
+                }
+                .buttonStyle(.bordered)
+            }
+            .controlSize(.small)
+        }
+        .cardStyle()
     }
 }

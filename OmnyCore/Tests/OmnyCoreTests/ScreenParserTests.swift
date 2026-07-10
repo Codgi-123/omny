@@ -138,4 +138,31 @@ final class ScreenParserTests: XCTestCase {
         let result = try await parser.parse("明天记得去天府广场拿你买的水果")
         XCTAssertNil(result)
     }
+
+    /// 关键回归：配了 LLM 但 LLM 请求失败（网络/端点/超时）时，回退到规则降级，
+    /// 纯净快递仍能抠出落库，而不是抛错 → nil → 全进需处理。
+    func testLLMFailureFallsBackToRules() async throws {
+        // LLM 返回 500 → send 抛错 → 应回退规则
+        let parser = ScreenParser(config: .claude(apiKey: "sk-test"),
+                                  transport: MockTransport { _ in (Data("boom".utf8), 500) })
+        let result = try await parser.parse("【韵达快递】凭6-28-9336到金正米业取运单尾号9336包裹")
+        let r = try XCTUnwrap(result, "LLM 失败应回退规则，纯净快递不应丢")
+        let pkg = r.payload.flattened.compactMap { p -> PackageInfo? in
+            if case .package(let i) = p { return i }; return nil
+        }.first
+        XCTAssertEqual(pkg?.carrier, "韵达快递")
+        XCTAssertEqual(pkg?.pickupCode, "6-28-9336")
+        XCTAssertLessThan(r.confidence, 0.8, "规则降级为低置信")
+    }
+
+    /// LLM 成功但一条都没抽出 → 也用规则兜一次
+    func testLLMEmptyResultFallsBackToRules() async throws {
+        let inner = #"{"todos":[],"packages":[],"trips":[]}"#
+        let parser = ScreenParser(config: .claude(apiKey: "sk-test"),
+                                  transport: MockTransport { _ in (envelope(inner), 200) })
+        // LLM 抽空，但规则能命中这条快递
+        let result = try await parser.parse("【韵达快递】凭6-28-9336到金正米业取运单尾号9336包裹")
+        let r = try XCTUnwrap(result, "LLM 抽空应回退规则")
+        XCTAssertEqual(r.payload.flattened.first?.itemType, .package)
+    }
 }
