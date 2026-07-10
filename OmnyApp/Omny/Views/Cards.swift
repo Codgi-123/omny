@@ -23,7 +23,7 @@ struct PackageCard: View {
         VStack(alignment: .leading, spacing: 14) {
             // 头部：图标与标题垂直居中；右侧状态标签
             HStack(spacing: 12) {
-                IconChip(symbol: "shippingbox.fill", color: Theme.express)
+                CarrierIcon(carrier: item.carrier, size: 48)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.carrier ?? "快递")
                         .font(.headline)
