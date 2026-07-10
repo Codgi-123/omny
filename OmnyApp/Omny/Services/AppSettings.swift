@@ -43,6 +43,12 @@ final class AppSettings: ObservableObject {
                               fallback: LLMTodoParser(config: llmConfig))
     }
 
+    /// 截图 OCR 专用解析器：一屏多条多类一次抽取（快递/行程/待办），忽略噪声。
+    /// 未配 LLM 时 ScreenParser 内部按行走规则降级，故 config 传 nil 也可用。
+    var screenParser: ScreenParser {
+        ScreenParser(config: llmConfig)
+    }
+
     // MARK: 收藏 tag（预置一批，设置页可增删改；LLM 打标只从这里选）
 
     static let defaultBookmarkTags = ["技术", "资讯", "视频", "购物", "美食", "旅行", "灵感", "工具", "娱乐"]

@@ -46,8 +46,9 @@ struct RecognizeTodoIntent: AppIntent {
         }
         let context = OmnyApp.sharedModelContainer.mainContext
         // OCR 由快捷指令完成，故无原图；sourceImage 传 nil（后续走内置 OCR 时再带原图）
-        // 全放行：四类都可识别入库；按实际识别到的类型如实汇总，不再谎报"待办"
-        let items = await Ingestor.ingest(text: trimmed, source: .screenshot, context: context)
+        // 走截图专用解析器：一屏多条多类一次抽取（快递/行程/待办），忽略 OCR 噪声。
+        let items = await Ingestor.ingest(text: trimmed, source: .screenshot,
+                                          parser: AppSettings.shared.screenParser, context: context)
         guard !items.isEmpty else {
             return .result(dialog: "没有识别到内容")
         }
