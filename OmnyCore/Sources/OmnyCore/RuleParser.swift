@@ -36,7 +36,8 @@ public struct RuleParser: Parser {
     static let packageKeywords = ["快递", "快件", "包裹", "取件", "取货", "驿站", "运单", "派送", "签收", "丰巢", "代收"]
     static let tripKeywords = ["列车", "车次", "次列车", "航班", "起飞", "登机", "检票", "乘车", "开车前"]
 
-    static func classify(_ text: String) -> ItemType? {
+    /// 关键词分类入口（public：MLTraining 回测工具用它当基线）
+    public static func classify(_ text: String) -> ItemType? {
         let packageScore = packageKeywords.count { text.contains($0) }
         let tripScore = tripKeywords.count { text.contains($0) }
         if tripScore > 0 && tripScore >= packageScore { return .trip }

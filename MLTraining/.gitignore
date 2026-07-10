@@ -1,0 +1,7 @@
+# 真实短信及其衍生数据涉及隐私，永不提交
+sms_raw.txt
+*.csv
+# 训练产物与构建目录
+*.mlmodel
+*.mlmodelc
+Backtest/.build/

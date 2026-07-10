@@ -11,7 +11,7 @@
 - [ ] `train_classifier.swift` 训练，盯 trip/package 召回（漏快递代价最高）
 - [ ] 集成：OmnyCore 定义 `TextKindClassifier` 协议（正则实现留 Core 做降级 + Linux 可测），App 层注入 CoreML 实现；推理带置信度阈值，低于阈值放行给正则兜底
 
-设计定论：package 覆盖快递全状态而非只取件码（合并链路依赖在途/签收短信）；
+设计定论：package 只认「待取（取件码）+ 签收」，核心是取件码识别，在途/派送过程通知归 other；
 todo 类样本要覆盖短信体（还款/缴费/预约）+ 聊天纪要体（截屏 OCR 入口）两种文风；
 提取模型不现在训——LLM 提取结果连同原文即天然标注对，攒够几千条后再蒸馏成
 按类型分置的 MLWordTagger，LLM 退居兜底（teacher-student 路线）。
