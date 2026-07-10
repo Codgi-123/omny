@@ -9,7 +9,7 @@ struct ExpressView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var items: [InboxItem]
 
-    private var packages: [InboxItem] { items.filter { $0.kind == .package } }
+    private var packages: [InboxItem] { items.filter { $0.kind == .package && $0.deletedAt == nil } }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -39,7 +39,7 @@ struct ExpressView: View {
             Section {
                 ForEach(list) { pkg in
                     PackageCard(item: pkg).opacity(dimmed ? 0.55 : 1).cardCell()
-                        // 整条右滑完成/撤销（提醒事项式）
+                        // 左滑（trailing）完成/撤销（提醒事项式）
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             if pkg.packageStatus == .pickedUp {
                                 Button {
@@ -53,6 +53,12 @@ struct ExpressView: View {
                                 } label: { Label("已取", systemImage: "checkmark") }
                                     .tint(Theme.green)
                             }
+                        }
+                        // 右滑（leading）删除 → 回收站
+                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                withAnimation(.snappy) { Trash.softDelete(pkg, context: context) }
+                            } label: { Label("删除", systemImage: "trash") }
                         }
                 }
             } header: {
@@ -75,7 +81,7 @@ struct TripView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var items: [InboxItem]
 
-    private var trips: [InboxItem] { items.filter { $0.kind == .trip } }
+    private var trips: [InboxItem] { items.filter { $0.kind == .trip && $0.deletedAt == nil } }
     private var upcoming: [InboxItem] {
         trips.filter { ($0.departAt ?? .distantPast) > .now }
             .sorted { ($0.departAt ?? .distantFuture) < ($1.departAt ?? .distantFuture) }
@@ -91,7 +97,14 @@ struct TripView: View {
             List {
             if !upcoming.isEmpty {
                 Section {
-                    ForEach(upcoming) { TripCard(item: $0).cardCell() }
+                    ForEach(upcoming) { item in
+                        TripCard(item: item).cardCell()
+                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    withAnimation(.snappy) { Trash.softDelete(item, context: context) }
+                                } label: { Label("删除", systemImage: "trash") }
+                            }
+                    }
                 } header: {
                     tripHeader("即将出行")
                 }
@@ -99,20 +112,12 @@ struct TripView: View {
             if !past.isEmpty {
                 Section {
                     ForEach(past) { item in
-                        HStack {
-                            Text("\(item.tripNumber ?? "") \(item.departPlace ?? "") → \(item.arrivePlace ?? "")")
-                                .font(.body)
-                            Spacer()
-                            Badge(text: "已结束")
-                        }
-                        .opacity(0.7)
-                        .cardCell()
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            Button(role: .destructive) {
-                                context.delete(item)
-                                try? context.save()
-                            } label: { Label("删除", systemImage: "trash") }
-                        }
+                        TripCard(item: item).opacity(0.6).cardCell()
+                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    withAnimation(.snappy) { Trash.softDelete(item, context: context) }
+                                } label: { Label("删除", systemImage: "trash") }
+                            }
                     }
                 } header: {
                     tripHeader("历史行程")
@@ -151,7 +156,7 @@ struct TodoView: View {
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var dida: DidaService
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var items: [InboxItem]
-    @State private var newTodoTitle = ""
+    @State private var showAdd = false
 
     private var todos: [InboxItem] {
         items.filter { $0.kind == .todo && !$0.deletedLocally && !$0.needsReview }
@@ -160,12 +165,8 @@ struct TodoView: View {
     var body: some View {
         VStack(spacing: 0) {
             ScreenHeader("待办") { NavActions() }
+            syncBar   // 纤细同步状态条，置顶不占版面
             List {
-            Section {
-                syncBanner
-                addField
-            }
-
             let open = todos.filter { !$0.todoCompleted }
             if !open.isEmpty {
                 Section { ForEach(open) { TodoRow(item: $0) } }
@@ -187,38 +188,41 @@ struct TodoView: View {
             .refreshable { await Task { await dida.syncNow(context: context) }.value }
         }
         .background(Theme.screen)
+        .overlay(alignment: .bottomTrailing) {
+            FloatingAddButton { showAdd = true }
+        }
+        .sheet(isPresented: $showAdd) { TodoAddSheet() }
         .toolbar(.hidden, for: .navigationBar)
     }
 
-    private var addField: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "plus.circle.fill")
-                .foregroundStyle(Theme.accent)
-                .font(.title2)
-            TextField("添加待办…", text: $newTodoTitle)
-                .textFieldStyle(.plain)
-                .onSubmit(addTodo)
-        }
-    }
-
-    private var syncBanner: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(settings.didaBound ? "滴答清单 · \(settings.didaProjectName ?? "")" : "滴答清单未绑定")
-                    .font(.body)
-                Text(bannerDetail)
-                    .font(.caption)
-                    .foregroundStyle(Theme.sub)
-            }
+    /// 顶部纤细同步条：一行显示滴答绑定/同步状态，可点刷新，不再占用大块版面。
+    private var syncBar: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(settings.didaBound ? Theme.green : Theme.sub)
+                .frame(width: 7, height: 7)
+            Text(syncLine)
+                .font(.caption)
+                .foregroundStyle(Theme.sub)
+                .lineLimit(1)
             Spacer()
             if dida.syncing {
-                ProgressView().controlSize(.small)
+                ProgressView().controlSize(.mini)
             } else if settings.didaBound {
-                Badge(text: "已同步", color: Theme.green)
-            } else {
-                Badge(text: "本地模式", color: Theme.sub)
+                Button { Task { await dida.syncNow(context: context) } } label: {
+                    Image(systemName: "arrow.clockwise").font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Theme.accent)
             }
         }
+        .padding(.horizontal, Theme.Space.page)
+        .padding(.vertical, 7)
+    }
+
+    private var syncLine: String {
+        let head = settings.didaBound ? "滴答清单 · \(settings.didaProjectName ?? "")" : "本地模式"
+        return head + " · " + bannerDetail
     }
 
     private var bannerDetail: String {
@@ -227,17 +231,6 @@ struct TodoView: View {
             return "上次同步 " + last.formatted(date: .omitted, time: .shortened)
         }
         return settings.didaBound ? "下拉触发同步" : "未绑定时功能照常可用"
-    }
-
-    private func addTodo() {
-        let title = newTodoTitle.trimmingCharacters(in: .whitespaces)
-        guard !title.isEmpty else { return }
-        let item = InboxItem(kind: .todo, source: .manual, rawText: title)
-        item.todoTitle = title
-        context.insert(item)
-        try? context.save()
-        newTodoTitle = ""
-        // 本地待办不与滴答同步
     }
 }
 
@@ -256,8 +249,9 @@ struct BookmarkView: View {
     @State private var query = ""
     @State private var showAddSheet = false
     @State private var editingItem: InboxItem?
+    @State private var detailItem: InboxItem?
 
-    private var bookmarks: [InboxItem] { items.filter { $0.kind == .bookmark } }
+    private var bookmarks: [InboxItem] { items.filter { $0.kind == .bookmark && $0.deletedAt == nil } }
 
     private var filtered: [InboxItem] {
         let base: [InboxItem]
@@ -286,18 +280,7 @@ struct BookmarkView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScreenHeader("收藏") {
-                HStack(spacing: 14) {
-                    Button { showAddSheet = true } label: {
-                        Image(systemName: "plus")
-                            .font(.title2)
-                            .foregroundStyle(Theme.accent)
-                            .frame(width: 34, height: 34)
-                            .contentShape(Circle())
-                    }
-                    NavActions()
-                }
-            }
+            ScreenHeader("收藏") { NavActions() }
             if !bookmarks.isEmpty { searchBar }
             List {
             if !bookmarks.isEmpty {
@@ -305,10 +288,10 @@ struct BookmarkView: View {
             }
             ForEach(filtered) { item in
                 BookmarkCard(item: item,
+                             onOpen: { detailItem = item },
                              onEditTags: { editingItem = item },
                              onDelete: {
-                                 context.delete(item)
-                                 try? context.save()
+                                 withAnimation(.snappy) { Trash.softDelete(item, context: context) }
                              })
                     .cardCell()
             }
@@ -333,8 +316,14 @@ struct BookmarkView: View {
             BookmarkTagSheet(item: item)
                 .presentationDetents([.medium])
         }
+        .sheet(item: $detailItem) { item in
+            BookmarkDetailSheet(item: item)
+        }
         }
         .background(Theme.screen)
+        .overlay(alignment: .bottomTrailing) {
+            FloatingAddButton { showAddSheet = true }
+        }
         .toolbar(.hidden, for: .navigationBar)
     }
 
@@ -401,6 +390,7 @@ struct BookmarkCard: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.modelContext) private var context
     let item: InboxItem
+    var onOpen: () -> Void
     var onEditTags: () -> Void
     var onDelete: () -> Void
 
@@ -451,9 +441,7 @@ struct BookmarkCard: View {
             }
         }
         .contentShape(Rectangle())
-        .onTapGesture {
-            if let url { openURL(url) } else { onEditTags() }
-        }
+        .onTapGesture { onOpen() }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive, action: onDelete) { Label("删除", systemImage: "trash") }
             Button(action: onEditTags) { Label("标签", systemImage: "tag") }
@@ -845,5 +833,289 @@ private struct ReviewCard: View {
                 try? context.save()
             }
         }
+    }
+}
+
+// MARK: - 回收站：软删除 / 恢复 / 彻底删除 / 到期清理
+
+enum Trash {
+    /// 软删除：进回收站（打时间戳），各列表默认不再展示。
+    static func softDelete(_ item: InboxItem, context: ModelContext) {
+        item.deletedAt = .now
+        try? context.save()
+    }
+    static func restore(_ item: InboxItem, context: ModelContext) {
+        item.deletedAt = nil
+        try? context.save()
+    }
+    static func deleteForever(_ item: InboxItem, context: ModelContext) {
+        context.delete(item)
+        try? context.save()
+    }
+    /// 清理满 7 天的回收站条目（启动 / 回前台时调用）
+    static func purgeExpired(context: ModelContext) {
+        let cutoff = Date.now.addingTimeInterval(-Double(InboxItem.trashRetentionDays) * 86400)
+        let descriptor = FetchDescriptor<InboxItem>(predicate: #Predicate { $0.deletedAt != nil })
+        guard let candidates = try? context.fetch(descriptor) else { return }
+        let expired = candidates.filter { ($0.deletedAt ?? .now) < cutoff }
+        guard !expired.isEmpty else { return }
+        for item in expired { context.delete(item) }
+        try? context.save()
+    }
+}
+
+/// 回收站页：展示已删除条目，可恢复 / 彻底删除；7 天自动清理。
+struct TrashView: View {
+    @Environment(\.modelContext) private var context
+    @Query(sort: \InboxItem.deletedAt, order: .reverse) private var all: [InboxItem]
+
+    private var trashed: [InboxItem] { all.filter { $0.deletedAt != nil } }
+
+    var body: some View {
+        List {
+            ForEach(trashed) { item in
+                HStack(spacing: 12) {
+                    Image(systemName: icon(item))
+                        .foregroundStyle(Theme.sub)
+                        .frame(width: 26)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(titleFor(item)).font(.body).lineLimit(1)
+                        Text("\(kindName(item)) · \(item.trashDaysLeft) 天后彻底删除")
+                            .font(.caption).foregroundStyle(Theme.sub)
+                    }
+                    Spacer()
+                    Button { Trash.restore(item, context: context) } label: {
+                        Image(systemName: "arrow.uturn.backward")
+                    }
+                    .buttonStyle(.borderless)
+                    .tint(Theme.accent)
+                }
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    Button(role: .destructive) {
+                        Trash.deleteForever(item, context: context)
+                    } label: { Label("彻底删除", systemImage: "trash") }
+                    Button { Trash.restore(item, context: context) } label: {
+                        Label("恢复", systemImage: "arrow.uturn.backward")
+                    }.tint(Theme.accent)
+                }
+            }
+        }
+        .overlay {
+            if trashed.isEmpty {
+                ContentUnavailableView("回收站为空", systemImage: "trash",
+                                       description: Text("删除的快递、行程、收藏会在这里保留 7 天，之后自动清除"))
+            }
+        }
+        .navigationTitle("回收站")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
+        .toolbar {
+            if !trashed.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("清空", role: .destructive) {
+                        for item in trashed { context.delete(item) }
+                        try? context.save()
+                    }
+                }
+            }
+        }
+    }
+
+    private func icon(_ i: InboxItem) -> String {
+        switch i.kind {
+        case .package: "shippingbox.fill"
+        case .trip: "airplane"
+        case .bookmark: "bookmark.fill"
+        case .todo: "checkmark.circle"
+        case .unclassified: "questionmark.circle"
+        }
+    }
+    private func kindName(_ i: InboxItem) -> String {
+        switch i.kind {
+        case .package: "快递"; case .trip: "行程"; case .bookmark: "收藏"
+        case .todo: "待办"; case .unclassified: "未分类"
+        }
+    }
+    private func titleFor(_ i: InboxItem) -> String {
+        switch i.kind {
+        case .package: i.carrier ?? "快递"
+        case .trip: i.tripNumber ?? "\(i.departPlace ?? "") → \(i.arrivePlace ?? "")"
+        case .bookmark: i.bookmarkTitle ?? i.urlString ?? i.rawText
+        case .todo: i.todoTitle ?? i.rawText
+        case .unclassified: i.rawText
+        }
+    }
+}
+
+/// 收藏详情：查看内容 / 图片 / 链接 / 标签，点「编辑」后可改内容、换图、改标签。
+struct BookmarkDetailSheet: View {
+    @Bindable var item: InboxItem
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+    @EnvironmentObject private var settings: AppSettings
+    @Environment(\.openURL) private var openURL
+
+    @State private var editing = false
+    @State private var draftText = ""
+    @State private var selectedTags: [String] = []
+    @State private var pickedItem: PhotosPickerItem?
+
+    private var url: URL? { item.urlString.flatMap(URL.init(string:)) }
+    private var candidateTags: [String] {
+        var tags = settings.bookmarkTags
+        for t in item.tags where !tags.contains(t) { tags.append(t) }
+        return tags
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("内容") {
+                    if editing {
+                        TextField("内容", text: $draftText, axis: .vertical).lineLimit(3...12)
+                    } else if item.rawText.isEmpty {
+                        Text("（无文字）").foregroundStyle(Theme.sub)
+                    } else {
+                        Text(item.rawText).textSelection(.enabled)
+                    }
+                }
+
+                if let url {
+                    Section("链接") {
+                        Button { openURL(url) } label: {
+                            Label(url.absoluteString, systemImage: "safari").lineLimit(1)
+                        }
+                    }
+                }
+
+                if let data = item.sourceImage, let ui = UIImage(data: data) {
+                    Section("图片") {
+                        Image(uiImage: ui).resizable().scaledToFit()
+                            .frame(maxHeight: 280)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        if editing {
+                            PhotosPicker(selection: $pickedItem, matching: .images) {
+                                Label("更换图片", systemImage: "photo")
+                            }
+                            Button(role: .destructive) {
+                                item.sourceImage = nil; try? context.save()
+                            } label: { Label("移除图片", systemImage: "trash") }
+                        }
+                    }
+                } else if editing {
+                    Section("图片") {
+                        PhotosPicker(selection: $pickedItem, matching: .images) {
+                            Label("添加图片", systemImage: "photo.on.rectangle")
+                        }
+                    }
+                }
+
+                Section("标签") {
+                    if editing {
+                        FlowLayout(spacing: 8) {
+                            ForEach(candidateTags, id: \.self) { tag in
+                                let on = selectedTags.contains(tag)
+                                Button {
+                                    if on { selectedTags.removeAll { $0 == tag } }
+                                    else { selectedTags.append(tag) }
+                                } label: {
+                                    Text(tag).font(.subheadline)
+                                        .foregroundStyle(on ? .white : Theme.text)
+                                        .padding(.horizontal, 12).padding(.vertical, 6)
+                                        .background(on ? Theme.accent : Theme.card, in: Capsule())
+                                }.buttonStyle(.plain)
+                            }
+                        }.padding(.vertical, 2)
+                    } else if item.tags.isEmpty {
+                        Text("未打标").foregroundStyle(Theme.sub)
+                    } else {
+                        FlowLayout(spacing: 8) {
+                            ForEach(item.tags, id: \.self) { Badge(text: "#\($0)", color: Theme.green) }
+                        }.padding(.vertical, 2)
+                    }
+                }
+            }
+            .navigationTitle("收藏详情")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(editing ? "取消" : "关闭") {
+                        if editing { editing = false } else { dismiss() }
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    if editing {
+                        Button("完成") { saveEdits() }
+                    } else {
+                        Button("编辑") { startEditing() }
+                    }
+                }
+            }
+            .onChange(of: pickedItem) { _, newItem in
+                Task {
+                    if let data = try? await newItem?.loadTransferable(type: Data.self) {
+                        item.sourceImage = data; try? context.save()
+                    }
+                }
+            }
+        }
+    }
+
+    private func startEditing() {
+        draftText = item.rawText
+        selectedTags = item.tags
+        editing = true
+    }
+    private func saveEdits() {
+        item.rawText = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let info = RuleParser.extractBookmark(item.rawText) {
+            item.urlString = info.url.absoluteString
+            if (item.bookmarkTitle ?? "").isEmpty { item.bookmarkTitle = info.title }
+        }
+        item.tags = selectedTags
+        try? context.save()
+        editing = false
+    }
+}
+
+/// 新增待办：标题 + 可选截止时间。与收藏统一走右下角「+」入口。
+struct TodoAddSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+    @State private var title = ""
+    @State private var hasDue = false
+    @State private var due = Date()
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("内容") {
+                    TextField("待办内容…", text: $title, axis: .vertical).lineLimit(1...4)
+                }
+                Section("截止时间") {
+                    Toggle("设置截止时间", isOn: $hasDue.animation())
+                    if hasDue { DatePicker("截止", selection: $due) }
+                }
+            }
+            .navigationTitle("新增待办")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") { save() }
+                        .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+        }
+    }
+    private func save() {
+        let t = title.trimmingCharacters(in: .whitespaces)
+        guard !t.isEmpty else { return }
+        let item = InboxItem(kind: .todo, source: .manual, rawText: t)
+        item.todoTitle = t
+        item.todoDue = hasDue ? due : nil
+        context.insert(item)
+        try? context.save()
+        dismiss()
     }
 }

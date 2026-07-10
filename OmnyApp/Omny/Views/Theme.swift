@@ -82,11 +82,13 @@ extension View {
             .listRowSeparator(.hidden)
     }
 
-    /// 独立富卡片作为 plain List 行：加中性卡面、清行背景、无分隔线、卡间留白
+    /// 独立富卡片作为 plain List 行：加中性卡面、无分隔线、卡间留白。
+    /// 行背景用不透明底色（与列表底同色）而非 clear —— 这样横滑操作会渲染成
+    /// 齐边的整块色带（而不是悬浮的小药丸/圆钮）。
     func cardCell() -> some View {
         self
             .cardStyle()
-            .listRowBackground(Color.clear)
+            .listRowBackground(Theme.screen)
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: 5, leading: Theme.Space.page, bottom: 5, trailing: Theme.Space.page))
     }
@@ -267,6 +269,27 @@ struct StatusTag: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
             .background(color.opacity(0.15), in: Capsule())
+    }
+}
+
+/// 右下角悬浮新增按钮：待办 / 收藏统一的「+」入口。
+/// 放在页面 ZStack 的 bottomTrailing。
+struct FloatingAddButton: View {
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "plus")
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 56, height: 56)
+                .background(Theme.accent.gradient, in: Circle())
+                .shadow(color: Theme.accent.opacity(0.35), radius: 8, y: 4)
+        }
+        .buttonStyle(.plain)
+        .padding(.trailing, Theme.Space.page)
+        .padding(.bottom, 18)
+        .accessibilityLabel("新增")
     }
 }
 

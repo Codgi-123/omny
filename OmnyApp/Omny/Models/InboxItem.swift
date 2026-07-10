@@ -25,6 +25,8 @@ final class InboxItem {
     var rawText: String = ""
     /// 解析置信度不足 / 完全没识别出来，需要人工确认
     var needsReview: Bool = false
+    /// 软删除时间：非 nil 表示已进回收站；各列表默认过滤掉；满 7 天由启动时清理彻底删除。
+    var deletedAt: Date?
     /// 截图来源的原图（外部存储）
     @Attribute(.externalStorage) var sourceImage: Data?
 
@@ -77,5 +79,17 @@ final class InboxItem {
     var packageStatus: PackageStatus {
         get { PackageStatus(rawValue: packageStatusRaw) ?? .inTransit }
         set { packageStatusRaw = newValue.rawValue }
+    }
+
+    /// 是否在回收站
+    var isDeleted: Bool { deletedAt != nil }
+    /// 回收站保留天数
+    static let trashRetentionDays = 7
+    /// 距离彻底清除还剩几天（向上取整，至少 0）
+    var trashDaysLeft: Int {
+        guard let deletedAt else { return Self.trashRetentionDays }
+        let elapsed = Date.now.timeIntervalSince(deletedAt)
+        let left = Double(Self.trashRetentionDays) - elapsed / 86400
+        return max(0, Int(ceil(left)))
     }
 }

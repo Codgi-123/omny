@@ -9,20 +9,20 @@ struct TodayView: View {
     private let margin: CGFloat = Theme.Space.page
 
     private var upcomingTrips: [InboxItem] {
-        items.filter { $0.kind == .trip && ($0.departAt ?? .distantPast) > .now }
+        items.filter { $0.kind == .trip && $0.deletedAt == nil && ($0.departAt ?? .distantPast) > .now }
             .sorted { ($0.departAt ?? .distantFuture) < ($1.departAt ?? .distantFuture) }
     }
 
     private var awaitingPackages: [InboxItem] {
-        items.filter { $0.kind == .package && $0.packageStatus != .pickedUp }
+        items.filter { $0.kind == .package && $0.deletedAt == nil && $0.packageStatus != .pickedUp }
     }
 
     private var openTodos: [InboxItem] {
-        items.filter { $0.kind == .todo && !$0.todoCompleted && !$0.needsReview && !$0.deletedLocally }
+        items.filter { $0.kind == .todo && !$0.todoCompleted && !$0.needsReview && !$0.deletedLocally && $0.deletedAt == nil }
     }
 
     private var reviewItems: [InboxItem] {
-        items.filter { $0.needsReview && !$0.deletedLocally }
+        items.filter { $0.needsReview && !$0.deletedLocally && $0.deletedAt == nil }
     }
 
     private var everythingEmpty: Bool {

@@ -32,6 +32,7 @@ struct RootView: View {
         .tint(Theme.accent)
         .task {
             DebugSupport.seedIfNeeded(context)
+            Trash.purgeExpired(context: context)   // 清理满 7 天的回收站条目
             // 启动时先收分享队列，再后台同步一次滴答
             await drainShareQueue()
             await dida.syncNow(context: context)

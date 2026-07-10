@@ -167,7 +167,11 @@ struct TripCard: View {
                 }
                 Spacer()
                 if let depart = item.departAt {
-                    StatusTag(text: countdown(to: depart) + "后", color: Theme.trip)
+                    if depart > .now {
+                        StatusTag(text: countdown(to: depart) + "后", color: Theme.trip)
+                    } else {
+                        StatusTag(text: "已结束", color: Theme.sub)
+                    }
                 }
             }
             HStack(alignment: .center, spacing: 10) {
