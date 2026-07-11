@@ -24,6 +24,7 @@ xcrun devicectl device install app --device <设备ID> \
 ---
 
 ### 已完成
+- [x] 快递卡取件交互按 HIG 重做（2026-07-11，dev-kiwi 发布 build 7）：取件码/单号改 SF Rounded 圆润数字并随 Dynamic Type 缩放；点取件码即复制；「确认取件」改为提醒事项式勾选圈（空心圈→绿色对勾，symbol 替换动画 + 成功触感，与数字中心对齐）；快递列表页整条右滑完成/撤销；首页卡片取消长按菜单；全局日期锁 zh_CN。同批把 dev-zhanghaha 的屏幕识别（ScreenParser）、需处理「重新识别」等功能合并进 dev-kiwi
 - [x] 快捷指令导入接线（2026-07-10）：「解析文本」（`78b9cbce…`）与「截图识别待办」（`f37dc8b6…`）两条 iCloud 链接接入 SettingsView，各有导入按钮 + 图文引导；后者手动触发（背面轻点 / 控制中心，iOS 无"截屏就运行"触发器）
 - [x] SettingsView 加「快捷指令」Section：「解析文本」导入按钮（占位链接）+ 两步图文引导
 - [x] LLM 调用收敛到 `LLMClient` 公共底座（2026-07-09）：结构化输出 400 降级重试、围栏剥离、maxTokens 统一进底座，删 `LLMResponseParsing.swift`

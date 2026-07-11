@@ -5,41 +5,66 @@ import OmnyCore
 // MARK: - 快递页：待取 / 在途 / 已签收
 
 struct ExpressView: View {
+    @Environment(\.modelContext) private var context
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var items: [InboxItem]
 
     private var packages: [InboxItem] { items.filter { $0.kind == .package } }
 
     var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 10) {
+        VStack(spacing: 0) {
+            ScreenHeader("快递") { NavActions() }
+            List {
                 group("待取", packages.filter { $0.packageStatus == .awaitingPickup })
                 group("在途", packages.filter { $0.packageStatus < .awaitingPickup })
                 group("已签收", packages.filter { $0.packageStatus == .pickedUp }, dimmed: true)
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(Theme.screen)
+            .overlay {
                 if packages.isEmpty {
                     ContentUnavailableView("暂无快递", systemImage: "shippingbox",
                                            description: Text("驿站短信到达后会自动出现在这里"))
-                        .padding(.top, 80)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 24)
         }
         .background(Theme.screen)
-        .navigationTitle("快递")
-        .toolbar { NavActions() }
+        .toolbar(.hidden, for: .navigationBar)
     }
 
     @ViewBuilder
     private func group(_ title: String, _ list: [InboxItem], dimmed: Bool = false) -> some View {
         if !list.isEmpty {
-            Text(title)
-                .font(.system(size: 12, weight: .heavy))
-                .foregroundStyle(Theme.sub)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 4)
-                .padding(.top, 14)
-            ForEach(list) { PackageCard(item: $0).opacity(dimmed ? 0.62 : 1) }
+            Section {
+                ForEach(list) { pkg in
+                    PackageCard(item: pkg).opacity(dimmed ? 0.55 : 1).cardCell()
+                        // 整条右滑完成/撤销（提醒事项式）
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            if pkg.packageStatus == .pickedUp {
+                                Button {
+                                    withAnimation(.snappy) { pkg.packageStatus = .awaitingPickup }
+                                    try? context.save()
+                                } label: { Label("撤销", systemImage: "arrow.uturn.left") }
+                            } else {
+                                Button {
+                                    withAnimation(.snappy) { pkg.packageStatus = .pickedUp }
+                                    try? context.save()
+                                } label: { Label("已取", systemImage: "checkmark") }
+                                    .tint(Theme.green)
+                            }
+                        }
+                }
+            } header: {
+                sectionHeader(title)
+            }
         }
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.subheadline).fontWeight(.semibold)
+            .foregroundStyle(Theme.sub)
+            .textCase(nil)
     }
 }
 
@@ -60,59 +85,61 @@ struct TripView: View {
     }
 
     var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 10) {
-                if upcoming.isEmpty {
-                    VStack(spacing: 10) {
-                        Image(systemName: "tram")
-                            .font(.system(size: 36))
-                            .foregroundStyle(Theme.sub.opacity(0.7))
-                        Text("暂无即将出行")
-                            .font(.system(size: 15, weight: .bold))
-                        Text("购票短信会自动生成行程卡片")
-                            .font(.system(size: 12.5))
-                            .foregroundStyle(Theme.sub)
-                    }
-                    .padding(.vertical, 60)
-                } else {
-                    sectionTitle("即将出行")
-                    ForEach(upcoming) { TripCard(item: $0) }
+        VStack(spacing: 0) {
+            ScreenHeader("行程") { NavActions() }
+            List {
+            if !upcoming.isEmpty {
+                Section {
+                    ForEach(upcoming) { TripCard(item: $0).cardCell() }
+                } header: {
+                    tripHeader("即将出行")
                 }
-                if !past.isEmpty {
-                    sectionTitle("历史行程")
+            }
+            if !past.isEmpty {
+                Section {
                     ForEach(past) { item in
                         HStack {
                             Text("\(item.tripNumber ?? "") \(item.departPlace ?? "") → \(item.arrivePlace ?? "")")
-                                .font(.system(size: 14.5, weight: .bold))
+                                .font(.body)
                             Spacer()
                             Badge(text: "已结束")
                         }
-                        .cardStyle()
-                        .opacity(0.62)
-                        .contextMenu {
+                        .opacity(0.7)
+                        .cardCell()
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button(role: .destructive) {
                                 context.delete(item)
                                 try? context.save()
                             } label: { Label("删除", systemImage: "trash") }
                         }
                     }
+                } header: {
+                    tripHeader("历史行程")
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 24)
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Theme.screen)
+        .overlay {
+            if upcoming.isEmpty && past.isEmpty {
+                ContentUnavailableView {
+                    Label("暂无即将出行", systemImage: "tram")
+                } description: {
+                    Text("购票短信会自动生成行程卡片")
+                }
+            }
+        }
         }
         .background(Theme.screen)
-        .navigationTitle("行程")
-        .toolbar { NavActions() }
+        .toolbar(.hidden, for: .navigationBar)
     }
 
-    private func sectionTitle(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 12, weight: .heavy))
+    private func tripHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.subheadline).fontWeight(.semibold)
             .foregroundStyle(Theme.sub)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 4)
-            .padding(.top, 14)
+            .textCase(nil)
     }
 }
 
@@ -130,54 +157,56 @@ struct TodoView: View {
     }
 
     var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 10) {
+        VStack(spacing: 0) {
+            ScreenHeader("待办") { NavActions() }
+            List {
+            Section {
                 syncBanner
-                HStack(spacing: 8) {
-                    TextField("添加待办…", text: $newTodoTitle)
-                        .textFieldStyle(.plain)
-                        .onSubmit(addTodo)
-                    Button(action: addTodo) {
-                        Image(systemName: "plus.circle.fill")
-                            .foregroundStyle(Theme.accent)
-                            .font(.system(size: 22))
-                    }
-                    .buttonStyle(.plain)
-                }
-                .cardStyle()
+                addField
+            }
 
-                ForEach(todos.filter { !$0.todoCompleted }) { TodoRow(item: $0) }
+            let open = todos.filter { !$0.todoCompleted }
+            if !open.isEmpty {
+                Section { ForEach(open) { TodoRow(item: $0) } }
+            }
 
-                let done = todos.filter(\.todoCompleted)
-                if !done.isEmpty {
-                    Text("已完成")
-                        .font(.system(size: 12, weight: .heavy))
-                        .foregroundStyle(Theme.sub)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 4)
-                        .padding(.top, 14)
-                    ForEach(done) { TodoRow(item: $0).opacity(0.62) }
+            let done = todos.filter(\.todoCompleted)
+            if !done.isEmpty {
+                Section {
+                    ForEach(done) { TodoRow(item: $0).opacity(0.6) }
+                } header: {
+                    Text("已完成").textCase(nil)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 24)
+        }
+            .listStyle(.insetGrouped)
+            // 包一层非结构化 Task：.refreshable 的任务绑定在刷新手势上，视图刷新时会被
+            // SwiftUI 取消并把取消传给 URLSession（表现为"同步失败：cancelled"）。
+            // Task {} 不继承外层取消，await .value 让菊花转到同步真正结束。
+            .refreshable { await Task { await dida.syncNow(context: context) }.value }
         }
         .background(Theme.screen)
-        .navigationTitle("待办")
-        .toolbar { NavActions() }
-        // 包一层非结构化 Task：.refreshable 的任务绑定在刷新手势上，视图刷新时会被
-        // SwiftUI 取消并把取消传给 URLSession（表现为"同步失败：cancelled"）。
-        // Task {} 不继承外层取消，await .value 让菊花转到同步真正结束。
-        .refreshable { await Task { await dida.syncNow(context: context) }.value }
+        .toolbar(.hidden, for: .navigationBar)
+    }
+
+    private var addField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "plus.circle.fill")
+                .foregroundStyle(Theme.accent)
+                .font(.title2)
+            TextField("添加待办…", text: $newTodoTitle)
+                .textFieldStyle(.plain)
+                .onSubmit(addTodo)
+        }
     }
 
     private var syncBanner: some View {
         HStack {
             VStack(alignment: .leading, spacing: 3) {
                 Text(settings.didaBound ? "滴答清单 · \(settings.didaProjectName ?? "")" : "滴答清单未绑定")
-                    .font(.system(size: 14.5, weight: .bold))
+                    .font(.body)
                 Text(bannerDetail)
-                    .font(.system(size: 12))
+                    .font(.caption)
                     .foregroundStyle(Theme.sub)
             }
             Spacer()
@@ -189,10 +218,6 @@ struct TodoView: View {
                 Badge(text: "本地模式", color: Theme.sub)
             }
         }
-        .padding(13)
-        .background(Theme.slate.opacity(0.12))
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Theme.slate.opacity(0.2)))
     }
 
     private var bannerDetail: String {
@@ -250,40 +275,42 @@ struct BookmarkView: View {
     }
 
     var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 10) {
-                if !bookmarks.isEmpty { tagFilterBar }
-                if bookmarks.isEmpty {
-                    ContentUnavailableView("暂无收藏", systemImage: "bookmark",
-                                           description: Text("在任意 App 里点分享 → 选 Omny，链接和文字都能收"))
-                        .padding(.top, 80)
-                } else if filtered.isEmpty {
-                    ContentUnavailableView("该标签下暂无收藏", systemImage: "tag")
-                        .padding(.top, 60)
-                }
-                ForEach(filtered) { item in
-                    BookmarkCard(item: item,
-                                 onEditTags: { editingItem = item },
-                                 onDelete: {
-                                     context.delete(item)
-                                     try? context.save()
-                                 })
+        VStack(spacing: 0) {
+            ScreenHeader("收藏") {
+                HStack(spacing: 14) {
+                    Button { showAddSheet = true } label: {
+                        Image(systemName: "plus")
+                            .font(.title2)
+                            .foregroundStyle(Theme.accent)
+                            .frame(width: 34, height: 34)
+                            .contentShape(Circle())
+                    }
+                    NavActions()
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 24)
+            List {
+            if !bookmarks.isEmpty {
+                tagFilterBar.carouselRow()
+            }
+            ForEach(filtered) { item in
+                BookmarkCard(item: item,
+                             onEditTags: { editingItem = item },
+                             onDelete: {
+                                 context.delete(item)
+                                 try? context.save()
+                             })
+                    .cardCell()
+            }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
         .background(Theme.screen)
-        .navigationTitle("收藏")
-        .toolbar {
-            HStack(spacing: 8) {
-                Button {
-                    showAddSheet = true
-                } label: {
-                    Image(systemName: "plus")
-                        .foregroundStyle(Theme.accent)
-                }
-                NavActions()
+        .overlay {
+            if bookmarks.isEmpty {
+                ContentUnavailableView("暂无收藏", systemImage: "bookmark",
+                                       description: Text("在任意 App 里点分享 → 选 Omny，链接和文字都能收"))
+            } else if filtered.isEmpty {
+                ContentUnavailableView("该标签下暂无收藏", systemImage: "tag")
             }
         }
         .sheet(isPresented: $showAddSheet) { BookmarkAddSheet() }
@@ -291,6 +318,9 @@ struct BookmarkView: View {
             BookmarkTagSheet(item: item)
                 .presentationDetents([.medium])
         }
+        }
+        .background(Theme.screen)
+        .toolbar(.hidden, for: .navigationBar)
     }
 
     private var tagFilterBar: some View {
@@ -304,8 +334,8 @@ struct BookmarkView: View {
                     filterChip("未打标", .untagged)
                 }
             }
-            .padding(.horizontal, 2)
-            .padding(.vertical, 4)
+            .padding(.horizontal, Theme.Space.page)
+            .padding(.vertical, 8)
         }
     }
 
@@ -315,13 +345,12 @@ struct BookmarkView: View {
             filter = value
         } label: {
             Text(label)
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(selected ? Theme.card : Theme.sub)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(selected ? Theme.accent : Theme.card)
-                .clipShape(Capsule())
-                .overlay(Capsule().strokeBorder(Theme.line, lineWidth: selected ? 0 : 1))
+                .font(.subheadline)
+                .fontWeight(selected ? .semibold : .regular)
+                .foregroundStyle(selected ? .white : Theme.text)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .background(selected ? Theme.accent : Theme.card, in: Capsule())
         }
         .buttonStyle(.plain)
     }
@@ -338,46 +367,48 @@ struct BookmarkCard: View {
     private var url: URL? { item.urlString.flatMap(URL.init(string:)) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top) {
-                Text(title)
-                    .font(.system(size: 14.5, weight: .bold))
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                Spacer()
-                Badge(text: url != nil ? "链接" : "文本",
-                      color: url != nil ? Theme.accent : Theme.slate)
-            }
+        HStack(alignment: .top, spacing: 12) {
+            IconChip(symbol: url != nil ? "link" : "text.alignleft", color: Theme.bookmark, size: 38)
+            VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.body)
+                .foregroundStyle(Theme.text)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
             if let url {
                 Text(url.host() ?? url.absoluteString)
-                    .font(.system(size: 12.5))
+                    .font(.caption)
                     .foregroundStyle(Theme.sub)
                     .lineLimit(1)
             } else if item.rawText != title {
                 Text(item.rawText)
-                    .font(.system(size: 12.5))
+                    .font(.caption)
                     .foregroundStyle(Theme.sub)
                     .lineLimit(3)
             }
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 if item.tags.isEmpty {
                     Text("未打标")
-                        .font(.system(size: 11.5))
+                        .font(.caption)
                         .foregroundStyle(Theme.sub.opacity(0.7))
                 } else {
-                    ForEach(item.tags, id: \.self) { Badge(text: $0, color: Theme.green) }
+                    ForEach(item.tags, id: \.self) { Badge(text: "#\($0)", color: Theme.green) }
                 }
                 Spacer()
-                Text(item.createdAt.formatted(.relative(presentation: .named)))
-                    .font(.system(size: 11.5))
+                Text(item.createdAt.formatted(.relative(presentation: .named).locale(Locale(identifier: "zh_CN"))))
+                    .font(.caption)
                     .foregroundStyle(Theme.sub)
             }
+            }
         }
-        .cardStyle()
         .contentShape(Rectangle())
         .onTapGesture {
             if let url { openURL(url) } else { onEditTags() }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive, action: onDelete) { Label("删除", systemImage: "trash") }
+            Button(action: onEditTags) { Label("标签", systemImage: "tag") }
+                .tint(Theme.green)
         }
         .contextMenu {
             if let url {
@@ -551,18 +582,21 @@ struct ReviewView: View {
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 10) {
-                if reviewItems.isEmpty {
-                    ContentUnavailableView("没有需要处理的内容", systemImage: "checkmark.seal")
-                        .padding(.top, 80)
-                }
                 ForEach(reviewItems) { item in
                     ReviewCard(item: item)
+                        .padding(.horizontal, Theme.Space.page)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 24)
+            .padding(.vertical, 8)
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
         .background(Theme.screen)
+        .overlay {
+            if reviewItems.isEmpty {
+                ContentUnavailableView("没有需要处理的内容", systemImage: "checkmark.seal")
+            }
+        }
         .navigationTitle("需处理")
     }
 }

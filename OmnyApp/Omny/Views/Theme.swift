@@ -1,31 +1,71 @@
 import SwiftUI
+import UIKit
 
-/// 交互稿的暖调配色：米色底、陶土橙点缀
+/// 原生分组表配色：中性系统色做表面（自动明暗 + 正确对比度），只保留陶土橙做品牌强调。
 enum Theme {
-    static let screen = Color(red: 0.957, green: 0.937, blue: 0.902)      // #f4efe6
-    static let card = Color(red: 1.0, green: 0.992, blue: 0.973)          // #fffdf8
-    static let cardWarm = Color(red: 0.992, green: 0.973, blue: 0.933)    // #fdf8ee
-    static let text = Color(red: 0.149, green: 0.133, blue: 0.11)         // #26221c
-    static let sub = Color(red: 0.549, green: 0.514, blue: 0.459)         // #8c8375
-    static let accent = Color(red: 0.761, green: 0.255, blue: 0.047)      // #c2410c 陶土橙
-    static let green = Color(red: 0.247, green: 0.435, blue: 0.31)        // #3f6f4f
-    static let slate = Color(red: 0.357, green: 0.42, blue: 0.62)         // #5b6b9e 行程蓝
-    static let red = Color(red: 0.702, green: 0.204, blue: 0.122)         // #b3341f
-    static let line = Color(red: 0.36, green: 0.314, blue: 0.235).opacity(0.14)
+    static let screen   = Color(.systemGroupedBackground)           // 分组表底
+    static let card     = Color(.secondarySystemGroupedBackground)  // 分组单元格 / 轮播卡表面
+    static let cardWarm = Color(.secondarySystemGroupedBackground)
+    static let text     = Color(.label)
+    static let sub      = Color(.secondaryLabel)
+    static let line     = Color(.separator)
+
+    /// 品牌强调色：iOS 系统蓝（Apple 最经典的默认强调色）。原陶土橙已弃用。
+    static let accent = Color(.systemBlue)
+    static let green  = Color(.systemGreen)
+    static let slate  = Color(.systemIndigo)
+    static let red    = Color(.systemRed)
+
+    /// 分类签名色：每类内容一个颜色，成体系地用在图标/关键数据上，给原生分组表加回识别度
+    static let express  = Color(.systemBlue)    // 快递 · 蓝
+    static let trip     = Color(.systemIndigo)  // 行程 · 靛
+    static let todo     = Color(.systemGreen)   // 待办 · 绿
+    static let bookmark = Color(.systemPink)    // 收藏 · 粉
+
+    /// 统一的间距刻度（4/8pt 栅格）
+    enum Space {
+        static let page: CGFloat = 16
+        static let gap: CGFloat = 12
+        static let cardPad: CGFloat = 16
+    }
 }
 
 // MARK: 通用组件
 
+/// 卡片表面：中性单元格底 + 柔和阴影托出层次（App Store 卡片式的"浮起"质感，非旧的描边+阴影堆叠）。
 struct CardBackground: ViewModifier {
     var warm = false
     func body(content: Content) -> some View {
         content
-            .padding(15)
-            .background(warm ? Theme.cardWarm : Theme.card)
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(Theme.line, lineWidth: 1))
-            .shadow(color: .black.opacity(0.04), radius: 5, y: 2)
+            .padding(Theme.Space.cardPad)
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            // 收紧阴影，避免晕影渗到卡片外的边距、看起来像背景色不均
+            .shadow(color: .black.opacity(0.05), radius: 5, y: 2)
+    }
+}
+
+/// 自定义大标题头部：左侧大号粗体标题 + 右侧操作按钮，同一行（App Store 首页式）。
+/// 用它替代系统导航标题，让标题和右上角按钮真正同高。
+struct ScreenHeader<Trailing: View>: View {
+    let title: String
+    @ViewBuilder var trailing: () -> Trailing
+
+    init(_ title: String, @ViewBuilder trailing: @escaping () -> Trailing) {
+        self.title = title
+        self.trailing = trailing
+    }
+
+    var body: some View {
+        HStack(alignment: .center) {
+            Text(title)
+                .font(.largeTitle)
+                .fontWeight(.bold)
+            Spacer()
+            trailing()
+        }
+        .padding(.horizontal, Theme.Space.page)
+        .padding(.top, 6)
+        .padding(.bottom, 8)
     }
 }
 
@@ -33,45 +73,94 @@ extension View {
     func cardStyle(warm: Bool = false) -> some View {
         modifier(CardBackground(warm: warm))
     }
+
+    /// 横向轮播作为 List row：整宽、清背景、无分隔线
+    func carouselRow() -> some View {
+        self
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+    }
+
+    /// 独立富卡片作为 plain List 行：加中性卡面、清行背景、无分隔线、卡间留白
+    func cardCell() -> some View {
+        self
+            .cardStyle()
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 5, leading: Theme.Space.page, bottom: 5, trailing: Theme.Space.page))
+    }
+
+    /// 按开关决定是否挂长按菜单：首页卡片传 false 关掉长按抬起效果
+    @ViewBuilder
+    func contextMenuIf<M: View>(_ enabled: Bool, @ViewBuilder menu: () -> M) -> some View {
+        if enabled { self.contextMenu(menuItems: menu) } else { self }
+    }
 }
 
+/// 分类图标块：渐变分类色 + 白色 SF Symbol（Settings / App Store 式），给卡片加强识别色。
+struct IconChip: View {
+    let symbol: String
+    let color: Color
+    var size: CGFloat = 38
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: size * 0.46, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(color.gradient, in: RoundedRectangle(cornerRadius: size * 0.28, style: .continuous))
+    }
+}
+
+/// 状态标签：淡底 tinted 胶囊（明确是"标签"而非可点链接）
+struct StatusTag: View {
+    let text: String
+    var color: Color = Theme.sub
+
+    var body: some View {
+        Text(text)
+            .font(.caption2)
+            .fontWeight(.semibold)
+            .foregroundStyle(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(color.opacity(0.15), in: Capsule())
+    }
+}
+
+/// 轻量彩色文字标签（用于 tag、次要标记）
 struct Badge: View {
     let text: String
     var color: Color = Theme.sub
 
     var body: some View {
         Text(text)
-            .font(.system(size: 11.5, weight: .heavy))
+            .font(.caption)
+            .fontWeight(.medium)
             .foregroundStyle(color)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 4)
-            .background(color.opacity(0.13))
-            .clipShape(Capsule())
     }
 }
 
+/// 首页分区头：分类色小图标 + 标题 + 计数。小号彩色 SF Symbol（不是填充色块），加识别度不显廉价。
 struct SectionHeader: View {
     let icon: String
-    let iconColor: Color
+    let tint: Color
     let title: String
     var count: String? = nil
 
     var body: some View {
-        HStack(spacing: 9) {
+        HStack(spacing: 7) {
             Image(systemName: icon)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(iconColor)
-                .frame(width: 30, height: 30)
-                .background(iconColor.opacity(0.13))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-            Text(title).font(.system(size: 17, weight: .bold))
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundStyle(tint)
+            Text(title).font(.headline)
             if let count {
-                Text(count).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.sub)
+                Text(count).font(.subheadline).foregroundStyle(Theme.sub)
             }
             Spacer()
         }
-        .padding(.horizontal, 4)
-        .padding(.top, 16)
-        .padding(.bottom, 4)
+        .textCase(nil)
     }
 }
