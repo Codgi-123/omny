@@ -13,20 +13,20 @@ struct RootView: View {
     var body: some View {
         TabView(selection: $selection) {
             NavigationStack { TodayView() }
-                .tabItem { Label("今天", systemImage: "house") }
+                .tabItem { Label("今天", image: "TabToday") }
                 .tag(0)
             NavigationStack { ExpressView() }
-                .tabItem { Label("快递", systemImage: "shippingbox") }
+                .tabItem { Label("快递", image: "TabExpress") }
                 .tag(1)
             NavigationStack { TripView() }
-                .tabItem { Label("行程", systemImage: "tram") }
+                .tabItem { Label("行程", image: "TabTrip") }
                 .tag(2)
             NavigationStack { TodoView() }
-                .tabItem { Label("待办", systemImage: "checkmark.circle") }
+                .tabItem { Label("待办", image: "TabTodo") }
                 .badge(reviewItems.filter { $0.kind == .todo }.count)
                 .tag(3)
             NavigationStack { BookmarkView() }
-                .tabItem { Label("收藏", systemImage: "bookmark") }
+                .tabItem { Label("收藏", image: "TabBookmark") }
                 .tag(4)
         }
         .tint(Theme.accent)

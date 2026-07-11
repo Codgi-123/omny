@@ -9,6 +9,8 @@ public struct SyncableTodo: Equatable, Sendable {
     public var note: String?
     public var due: Date?
     public var isCompleted: Bool
+    /// 优先级，取值对齐滴答（0 无 / 1 低 / 3 中 / 5 高）
+    public var priority: Int
     /// 本地有滴答侧还不知道的修改
     public var needsPush: Bool
     /// 本地已删除，等待推送删除后彻底清理
@@ -16,13 +18,14 @@ public struct SyncableTodo: Equatable, Sendable {
 
     public init(localID: UUID, didaTaskID: String? = nil, title: String,
                 note: String? = nil, due: Date? = nil, isCompleted: Bool = false,
-                needsPush: Bool = true, isDeletedLocally: Bool = false) {
+                priority: Int = 0, needsPush: Bool = true, isDeletedLocally: Bool = false) {
         self.localID = localID
         self.didaTaskID = didaTaskID
         self.title = title
         self.note = note
         self.due = due
         self.isCompleted = isCompleted
+        self.priority = priority
         self.needsPush = needsPush
         self.isDeletedLocally = isDeletedLocally
     }
@@ -30,6 +33,7 @@ public struct SyncableTodo: Equatable, Sendable {
     func asDidaTask(projectID: String) -> DidaTask {
         DidaTask(id: didaTaskID, projectId: projectID, title: title, content: note,
                  dueDate: due.map(DidaDate.string(from:)),
+                 priority: priority,
                  status: isCompleted ? 2 : 0)
     }
 }

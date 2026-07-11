@@ -18,6 +18,19 @@ struct PackageCard: View {
     var showsContextMenu = true          // 首页传 false 关闭长按菜单
     @Environment(\.modelContext) private var context
     @State private var copied = false
+    @State private var resetTask: Task<Void, Never>?
+
+    // 复制取件码：柔和切到"已复制"，1.5s 后回退。重按前取消上一个回退任务，
+    // 否则连点两次会让"已复制"提前消失。
+    private func copy(_ code: String) {
+        UIPasteboard.general.string = code
+        withAnimation(.snappy) { copied = true }
+        resetTask?.cancel()
+        resetTask = Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            if !Task.isCancelled { withAnimation(.snappy) { copied = false } }
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -36,20 +49,21 @@ struct PackageCard: View {
                 }
                 Spacer()
                 statusTag
+                    .contentTransition(.opacity)
+                    .animation(.snappy, value: item.packageStatus)
             }
 
             // 主体：取件码（点按复制）/ 单号，右侧取件勾选圈（圈与数字中心对齐）
             HStack(alignment: .codeCenter, spacing: 12) {
                 if let code = item.pickupCode {
                     Button {
-                        UIPasteboard.general.string = code
-                        copied = true
-                        Task { try? await Task.sleep(for: .seconds(1.5)); copied = false }
+                        copy(code)
                     } label: {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(copied ? "已复制取件码" : "取件码 · 点按复制")
                                 .font(.caption)
                                 .foregroundStyle(copied ? Theme.green : Theme.sub)
+                                .contentTransition(.opacity)
                             Text(code)
                                 // SF Rounded：原生圆润数字，比默认更柔和；用文本样式随 Dynamic Type 缩放
                                 .font(.system(.largeTitle, design: .rounded).weight(.bold))
@@ -58,8 +72,9 @@ struct PackageCard: View {
                                 .alignmentGuide(.codeCenter) { $0[VerticalAlignment.center] }
                         }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressableStyle())
                     .accessibilityLabel("复制取件码")
+                    .sensoryFeedback(.impact(weight: .light), trigger: copied) { _, now in now }
                 } else if let number = item.trackingNumber ?? item.trackingTail {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("单号")
@@ -119,7 +134,7 @@ struct PackageCard: View {
                 .frame(width: 44, height: 44)          // ≥44pt 触控目标
                 .contentShape(Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle(scale: 0.9))
         .accessibilityLabel(done ? "撤销取件" : "确认取件")
         .sensoryFeedback(trigger: item.packageStatus) { _, new in
             new == .pickedUp ? .success : nil
@@ -140,6 +155,114 @@ struct PackageCard: View {
         case .outForDelivery: StatusTag(text: "派送中", color: Theme.sub)
         case .inTransit: StatusTag(text: "在途", color: Theme.sub)
         case .pickedUp: StatusTag(text: "已签收", color: Theme.sub)
+        }
+    }
+}
+
+// MARK: - 快递卡·紧凑版（首页轮播用：一行装下核心信息，密度更高）
+
+struct PackageCardCompact: View {
+    @Bindable var item: InboxItem
+    @Environment(\.modelContext) private var context
+    @State private var copied = false
+    @State private var resetTask: Task<Void, Never>?
+
+    private func copy(_ code: String) {
+        UIPasteboard.general.string = code
+        withAnimation(.snappy) { copied = true }
+        resetTask?.cancel()
+        resetTask = Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            if !Task.isCancelled { withAnimation(.snappy) { copied = false } }
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // 顶排：包裹图标 + 承运商名 + 取件圈，垂直居中对齐
+            HStack(alignment: .center, spacing: 8) {
+                CarrierIcon(carrier: item.carrier, size: 36)
+                Text(item.carrier ?? "快递")
+                    .font(.system(size: 22, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .layoutPriority(1)
+                Spacer(minLength: 4)
+                pickupButton
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                codeLine
+                if let station = item.station {
+                    Text(station)
+                        .font(.caption2)
+                        .foregroundStyle(Theme.sub)
+                        .lineLimit(1)
+                }
+                Text(timeText)
+                    .font(.caption2)
+                    .foregroundStyle(Theme.sub)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    @ViewBuilder private var codeLine: some View {
+        if let code = item.pickupCode {
+            Button {
+                copy(code)
+            } label: {
+                HStack(spacing: 5) {
+                    Text(code)
+                        .font(.system(.title3, design: .rounded).weight(.bold))
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.express)
+                        .lineLimit(1)
+                    Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                        .font(.caption2)
+                        .foregroundStyle(copied ? Theme.green : Theme.sub)
+                        .contentTransition(.symbolEffect(.replace))
+                }
+            }
+            .buttonStyle(PressableStyle())
+            .accessibilityLabel("复制取件码")
+            .sensoryFeedback(.impact(weight: .light), trigger: copied) { _, now in now }
+        } else if let number = item.trackingNumber ?? item.trackingTail {
+            Text("单号 \(number)")
+                .font(.footnote)
+                .monospacedDigit()
+                .foregroundStyle(Theme.text)
+                .lineLimit(1)
+        }
+    }
+
+    // 收件时间：不显示年，按 UTC+8（例：7月10日 23:44）
+    private var timeText: String {
+        item.createdAt.formatted(
+            Date.FormatStyle(locale: Locale(identifier: "zh_CN"),
+                             timeZone: TimeZone(secondsFromGMT: 8 * 3600)!)
+                .month().day().hour().minute()
+        )
+    }
+
+    private var pickupButton: some View {
+        let done = item.packageStatus == .pickedUp
+        return Button {
+            withAnimation(.snappy) {
+                item.packageStatus = done ? .awaitingPickup : .pickedUp
+            }
+            try? context.save()
+        } label: {
+            Image(systemName: done ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 24))
+                .foregroundStyle(done ? Theme.green : Theme.express.opacity(0.85))
+                .contentTransition(.symbolEffect(.replace))
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
+        }
+        .buttonStyle(PressableStyle(scale: 0.9))
+        .accessibilityLabel(done ? "撤销取件" : "确认取件")
+        .sensoryFeedback(trigger: item.packageStatus) { _, new in
+            new == .pickedUp ? .success : nil
         }
     }
 }
@@ -220,6 +343,14 @@ struct TripCard: View {
 
 // MARK: - 待办行（勾选 + 同步状态）
 
+/// 让「方框 / 标题 / 旗帜」三者的垂直中心对齐到同一条线（各自在多行列里也能对齐）。
+private extension VerticalAlignment {
+    enum CheckTitle: AlignmentID {
+        static func defaultValue(in d: ViewDimensions) -> CGFloat { d[VerticalAlignment.center] }
+    }
+    static let checkTitle = VerticalAlignment(CheckTitle.self)
+}
+
 struct TodoRow: View {
     @Bindable var item: InboxItem
     var showsContextMenu = true          // 首页传 false 关闭长按菜单
@@ -229,39 +360,67 @@ struct TodoRow: View {
 
     private var isLocal: Bool { item.canEditLocally }
 
+    /// 未勾选圆圈的颜色：有优先级时用优先级色着色（对齐滴答），否则中性灰
+    private var uncheckedTint: Color {
+        item.todoPriority == 0 ? Theme.sub : TodoPriority(raw: item.todoPriority).color
+    }
+
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(alignment: .checkTitle, spacing: 8) {
             Button {
-                item.todoCompleted.toggle()
+                withAnimation(.snappy) { item.todoCompleted.toggle() }
                 // 滴答待办：完成/取消完成要标脏并回写滴答；本地待办纯本地，只存不同步
                 if item.isDidaSynced { item.needsPush = true }
                 try? context.save()
                 if item.isDidaSynced { Task { await dida.syncNow(context: context) } }
             } label: {
-                Image(systemName: item.todoCompleted ? "checkmark.circle.fill" : "circle")
-                    .font(.title2)
-                    .foregroundStyle(item.todoCompleted ? Theme.green : Theme.sub)
-                    .frame(width: 44, height: 44)          // ≥44pt 触控目标
-                    .contentShape(Circle())
+                Image(systemName: item.todoCompleted ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 18))
+                    .foregroundStyle(item.todoCompleted ? Theme.green : uncheckedTint)
+                    .contentTransition(.symbolEffect(.replace))
+                    .frame(width: 36, height: 26)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableStyle(scale: 0.9))
             .accessibilityLabel(item.todoCompleted ? "标记为未完成" : "标记为完成")
+            .sensoryFeedback(trigger: item.todoCompleted) { _, done in
+                done ? .success : nil
+            }
+            // 方框中心作为对齐基准
+            .alignmentGuide(.checkTitle) { $0[VerticalAlignment.center] }
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(item.todoTitle ?? item.rawText)
                     .font(.body)
                     .strikethrough(item.todoCompleted)
                     .foregroundStyle(item.todoCompleted ? Theme.sub : Theme.text)
-                Text(syncMeta)
-                    .font(.caption)
-                    .foregroundStyle(Theme.sub)
+                    // 标题中心对齐到方框中心
+                    .alignmentGuide(.checkTitle) { $0[VerticalAlignment.center] }
+                if let note = item.todoNote?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
+                    Text(note)
+                        .font(.footnote)
+                        .foregroundStyle(Theme.sub)
+                        .lineLimit(2)
+                }
             }
-            Spacer()
+
+            Spacer(minLength: 4)
+
+            // 右侧：来源 tag → 截止时间 → 旗帜，均与方框对齐到同一中线
+            sourceTag
+                .alignmentGuide(.checkTitle) { $0[VerticalAlignment.center] }
             if let due = item.todoDue {
                 Text(dueLabel(due))
                     .font(.caption)
                     .fontWeight(.medium)
-                    .foregroundStyle(isToday(due) ? Theme.accent : Theme.sub)
+                    .foregroundStyle(dueColor(due))
+                    .alignmentGuide(.checkTitle) { $0[VerticalAlignment.center] }
+            }
+            if item.todoPriority != 0 {
+                Image(systemName: "flag.fill")
+                    .font(.system(size: 16))
+                    .foregroundStyle(TodoPriority(raw: item.todoPriority).color)
+                    .alignmentGuide(.checkTitle) { $0[VerticalAlignment.center] }
             }
         }
         // 本地待办：点按编辑、左滑删除/编辑；滴答待办只读（仅完成勾选可用）
@@ -284,29 +443,38 @@ struct TodoRow: View {
     }
 
     private func delete() {
-        // 本地待办不涉及同步，直接删除
-        context.delete(item)
-        try? context.save()
+        // 本地待办软删除进回收站，7 天内可恢复（与快递/收藏一致）
+        withAnimation(.snappy) { Trash.softDelete(item, context: context) }
     }
 
-    private var syncMeta: String {
-        guard item.isDidaSynced else { return "仅本地" }
-        return item.needsPush ? "待同步" : "已同步滴答"
+    /// 来源标签：本地待办「本地」、滴答待办「滴答」。
+    private var sourceTag: some View {
+        let dida = item.isDidaSynced
+        return Text(dida ? "滴答" : "本地")
+            .font(.caption2.weight(.medium))
+            .foregroundStyle(dida ? Theme.accent : Theme.sub)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background((dida ? Theme.accent : Theme.sub).opacity(0.12), in: Capsule())
     }
 
     private func dueLabel(_ date: Date) -> String {
         if Calendar.current.isDateInToday(date) {
             return "今天 " + date.formatted(date: .omitted, time: .shortened)
         }
-        return date.formatted(.dateTime.month().day())
+        return date.formatted(.dateTime.locale(Locale(identifier: "zh_CN")).month().day())
     }
 
-    private func isToday(_ date: Date) -> Bool {
-        Calendar.current.isDateInToday(date)
+    /// 截止色：已过期红、今天蓝、其余灰。
+    private func dueColor(_ date: Date) -> Color {
+        let cal = Calendar.current
+        if cal.startOfDay(for: date) < cal.startOfDay(for: Date()) { return Theme.red }
+        if cal.isDateInToday(date) { return Theme.accent }
+        return Theme.sub
     }
 }
 
-// MARK: - 本地待办编辑弹窗（改标题/截止时间 + 删除）。仅用于本地来源待办。
+// MARK: - 本地待办编辑弹窗（仿参考图的底部详情卡）。仅用于本地来源待办。
 
 struct TodoEditSheet: View {
     @Bindable var item: InboxItem
@@ -315,52 +483,149 @@ struct TodoEditSheet: View {
     @Environment(\.modelContext) private var context
 
     @State private var title: String
-    @State private var hasDue: Bool
-    @State private var due: Date
+    @State private var note: String
+    @State private var due: Date?
+    @State private var priority: Int
+    @State private var completed: Bool
+    @State private var showDate = false
+    @State private var showPriority = false
+    @State private var confirmDelete = false
+    @FocusState private var focus: Field?
+
+    private enum Field { case title, note }
 
     init(item: InboxItem, onDelete: @escaping () -> Void) {
         self.item = item
         self.onDelete = onDelete
         _title = State(initialValue: item.todoTitle ?? item.rawText)
-        _hasDue = State(initialValue: item.todoDue != nil)
-        _due = State(initialValue: item.todoDue ?? Date())
+        _note = State(initialValue: item.todoNote ?? "")
+        _due = State(initialValue: item.todoDue)
+        _priority = State(initialValue: item.todoPriority)
+        _completed = State(initialValue: item.todoCompleted)
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("内容") {
-                    TextField("标题", text: $title)
-                }
-                Section("截止时间") {
-                    Toggle("设置截止时间", isOn: $hasDue.animation())
-                    if hasDue {
-                        DatePicker("截止", selection: $due)
-                    }
-                }
-                Section {
-                    Button("删除待办", role: .destructive) {
-                        onDelete()
-                        dismiss()
-                    }
-                }
+        VStack(alignment: .leading, spacing: 16) {
+            topRow
+            dateRow
+
+            TextField("准备做什么？", text: $title, axis: .vertical)
+                .font(.title3.weight(.semibold))
+                .lineLimit(1...4)
+                .focused($focus, equals: .title)
+
+            // 描述：输入框 + 下方整片空白都可点，点任意处进入编辑
+            VStack(alignment: .leading, spacing: 0) {
+                TextField("描述", text: $note, axis: .vertical)
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.sub)
+                    .focused($focus, equals: .note)
+                Color.clear
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .contentShape(Rectangle())
+                    .onTapGesture { focus = .note }
             }
-            .navigationTitle("编辑待办")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") {
-                        let trimmed = title.trimmingCharacters(in: .whitespaces)
-                        item.todoTitle = trimmed.isEmpty ? item.rawText : trimmed
-                        item.todoDue = hasDue ? due : nil
-                        try? context.save()
-                        dismiss()
-                    }
-                }
-            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
+        .padding(20)
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .sheet(isPresented: $showDate) { DueDateSheet(due: $due) }
+        .sheet(isPresented: $showPriority) { PrioritySheet(priority: $priority) }
+        .alert("删除这条待办？", isPresented: $confirmDelete) {
+            Button("删除", role: .destructive) { onDelete(); dismiss() }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("会移到回收站，7 天内可在「回收站」恢复。")
+        }
+        .onDisappear(perform: commit)
+    }
+
+    // MARK: 顶部：来源标签 + 优先级 + 删除
+
+    private var topRow: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "tray.full")
+                Text(item.isDidaSynced ? "滴答清单" : "本地待办")
+            }
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(Theme.sub)
+
+            Spacer()
+
+            Button { focus = nil; showPriority = true } label: {
+                Image(systemName: priority == 0 ? "flag" : "flag.fill")
+                    .font(.system(size: 16))
+                    .foregroundStyle(priority == 0 ? Theme.accent : TodoPriority(raw: priority).color)
+                    .frame(width: 40, height: 40)
+                    .background(Color(.tertiarySystemFill), in: Circle())
+            }
+            .buttonStyle(PressableStyle(scale: 0.9))
+
+            Button { focus = nil; confirmDelete = true } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Theme.red)
+                    .frame(width: 40, height: 40)
+                    .background(Theme.red.opacity(0.12), in: Circle())
+            }
+            .buttonStyle(PressableStyle(scale: 0.9))
+        }
+    }
+
+    // MARK: 完成勾选 + 日期
+
+    private var dateRow: some View {
+        HStack(spacing: 12) {
+            Button {
+                withAnimation(.snappy) { completed.toggle() }
+            } label: {
+                Image(systemName: completed ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 18))
+                    .foregroundStyle(completed ? Theme.green
+                                     : (priority == 0 ? Theme.sub : TodoPriority(raw: priority).color))
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .buttonStyle(PressableStyle(scale: 0.9))
+
+            Button { focus = nil; showDate = true } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "calendar")
+                    Text(due.map(dueText) ?? "日期&提醒")
+                }
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(due == nil ? Theme.sub : Theme.accent)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background((due == nil ? Theme.sub : Theme.accent).opacity(0.12), in: Capsule())
+            }
+            .buttonStyle(PressableStyle())
+
+            Spacer()
+        }
+    }
+
+    private func dueText(_ d: Date) -> String {
+        let cal = Calendar.current
+        let time = (cal.component(.hour, from: d) != 0 || cal.component(.minute, from: d) != 0)
+        if cal.isDateInToday(d) {
+            return time ? "今天 " + d.formatted(date: .omitted, time: .shortened) : "今天"
+        }
+        let zh = Locale(identifier: "zh_CN")
+        return time ? d.formatted(.dateTime.locale(zh).month().day().hour().minute())
+                    : d.formatted(.dateTime.locale(zh).month().day())
+    }
+
+    /// 关闭时统一落库（标题为空回退到原文）。
+    private func commit() {
+        let trimmed = title.trimmingCharacters(in: .whitespaces)
+        item.todoTitle = trimmed.isEmpty ? item.rawText : trimmed
+        let n = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        item.todoNote = n.isEmpty ? nil : n
+        item.todoDue = due
+        item.todoPriority = priority
+        item.todoCompleted = completed
+        try? context.save()
     }
 }

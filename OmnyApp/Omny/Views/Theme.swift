@@ -32,13 +32,26 @@ enum Theme {
 
 // MARK: 通用组件
 
+/// 通用按压反馈：按下即缩，`.snappy` 快速回弹。替代 `.buttonStyle(.plain)`
+/// —— `.plain` 会连系统高亮一起去掉，导致可点元素按下去毫无回应。
+/// 勾选圈这类小目标可传更明显的 scale（如 0.9）。
+struct PressableStyle: ButtonStyle {
+    var scale: CGFloat = 0.97
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? scale : 1)
+            .animation(.snappy(duration: 0.14), value: configuration.isPressed)
+    }
+}
+
 /// 卡片表面：中性单元格底 + 柔和阴影托出层次（App Store 卡片式的"浮起"质感，非旧的描边+阴影堆叠）。
 struct CardBackground: ViewModifier {
     var warm = false
+    var pad: CGFloat = Theme.Space.cardPad
     func body(content: Content) -> some View {
         content
-            .padding(Theme.Space.cardPad)
-            .background(Theme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .padding(pad)
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             // 收紧阴影，避免晕影渗到卡片外的边距、看起来像背景色不均
             .shadow(color: .black.opacity(0.05), radius: 5, y: 2)
     }
@@ -70,8 +83,8 @@ struct ScreenHeader<Trailing: View>: View {
 }
 
 extension View {
-    func cardStyle(warm: Bool = false) -> some View {
-        modifier(CardBackground(warm: warm))
+    func cardStyle(warm: Bool = false, pad: CGFloat = Theme.Space.cardPad) -> some View {
+        modifier(CardBackground(warm: warm, pad: pad))
     }
 
     /// 横向轮播作为 List row：整宽、清背景、无分隔线
@@ -85,9 +98,17 @@ extension View {
     /// 独立富卡片作为 plain List 行：加中性卡面、无分隔线、卡间留白。
     /// 行背景用不透明底色（与列表底同色）而非 clear —— 这样横滑操作会渲染成
     /// 齐边的整块色带（而不是悬浮的小药丸/圆钮）。
-    func cardCell() -> some View {
+    /// plain 列表的 section 头部：与卡片同边距对齐、清掉默认高亮底。
+    func sectionHeaderInset() -> some View {
         self
-            .cardStyle()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .listRowInsets(EdgeInsets(top: 10, leading: Theme.Space.page, bottom: 4, trailing: Theme.Space.page))
+            .listRowBackground(Color.clear)
+    }
+
+    func cardCell(pad: CGFloat = Theme.Space.cardPad) -> some View {
+        self
+            .cardStyle(pad: pad)
             .listRowBackground(Theme.screen)
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: 5, leading: Theme.Space.page, bottom: 5, trailing: Theme.Space.page))
@@ -286,10 +307,164 @@ struct FloatingAddButton: View {
                 .background(Theme.accent.gradient, in: Circle())
                 .shadow(color: Theme.accent.opacity(0.35), radius: 8, y: 4)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle(scale: 0.94))
         .padding(.trailing, Theme.Space.page)
         .padding(.bottom, 18)
         .accessibilityLabel("新增")
+    }
+}
+
+// MARK: - 待办优先级
+
+/// 待办优先级：数值对齐滴答清单（0 无 / 1 低 / 3 中 / 5 高），可排序、可同步。
+/// 存储用 `InboxItem.todoPriority`(Int)，这里只做展示映射。
+enum TodoPriority: Int, CaseIterable, Identifiable {
+    case none = 0, low = 1, medium = 3, high = 5
+
+    /// 从存储的原始值构造（无法识别的值归为无优先级）
+    init(raw: Int) { self = TodoPriority(rawValue: raw) ?? .none }
+
+    var id: Int { rawValue }
+
+    var label: String {
+        switch self {
+        case .none:   "无优先级"
+        case .low:    "低优先级"
+        case .medium: "中优先级"
+        case .high:   "高优先级"
+        }
+    }
+
+    /// 旗标颜色，与滴答一致：高=红 / 中=黄 / 低=蓝 / 无=灰
+    var color: Color {
+        switch self {
+        case .none:   Color(.tertiaryLabel)
+        case .low:    Color(.systemBlue)
+        case .medium: Color(.systemYellow)
+        case .high:   Color(.systemRed)
+        }
+    }
+}
+
+/// 优先级选择器：一排四个旗标（高/中/低/无），选中项高亮。用于新增/编辑弹窗。
+struct TodoPriorityPicker: View {
+    @Binding var priority: Int
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ForEach([TodoPriority.high, .medium, .low, .none]) { p in
+                let selected = p.rawValue == priority
+                Button {
+                    withAnimation(.snappy(duration: 0.15)) { priority = p.rawValue }
+                } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: "flag.fill")
+                            .font(.system(size: 17))
+                            .foregroundStyle(p.color)
+                        Text(shortLabel(p))
+                            .font(.caption2)
+                            .foregroundStyle(selected ? Theme.text : Theme.sub)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 9)
+                    .background(selected ? p.color.opacity(0.14) : Color(.tertiarySystemFill),
+                               in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(selected ? p.color.opacity(0.55) : .clear, lineWidth: 1.5)
+                    }
+                }
+                .buttonStyle(PressableStyle())
+            }
+        }
+    }
+
+    private func shortLabel(_ p: TodoPriority) -> String {
+        switch p {
+        case .none: "无"; case .low: "低"; case .medium: "中"; case .high: "高"
+        }
+    }
+}
+
+/// 截止时间选择器：一排快捷时间瓦片（今天/明天/下周一/今天傍晚）+ 展开的图形日期选择。
+/// 用 `Date?` 绑定：nil = 无截止。用于新增/编辑弹窗，替代裸 Toggle+DatePicker。
+struct TodoDuePicker: View {
+    @Binding var due: Date?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                quickTile("今天", "calendar", .systemRed, date: startOfToday)
+                quickTile("明天", "sunrise.fill", .systemOrange, date: dayAfter(startOfToday, 1))
+                quickTile("下周一", "arrow.right.circle.fill", .systemBlue, date: nextMonday)
+                quickTile("今天傍晚", "moon.fill", .systemIndigo, date: todayEvening)
+            }
+
+            if let current = due {
+                DatePicker(
+                    "",
+                    selection: Binding(get: { current }, set: { due = $0 }),
+                    displayedComponents: [.date, .hourAndMinute]
+                )
+                .datePickerStyle(.graphical)
+                .labelsHidden()
+                .tint(Theme.accent)
+
+                Button {
+                    withAnimation(.snappy) { due = nil }
+                } label: {
+                    Label("清除截止时间", systemImage: "xmark.circle.fill")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Theme.red)
+                }
+                .buttonStyle(PressableStyle())
+            }
+        }
+    }
+
+    private func quickTile(_ title: String, _ icon: String, _ color: UIColor, date: Date) -> some View {
+        let tint = Color(color)
+        // 精确到分钟比对，避免「今天」和「今天傍晚」同日互相误高亮
+        let selected = due.map { Calendar.current.isDate($0, equalTo: date, toGranularity: .minute) } ?? false
+        return Button {
+            withAnimation(.snappy) { due = date }
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 17))
+                    .foregroundStyle(selected ? .white : tint)
+                Text(title)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(selected ? .white : Theme.text)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 11)
+            .background(selected ? tint : Color(.tertiarySystemFill),
+                        in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(PressableStyle())
+    }
+
+    private var startOfToday: Date { Calendar.current.startOfDay(for: Date()) }
+
+    private func dayAfter(_ date: Date, _ days: Int) -> Date {
+        Calendar.current.date(byAdding: .day, value: days, to: date) ?? date
+    }
+
+    /// 今天傍晚 18:00
+    private var todayEvening: Date {
+        Calendar.current.date(bySettingHour: 18, minute: 0, second: 0, of: Date()) ?? Date()
+    }
+
+    /// 下一个周一（若今天就是周一，取下周一）
+    private var nextMonday: Date {
+        let cal = Calendar.current
+        let today = startOfToday
+        // 周一 = 2（周日为 1）
+        let weekday = cal.component(.weekday, from: today)
+        let delta = ((9 - weekday) % 7)
+        let offset = delta == 0 ? 7 : delta
+        return cal.date(byAdding: .day, value: offset, to: today) ?? today
     }
 }
 

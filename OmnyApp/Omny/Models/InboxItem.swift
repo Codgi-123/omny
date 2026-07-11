@@ -50,8 +50,12 @@ final class InboxItem {
 
     // 待办（滴答同步字段与 OmnyCore.SyncableTodo 对应）
     var todoTitle: String?
+    /// 待办描述 / 补充说明，对应滴答的 content
+    var todoNote: String?
     var todoDue: Date?
     var todoCompleted: Bool = false
+    /// 优先级，取值对齐滴答（0 无 / 1 低 / 3 中 / 5 高）；本地待办也可用于排序展示
+    var todoPriority: Int = 0
     var didaTaskID: String?
     var needsPush: Bool = false
     var deletedLocally: Bool = false

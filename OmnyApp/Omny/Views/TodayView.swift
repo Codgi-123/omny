@@ -19,6 +19,8 @@ struct TodayView: View {
 
     private var openTodos: [InboxItem] {
         items.filter { $0.kind == .todo && !$0.todoCompleted && !$0.needsReview && !$0.deletedLocally && $0.deletedAt == nil }
+            // 优先级降序（高→无），同级按创建时间倒序
+            .sorted { ($0.todoPriority, $0.createdAt) > ($1.todoPriority, $1.createdAt) }
     }
 
     private var reviewItems: [InboxItem] {
@@ -44,8 +46,9 @@ struct TodayView: View {
                 if !awaitingPackages.isEmpty {
                     CarouselSection(icon: "shippingbox.fill", tint: Theme.express, title: "快递",
                                     count: "\(awaitingPackages.filter { $0.packageStatus == .awaitingPickup }.count) 件待取",
-                                    items: awaitingPackages, margin: margin) {
-                        PackageCard(item: $0, showsContextMenu: false).cardStyle()
+                                    items: awaitingPackages, margin: margin, widthFraction: 0.44,
+                                    barIndicator: true) {
+                        PackageCardCompact(item: $0).cardStyle()
                     }
                 }
 
@@ -54,7 +57,7 @@ struct TodayView: View {
                         SectionHeader(icon: "checkmark.circle.fill", tint: Theme.todo, title: "待办",
                                       count: "\(openTodos.count) 项未完成")
                         VStack(spacing: 10) {
-                            ForEach(openTodos.prefix(5)) { TodoRow(item: $0, showsContextMenu: false).cardStyle() }
+                            ForEach(openTodos.prefix(5)) { TodoRow(item: $0, showsContextMenu: false).cardStyle(pad: 11) }
                         }
                     }
                     .padding(.horizontal, margin)
@@ -116,14 +119,23 @@ private struct CarouselSection<Content: View>: View {
     let count: String
     let items: [InboxItem]
     let margin: CGFloat
+    var widthFraction: CGFloat = 0.82
+    var barIndicator: Bool = false        // true：底部位置指示强制用细长进度条
     @ViewBuilder let content: (InboxItem) -> Content
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var currentID: InboxItem.ID?
 
     private var currentIndex: Int {
         guard let currentID, let i = items.firstIndex(where: { $0.id == currentID }) else { return 0 }
         return i
     }
+    /// 一屏能放下几张卡（由卡片宽度占比推算）
+    private var visibleCount: Int { max(1, Int((1 / widthFraction).rounded(.down))) }
+    /// 实际可滚动的"页数"：多卡可视时，最左卡片只能翻到 count-visibleCount，据此折算
+    private var pageCount: Int { max(items.count - visibleCount + 1, 1) }
+    /// 当前页（最左卡片序号夹到有效页范围内 → 滑到底就是最后一页）
+    private var activePage: Int { min(max(currentIndex, 0), pageCount - 1) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -133,23 +145,26 @@ private struct CarouselSection<Content: View>: View {
                 HStack(spacing: Theme.Space.gap) {
                     ForEach(items) {
                         content($0)
-                            .containerRelativeFrame(.horizontal) { w, _ in w * 0.82 }
-                            // 卡片移除时渐隐缩小，右侧后续卡片平滑补位
-                            .transition(.scale(scale: 0.9).combined(with: .opacity))
+                            .containerRelativeFrame(.horizontal) { w, _ in w * widthFraction }
+                            // 卡片移除时渐隐缩小，右侧后续卡片平滑补位；
+                            // 减弱动效时只保留淡入淡出、去掉缩放位移。
+                            .transition(reduceMotion ? .opacity
+                                        : .scale(scale: 0.9).combined(with: .opacity))
                     }
                 }
                 .scrollTargetLayout()
                 .padding(.horizontal, margin)
                 .padding(.vertical, 8)   // 给卡片阴影留出不被裁切的空间
                 // 绑定 id 列表：条目增减（如快递标记已取移出）时触发过渡动画
-                .animation(.easeInOut(duration: 0.35), value: items.map(\.persistentModelID))
+                .animation(.snappy(duration: 0.3), value: items.map(\.persistentModelID))
             }
             .scrollTargetBehavior(.viewAligned)
             .scrollPosition(id: $currentID)
 
-            // 只读位置指示：多于一张才显示
-            if items.count > 1 {
-                CarouselIndicator(count: items.count, index: currentIndex, tint: tint)
+            // 只读位置指示：按实际页数展示（多卡可视时也能翻到最后一页）
+            if pageCount > 1 {
+                CarouselIndicator(count: pageCount, index: activePage,
+                                  tint: tint, forceBar: barIndicator)
                     .padding(.horizontal, margin)
             }
         }
@@ -162,12 +177,13 @@ private struct CarouselIndicator: View {
     let count: Int
     let index: Int
     var tint: Color = Theme.express
+    var forceBar: Bool = false        // 强制用进度条（紧凑多卡轮播用）
 
     private let dotThreshold = 6
 
     var body: some View {
         Group {
-            if count <= dotThreshold { dots } else { bar }
+            if count <= dotThreshold && !forceBar { dots } else { bar }
         }
         .frame(maxWidth: .infinity)
         .animation(.easeInOut(duration: 0.25), value: index)
