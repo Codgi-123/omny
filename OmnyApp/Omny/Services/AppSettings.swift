@@ -57,6 +57,32 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(bookmarkTags, forKey: "bookmark.tags") }
     }
 
+    // MARK: 消费分类池（两级：大类 → 细分；LLM 打标只从这里选，扁平化成"大类/细分"约束）
+
+    static let defaultExpenseCategoryPool: [String: [String]] = [
+        "餐饮": ["早餐", "午餐", "晚餐", "外卖", "咖啡零食"],
+        "交通": ["打车", "公交地铁", "加油", "停车"],
+        "购物": ["日用", "服饰", "数码", "家居"],
+        "居家": ["房租", "水电燃气", "物业"],
+        "娱乐": ["订阅", "游戏", "电影"],
+        "医疗": ["门诊", "药品"],
+        "收入": ["工资", "报销", "退款", "其他"],
+    ]
+
+    /// 两级分类池。UserDefaults 存 JSON（字典嵌套数组无法直接存）。
+    @Published var expenseCategoryPool: [String: [String]] {
+        didSet {
+            if let data = try? JSONEncoder().encode(expenseCategoryPool) {
+                defaults.set(data, forKey: "expense.categoryPool")
+            }
+        }
+    }
+
+    /// 记账消费分类器（LLM 配好才有）
+    var expenseCategorizer: LLMExpenseCategorizer? {
+        llmConfig.map { LLMExpenseCategorizer(config: $0) }
+    }
+
     // MARK: 滴答清单绑定状态
 
     @Published var didaAccessToken: String? {
@@ -86,6 +112,12 @@ final class AppSettings: ObservableObject {
         llmAPIKey = defaults.string(forKey: "llm.apiKey") ?? ""
         llmModel = defaults.string(forKey: "llm.model") ?? "claude-opus-4-8"
         bookmarkTags = defaults.stringArray(forKey: "bookmark.tags") ?? Self.defaultBookmarkTags
+        if let data = defaults.data(forKey: "expense.categoryPool"),
+           let pool = try? JSONDecoder().decode([String: [String]].self, from: data) {
+            expenseCategoryPool = pool
+        } else {
+            expenseCategoryPool = Self.defaultExpenseCategoryPool
+        }
         didaAccessToken = defaults.string(forKey: "dida.accessToken")
         didaProjectID = defaults.string(forKey: "dida.projectID")
         didaProjectName = defaults.string(forKey: "dida.projectName")
@@ -101,6 +133,7 @@ final class AppSettings: ObservableObject {
         llmAPIKey = ""
         llmModel = "claude-opus-4-8"
         bookmarkTags = Self.defaultBookmarkTags
+        expenseCategoryPool = Self.defaultExpenseCategoryPool
         didaAccessToken = nil
         didaProjectID = nil
         didaProjectName = nil

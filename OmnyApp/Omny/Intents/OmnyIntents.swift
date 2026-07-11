@@ -15,11 +15,11 @@ struct ParseTextIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let context = OmnyApp.sharedModelContainer.mainContext
-        // 解析文本通道只过滤收藏；快递/行程/待办（含会议通知等）都入库
+        // 解析文本通道只过滤收藏；快递/行程/待办/记账（含会议通知、动账短信等）都入库
         let items = await Ingestor.ingest(text: text, source: .sms,
-                                          allowedTypes: [.package, .trip, .todo], context: context)
+                                          allowedTypes: [.package, .trip, .todo, .expense], context: context)
         guard !items.isEmpty else {
-            return .result(dialog: "没有识别到快递、行程或待办")
+            return .result(dialog: "没有识别到快递、行程、待办或记账")
         }
         let summary = items.map(\.intentSummary).joined(separator: "；")
         return .result(dialog: IntentDialog(stringLiteral: "已入库：\(summary)"))
@@ -68,6 +68,10 @@ extension InboxItem {
         case .trip: return "行程 \(tripNumber ?? "")"
         case .todo: return "待办 \(todoTitle ?? "")"
         case .bookmark: return "收藏 \(bookmarkTitle ?? urlString ?? "")"
+        case .expense:
+            let amt = amount.map { "\($0)元" } ?? ""
+            let label = expenseDirection == .income ? "收入" : "支出"
+            return "\(label) \(amt)\(merchant.map { "（\($0)）" } ?? "")"
         case .unclassified: return "未分类（需确认）"
         }
     }
