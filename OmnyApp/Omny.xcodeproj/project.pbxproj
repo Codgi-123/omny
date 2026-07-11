@@ -12,6 +12,8 @@
 		211842926C591F28A58A81D5 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CC21DA2A336C3F18CBD4472 /* AppSettings.swift */; };
 		2A9072EF706DEFE65EA02398 /* DidaService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CF741249636C17F15890CB8 /* DidaService.swift */; };
 		2B6169C091832764B753F49C /* OmnyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8AA264B58ADFB671485DEE6 /* OmnyApp.swift */; };
+		2DE102A3151AFCF9E0D7957C /* ManualExpenseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FD9BF7911B16F5D836593D6 /* ManualExpenseView.swift */; };
+		3436DC67A1948A62A1A43235 /* ExpenseDebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3256F2D6ADFD0C45637A6F93 /* ExpenseDebugView.swift */; };
 		3B55C4A7C51CACDF76C6ED90 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CF59AADF0299C174979693B /* SettingsView.swift */; };
 		3B6643656985F33192C0B1BC /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDA3EC43CC114A3BA3AAE2CD /* Secrets.swift */; };
 		402F23D9EC330177DF3D2AFB /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5765578C5CF868977175F47 /* TodayView.swift */; };
@@ -57,6 +59,7 @@
 
 /* Begin PBXFileReference section */
 		2F8DAA5F39FB955E53DF0154 /* OmnyShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = OmnyShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		3256F2D6ADFD0C45637A6F93 /* ExpenseDebugView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseDebugView.swift; sourceTree = "<group>"; };
 		37F66C226030118977E6ED59 /* InboxItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxItem.swift; sourceTree = "<group>"; };
 		4455F6F7EC03910790C400B0 /* OmnyCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = OmnyCore; path = ../OmnyCore; sourceTree = SOURCE_ROOT; };
 		487983E7453EA416476B5FA9 /* Omny.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Omny.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -67,6 +70,7 @@
 		6CF741249636C17F15890CB8 /* DidaService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DidaService.swift; sourceTree = "<group>"; };
 		7CC21DA2A336C3F18CBD4472 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		85454E4F6E16C8854FE43A6B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		8FD9BF7911B16F5D836593D6 /* ManualExpenseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualExpenseView.swift; sourceTree = "<group>"; };
 		9A7EE04CE4A538273114ED55 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		A42FEA9C1D69A760D542AE4D /* Ingestor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ingestor.swift; sourceTree = "<group>"; };
 		A9D19D7FE0FC7B0F439834DC /* ListViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListViews.swift; sourceTree = "<group>"; };
@@ -106,7 +110,9 @@
 			isa = PBXGroup;
 			children = (
 				4EE20B2F349C81A0B7136CA6 /* Cards.swift */,
+				3256F2D6ADFD0C45637A6F93 /* ExpenseDebugView.swift */,
 				A9D19D7FE0FC7B0F439834DC /* ListViews.swift */,
+				8FD9BF7911B16F5D836593D6 /* ManualExpenseView.swift */,
 				BE835B50414B0383DD7772DA /* RootView.swift */,
 				6CF59AADF0299C174979693B /* SettingsView.swift */,
 				49499EEAD615EA2186C49C44 /* TagManageView.swift */,
@@ -308,9 +314,11 @@
 				211842926C591F28A58A81D5 /* AppSettings.swift in Sources */,
 				B753F262EC77180CF0A4E5D0 /* Cards.swift in Sources */,
 				2A9072EF706DEFE65EA02398 /* DidaService.swift in Sources */,
+				3436DC67A1948A62A1A43235 /* ExpenseDebugView.swift in Sources */,
 				CCAAFBF6F56DECE1F2E419E2 /* InboxItem.swift in Sources */,
 				D1436F1C8D387FB2E7E76106 /* Ingestor.swift in Sources */,
 				E32CD62F4A5289EDEFF2D6D0 /* ListViews.swift in Sources */,
+				2DE102A3151AFCF9E0D7957C /* ManualExpenseView.swift in Sources */,
 				428BDC49572EB4F2911B4FD9 /* OCRService.swift in Sources */,
 				2B6169C091832764B753F49C /* OmnyApp.swift in Sources */,
 				DD739467D78B00097E1C3EFD /* OmnyIntents.swift in Sources */,

@@ -995,13 +995,14 @@ struct TrashView: View {
         case .trip: "airplane"
         case .bookmark: "bookmark.fill"
         case .todo: "checkmark.circle"
+        case .expense: "creditcard.fill"
         case .unclassified: "questionmark.circle"
         }
     }
     private func kindName(_ i: InboxItem) -> String {
         switch i.kind {
         case .package: "快递"; case .trip: "行程"; case .bookmark: "收藏"
-        case .todo: "待办"; case .unclassified: "未分类"
+        case .todo: "待办"; case .expense: "记账"; case .unclassified: "未分类"
         }
     }
     private func titleFor(_ i: InboxItem) -> String {
@@ -1010,6 +1011,7 @@ struct TrashView: View {
         case .trip: i.tripNumber ?? "\(i.departPlace ?? "") → \(i.arrivePlace ?? "")"
         case .bookmark: i.bookmarkTitle ?? i.urlString ?? i.rawText
         case .todo: i.todoTitle ?? i.rawText
+        case .expense: i.merchant ?? i.rawText
         case .unclassified: i.rawText
         }
     }
