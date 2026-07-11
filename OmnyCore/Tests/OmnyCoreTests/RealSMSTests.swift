@@ -116,4 +116,44 @@ final class RealSMSTests: XCTestCase {
         XCTAssertNil(info.pickupCode)
         XCTAssertLessThan(confidence, 0.8)
     }
+
+    // MARK: - 银行/支付动账短信（脱敏，记账规则降级基线）
+
+    private func parseExpense(_ text: String, file: StaticString = #filePath,
+                              line: UInt = #line) throws -> (ExpenseInfo, Double) {
+        let result = try XCTUnwrap(parser.parseSync(text), "未识别", file: file, line: line)
+        guard case .expense(let info) = result.payload else {
+            XCTFail("未识别为记账", file: file, line: line)
+            throw XCTSkip()
+        }
+        return (info, result.confidence)
+    }
+
+    func testBankDebitTailAndAmount() throws {
+        let (info, confidence) = try parseExpense(
+            "【招商银行】您尾号1234的储蓄卡于07月11日12:30消费人民币128.50元，余额2000.00元")
+        XCTAssertEqual(info.amount, Decimal(string: "128.50"))
+        XCTAssertEqual(info.cardTail, "1234")
+        XCTAssertEqual(info.direction, .expense)
+        XCTAssertGreaterThanOrEqual(confidence, 0.8)
+    }
+
+    func testBankIncomeCredit() throws {
+        let (info, _) = try parseExpense(
+            "【工商银行】您尾号5678的账户07月10日工资入账8,500.00元")
+        XCTAssertEqual(info.direction, .income)
+        XCTAssertEqual(info.amount, Decimal(string: "8500.00"))
+        XCTAssertEqual(info.cardTail, "5678")
+    }
+
+    func testAlipayPaymentYenPrefix() throws {
+        let (info, _) = try parseExpense("您使用支付宝成功支付￥25.00，收款方示例便利店")
+        XCTAssertEqual(info.amount, Decimal(string: "25.00"))
+        XCTAssertEqual(info.direction, .expense)
+    }
+
+    func testCommodityPriceNotExpense() throws {
+        // 有金额没交易动词，不应被判成记账
+        XCTAssertNil(parser.parseSync("这件商品原价199元现价128元"))
+    }
 }

@@ -91,6 +91,8 @@ enum Ingestor {
             // 补标题和打标不阻塞入库（短信快捷指令等入口要求即时返回）
             Task { await enrichBookmark(item, context: context) }
             return [item]
+        case .expense(let info):
+            return [ingestExpense(info, text: text, source: source, context: context)]
         case .mixed(let inner):
             // 理论上已被 flattened 展开，防御性再展一层
             return inner.flatMap { ingestPayload($0, text: text, source: source,
@@ -236,6 +238,116 @@ enum Ingestor {
             return hit
         }
         return nil
+    }
+
+    // MARK: 记账入库：CSV 用 txnID 精确去重；短信/截图用金额+时间窗+尾号/商户模糊去重
+
+    private static func ingestExpense(_ info: ExpenseInfo, text: String,
+                                      source: ItemSource, context: ModelContext) -> InboxItem {
+        let occurredAt = resolveDate(info.occurredAt)
+        if let existing = findExistingExpense(info, occurredAt: occurredAt, context: context) {
+            // 已存在（多渠道重复）：补齐更完整的字段，不新增
+            existing.amount = existing.amount ?? info.amount
+            existing.merchant = existing.merchant ?? info.merchant
+            existing.channel = existing.channel ?? info.channel
+            existing.cardTail = existing.cardTail ?? info.cardTail
+            existing.txnID = existing.txnID ?? info.txnID
+            if existing.occurredAt == nil { existing.occurredAt = occurredAt }
+            return existing
+        }
+        let item = InboxItem(kind: .expense, source: source, rawText: text)
+        item.expenseDirection = info.direction
+        item.amount = info.amount
+        item.merchant = info.merchant
+        item.categoryMajor = info.categoryMajor
+        item.categorySub = info.categorySub
+        item.occurredAt = occurredAt
+        item.channel = info.channel
+        item.cardTail = info.cardTail
+        item.txnID = info.txnID
+        context.insert(item)
+        // 分类不阻塞入库，异步补（同收藏打标）
+        Task { await categorizeExpense(item, context: context) }
+        return item
+    }
+
+    /// 手动记账：用户在表单里填好的结构化字段直接入库，不走解析管线。
+    /// 与自动记账的区别是「尊重用户输入」——不做模糊去重（手动录入即用户明确意图），
+    /// 也不异步调 LLM 覆盖分类（用户填了什么就是什么；没填分类则留空，不自动补）。
+    /// `item` 非空时为编辑已有条目（表单回写），空则新建。返回落库后的条目，save 失败返回 nil。
+    @discardableResult
+    static func addManualExpense(_ info: ExpenseInfo, occurredAt: Date?,
+                                 editing item: InboxItem? = nil,
+                                 context: ModelContext) -> InboxItem? {
+        let target: InboxItem
+        if let item {
+            target = item
+        } else {
+            target = InboxItem(kind: .expense, source: .manual, rawText: "")
+            context.insert(target)
+        }
+        target.expenseDirection = info.direction
+        target.amount = info.amount
+        target.merchant = info.merchant
+        target.categoryMajor = info.categoryMajor
+        target.categorySub = info.categorySub
+        target.occurredAt = occurredAt
+        target.channel = info.channel
+        target.cardTail = info.cardTail
+        target.txnID = info.txnID
+        // 手动录入字段完整、意图明确，不进「需处理」
+        target.needsReview = false
+        guard saveOrRollback([target], context: context) else { return nil }
+        return target
+    }
+
+    /// 记账去重：优先 txnID 精确匹配（CSV 权威源）；无 txnID 时用
+    /// 「金额相等 + 交易时间 ±10 分钟 + 卡尾号或商户其一匹配」判为同一笔（短信/截图重复）。
+    private static func findExistingExpense(_ info: ExpenseInfo, occurredAt: Date?,
+                                            context: ModelContext) -> InboxItem? {
+        let kindRaw = ItemKind.expense.rawValue
+        let descriptor = FetchDescriptor<InboxItem>(predicate: #Predicate { $0.kindRaw == kindRaw })
+        guard let expenses = try? context.fetch(descriptor) else { return nil }
+
+        if let txnID = info.txnID,
+           let hit = expenses.first(where: { $0.txnID == txnID }) {
+            return hit
+        }
+        guard let amount = info.amount else { return nil }
+        return expenses.first { e in
+            guard e.amount == amount else { return false }
+            // 时间窗：两边都有时间才比，任一缺失则不靠时间判定
+            if let a = occurredAt, let b = e.occurredAt,
+               abs(a.timeIntervalSince(b)) > 10 * 60 { return false }
+            let tailMatch = info.cardTail != nil && e.cardTail == info.cardTail
+            let merchantMatch = info.merchant != nil && e.merchant == info.merchant
+            return tailMatch || merchantMatch
+        }
+    }
+
+    /// LLM 补两级消费分类：从设置页配置的分类池里挑一个合法「大类/细分」。异步、不阻塞入库。
+    @discardableResult
+    static func categorizeExpense(_ item: InboxItem, context: ModelContext) async -> String? {
+        guard let config = AppSettings.shared.llmConfig else {
+            return "未配置 LLM：请在设置里填入 API Key"
+        }
+        let pool = AppSettings.shared.expenseCategoryPool
+        guard !pool.isEmpty else { return "分类池为空：请在设置 → 消费分类里添加" }
+
+        let content = [item.merchant, item.amount.map { "\($0)元" }, item.rawText]
+            .compactMap { $0 }
+            .joined(separator: "\n")
+        let categorizer = LLMExpenseCategorizer(config: config)
+        do {
+            if let picked = try await categorizer.classify(content, pool: pool) {
+                item.categoryMajor = picked.major
+                item.categorySub = picked.sub
+                try? context.save()
+            }
+            return nil
+        } catch {
+            return describeLLMError(error)
+        }
     }
 
     private static func ingestTrip(_ info: TripInfo, text: String,

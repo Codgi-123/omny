@@ -1,11 +1,12 @@
 import Foundation
 
-/// 条目类型：所有入口进来的信息最终都归为这四类之一。
+/// 条目类型：所有入口进来的信息最终都归为这几类之一。
 public enum ItemType: String, Codable, Sendable, CaseIterable {
     case package
     case trip
     case todo
     case bookmark
+    case expense
 }
 
 // MARK: - 各类型的结构化载荷
@@ -97,6 +98,50 @@ public struct BookmarkInfo: Equatable, Sendable, Codable {
     }
 }
 
+/// 记账方向。本期只支持支出/收入两类；转账/退款/理财等识别不确定时标 needsReview，
+/// 由用户人工归位或后续扩展枚举。
+public enum ExpenseDirection: String, Codable, Sendable {
+    case expense  // 支出
+    case income   // 收入
+}
+
+/// 记账载荷。金额用 Decimal（钱的精度，禁用 Double）；LLM 输出金额用字符串，本地转 Decimal。
+/// 消费分类拆两级（大类 + 细分）便于统计聚合，入库时可空，由 LLMExpenseCategorizer 异步补。
+public struct ExpenseInfo: Equatable, Sendable, Codable {
+    public var direction: ExpenseDirection
+    /// 金额（正数），识别不出为 nil
+    public var amount: Decimal?
+    /// 商户/交易对方，如 "美团""星巴克"
+    public var merchant: String?
+    /// 消费大类，如 "餐饮"
+    public var categoryMajor: String?
+    /// 消费细分，如 "午餐"
+    public var categorySub: String?
+    /// 交易时间（可能缺年份/时区，沿用宽容日期解析）
+    public var occurredAt: DateComponents?
+    /// 渠道/银行/支付平台，如 "招商银行""支付宝"
+    public var channel: String?
+    /// 卡尾号，如 "6789"，做去重主键之一
+    public var cardTail: String?
+    /// 官方交易单号，CSV 导入时的去重主键（短信/截图通常没有）
+    public var txnID: String?
+
+    public init(direction: ExpenseDirection = .expense, amount: Decimal? = nil,
+                merchant: String? = nil, categoryMajor: String? = nil, categorySub: String? = nil,
+                occurredAt: DateComponents? = nil, channel: String? = nil,
+                cardTail: String? = nil, txnID: String? = nil) {
+        self.direction = direction
+        self.amount = amount
+        self.merchant = merchant
+        self.categoryMajor = categoryMajor
+        self.categorySub = categorySub
+        self.occurredAt = occurredAt
+        self.channel = channel
+        self.cardTail = cardTail
+        self.txnID = txnID
+    }
+}
+
 // MARK: - 解析结果
 
 public enum ParsedPayload: Equatable, Sendable {
@@ -105,6 +150,7 @@ public enum ParsedPayload: Equatable, Sendable {
     /// 一段文本里可能识别出多条待办（截图 OCR 场景）
     case todos([TodoInfo])
     case bookmark(BookmarkInfo)
+    case expense(ExpenseInfo)
     /// 一屏多条多类（截图 OCR 场景）：一次识别里同时含快递/行程/待办等不同类型。
     /// 下游 Ingestor 递归展开逐条落库。不应再嵌套 .mixed。
     case mixed([ParsedPayload])
@@ -115,6 +161,7 @@ public enum ParsedPayload: Equatable, Sendable {
         case .trip: .trip
         case .todos: .todo
         case .bookmark: .bookmark
+        case .expense: .expense
         // mixed 无单一类型：取首个子载荷的类型（仅用于白名单粗筛等场景；
         // 真正落库靠 Ingestor 递归展开，不依赖这里）。空则回退 todo。
         case .mixed(let payloads): payloads.first?.itemType ?? .todo
