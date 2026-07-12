@@ -90,11 +90,10 @@ struct OmnyShortcuts: AppShortcutsProvider {
         AppShortcut(intent: RecognizeTodoIntent(),
                     phrases: ["用 \(.applicationName) 屏幕识别"],
                     shortTitle: "屏幕识别", systemImageName: "text.viewfinder")
-        // 「确认记账」用 interactive snippet（SnippetIntent，iOS 26+）；低版本不注册
-        if #available(iOS 26, *) {
-            AppShortcut(intent: ConfirmExpenseIntent(),
-                        phrases: ["用 \(.applicationName) 确认记账"],
-                        shortTitle: "确认记账", systemImageName: "checklist")
-        }
+        // 「确认记账」用 interactive snippet（requestConfirmation content 重载，iOS 18+）
+        // 部署目标已是 18，@available(iOS 18) 恒满足，直接注册（AppShortcutsBuilder 不支持 if #available）
+        AppShortcut(intent: ConfirmExpenseIntent(),
+                    phrases: ["用 \(.applicationName) 确认记账"],
+                    shortTitle: "确认记账", systemImageName: "checklist")
     }
 }

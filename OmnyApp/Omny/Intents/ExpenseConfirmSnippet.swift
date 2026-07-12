@@ -3,17 +3,19 @@ import SwiftUI
 import OmnyCore
 
 /// 「确认记账」的 interactive snippet 视图：展示一笔草稿的各字段，点字段触发子编辑 Intent。
-/// 纯渲染——草稿由 ExpenseSnippetIntent.perform 从共享 store 读好后传入（子编辑完成系统会重调 perform）。
+/// 作为 requestConfirmation(content:) 的内联视图（iOS 18）。从共享 store 读草稿——子编辑 Intent
+/// 的 perform 返回后系统重绘本视图（同 widget 交互刷新机制），故每次 body 求值读到最新草稿。
 /// 点金额/备注 → 子 Intent 的 @Parameter 未预填 → 系统弹输入框（「点字段弹二级弹窗」即此机制）；
 /// 点收支 → 直接切换；点分类 → 子 Intent 带动态候选 → 系统弹选择。
-///
 /// Button/Toggle 必须用 AppIntent 驱动（同 widget/Live Activity 交互规则）。
-@available(iOS 26, *)
+@available(iOS 18, *)
 struct ExpenseConfirmSnippet: View {
     let draftID: String
-    let draft: ExpenseDraft?
 
+    @MainActor
     var body: some View {
+        // body 是 @MainActor：直接从共享 store 读最新草稿（子编辑后系统重绘会重新求值）
+        let draft = UUID(uuidString: draftID).flatMap { ExpenseDraftStore.shared.get($0) }
         if let draft {
             VStack(spacing: 0) {
                 amountHeader(draft)

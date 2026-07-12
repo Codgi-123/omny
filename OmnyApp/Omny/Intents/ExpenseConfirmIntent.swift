@@ -13,7 +13,7 @@ import OmnyCore
 // 机制：requestConfirmation(actionName:snippetIntent:) 展示可交互确认 snippet；
 // snippet 里 Button(intent:) 触发子编辑 Intent，完成后系统自动重调 SnippetIntent.perform 重渲染。
 
-@available(iOS 26, *)
+@available(iOS 18, *)
 struct ConfirmExpenseIntent: AppIntent {
     static let title: LocalizedStringResource = "确认记账"
     static let description = IntentDescription(
@@ -44,11 +44,12 @@ struct ConfirmExpenseIntent: AppIntent {
             store.put(draft)
             defer { store.remove(draft.id) }
             do {
-                // 展示可交互确认 snippet：ExpenseSnippetIntent 渲染表单，用户可点字段改；
-                // 点「记账」确认继续、点取消 throw → catch 跳过该笔
-                try await requestConfirmation(
-                    actionName: .go,
-                    snippetIntent: ExpenseSnippetIntent(draftID: draft.id.uuidString))
+                // 展示可交互确认 snippet（content 内联视图，iOS 18）：视图里点字段触发子编辑 Intent，
+                // 其 perform 返回后系统重绘 content（同 widget 交互刷新机制）。点「记账」确认、取消 throw → 跳过。
+                let id = draft.id.uuidString
+                try await requestConfirmation(actionName: .go) {
+                    ExpenseConfirmSnippet(draftID: id)
+                }
                 // 确认后读回（子编辑 Intent 可能已改过）最终草稿入库
                 let final = store.get(draft.id) ?? draft
                 Ingestor.addManualExpense(final.info, occurredAt: final.occurredAt, context: context)
@@ -95,34 +96,9 @@ struct ConfirmExpenseIntent: AppIntent {
     }
 }
 
-// MARK: - 记账确认 snippet 指令
-//
-// SnippetIntent（iOS 26）：渲染可交互记账表单。系统在其字段的子编辑 Intent 完成后会自动重调
-// perform()，故 perform 必须无副作用、每次从共享 store 读最新草稿。draftID 是传入的最小不可变数据。
+// MARK: - 子编辑指令（点 snippet 字段触发；perform 返回后系统重绘 content snippet）
 
-@available(iOS 26, *)
-struct ExpenseSnippetIntent: SnippetIntent {
-    static let title: LocalizedStringResource = "记账确认卡片"
-
-    @Parameter(title: "草稿ID") var draftID: String
-
-    @MainActor
-    func perform() async throws -> some IntentResult & ShowsSnippetView {
-        // 每次从 store 读最新（子编辑 Intent 改过后系统重调 perform 会拿到新值）
-        let draft = UUID(uuidString: draftID).flatMap { ExpenseDraftStore.shared.get($0) }
-        return .result(view: ExpenseConfirmSnippet(draftID: draftID, draft: draft))
-    }
-}
-
-// 自定义便捷 init 放 extension，保留编译器为 @Parameter 合成的 init()（App Intents 要求）
-@available(iOS 26, *)
-extension ExpenseSnippetIntent {
-    init(draftID: String) { self.draftID = draftID }
-}
-
-// MARK: - 子编辑指令（点 snippet 字段触发；改草稿后系统自动重调 ExpenseSnippetIntent 重渲染）
-
-@available(iOS 26, *)
+@available(iOS 18, *)
 struct EditExpenseAmountIntent: AppIntent {
     static let title: LocalizedStringResource = "改金额"
     static let openAppWhenRun = false
@@ -139,7 +115,12 @@ struct EditExpenseAmountIntent: AppIntent {
     }
 }
 
-@available(iOS 26, *)
+@available(iOS 18, *)
+extension EditExpenseAmountIntent {
+    init(draftID: String) { self.draftID = draftID }
+}
+
+@available(iOS 18, *)
 struct EditExpenseDirectionIntent: AppIntent {
     static let title: LocalizedStringResource = "切换收支"
     static let openAppWhenRun = false
@@ -157,8 +138,13 @@ struct EditExpenseDirectionIntent: AppIntent {
     }
 }
 
+@available(iOS 18, *)
+extension EditExpenseDirectionIntent {
+    init(draftID: String) { self.draftID = draftID }
+}
+
 /// 分类候选：从设置页分类池扁平化成「大类/细分」列表，供选分类子 Intent 弹出选择。
-@available(iOS 26, *)
+@available(iOS 18, *)
 struct ExpenseCategoryOptionsProvider: DynamicOptionsProvider {
     @MainActor
     func results() async throws -> [String] {
@@ -166,7 +152,7 @@ struct ExpenseCategoryOptionsProvider: DynamicOptionsProvider {
     }
 }
 
-@available(iOS 26, *)
+@available(iOS 18, *)
 struct EditExpenseCategoryIntent: AppIntent {
     static let title: LocalizedStringResource = "选分类"
     static let openAppWhenRun = false
@@ -188,7 +174,12 @@ struct EditExpenseCategoryIntent: AppIntent {
     }
 }
 
-@available(iOS 26, *)
+@available(iOS 18, *)
+extension EditExpenseCategoryIntent {
+    init(draftID: String) { self.draftID = draftID }
+}
+
+@available(iOS 18, *)
 struct EditExpenseNoteIntent: AppIntent {
     static let title: LocalizedStringResource = "改备注"
     static let openAppWhenRun = false
@@ -203,4 +194,9 @@ struct EditExpenseNoteIntent: AppIntent {
         }
         return .result()
     }
+}
+
+@available(iOS 18, *)
+extension EditExpenseNoteIntent {
+    init(draftID: String) { self.draftID = draftID }
 }
