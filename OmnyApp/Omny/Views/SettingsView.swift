@@ -101,14 +101,19 @@ struct SettingsView: View {
 
             Section {
                 NavigationLink {
+                    ExpenseHomeView()
+                } label: {
+                    Label("记账", systemImage: "yensign.circle")
+                }
+                NavigationLink {
                     ExpenseDebugView()
                 } label: {
-                    LabeledContent("记账（调试）", value: "\(settings.expenseCategoryPool.count) 个大类")
+                    LabeledContent("解析测试（调试）", value: "\(settings.expenseCategoryPool.count) 个大类")
                 }
             } header: {
                 Text("记账")
             } footer: {
-                Text("临时调试入口：粘贴动账短信测试解析入库。银行短信也可经上方「解析文本」快捷指令自动记账。正式入口待验证后再定。")
+                Text("「记账」为正式页（明细/日历/分析 + 手动记账），入口暂放这里，后续做 tab 调整时迁移。调试项用于粘贴动账短信测试解析入库。")
             }
 
             Section {

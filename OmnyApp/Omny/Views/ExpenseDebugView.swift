@@ -79,9 +79,7 @@ struct ExpenseDebugView: View {
         }
         .navigationTitle("记账（调试）")
         .sheet(item: $editingSheet) { sheet in
-            NavigationStack {
-                ManualExpenseView(editing: sheet.item)
-            }
+            ExpenseEditView(editing: sheet.item)
         }
     }
 
