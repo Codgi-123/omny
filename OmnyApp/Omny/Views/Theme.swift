@@ -40,6 +40,17 @@ enum Theme {
         static let other    = Color(.systemTeal)    // 其他 · 青
         /// 兜底取色用的有序色板（未命中分类按名 hash 稳定落到其中一个）
         static let palette: [Color] = [food, trans, shopping, home, fun, medical, income, other]
+
+        /// 稳定 key ↔ 色：用户自选色时存 key（非 hex），渲染时映射回动态色（保留深色适配）。
+        /// 顺序与 palette 一致，供颜色选择器展示。
+        static let keys: [String] = ["food", "trans", "shopping", "home", "fun", "medical", "income", "other"]
+        static func color(forKey key: String) -> Color? {
+            switch key {
+            case "food": food; case "trans": trans; case "shopping": shopping; case "home": home
+            case "fun": fun; case "medical": medical; case "income": income; case "other": other
+            default: nil
+            }
+        }
     }
 
     /// 统一的间距刻度（4/8pt 栅格）

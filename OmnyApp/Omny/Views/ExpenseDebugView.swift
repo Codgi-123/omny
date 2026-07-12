@@ -89,7 +89,8 @@ struct ExpenseDebugView: View {
         let text = input
         Task {
             let result = await Ingestor.ingest(text: text, source: .manual,
-                                               allowedTypes: [.expense], context: context)
+                                               allowedTypes: [.expense],
+                                               awaitEnrichment: true, context: context)
             resultOK = !result.isEmpty
             lastResult = result.isEmpty
                 ? "未识别为记账（检查是否含金额 + 交易动词）"

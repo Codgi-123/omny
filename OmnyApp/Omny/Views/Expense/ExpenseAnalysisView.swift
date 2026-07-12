@@ -17,13 +17,24 @@ struct ExpenseAnalysisView: View {
     private var total: Decimal {
         direction == .expense ? summary.totalExpense : summary.totalIncome
     }
-    /// 环状图分段数据（大类名 + 金额 + 色）
+    /// 大类 → 颜色映射（本图内不重复，按金额倒序的分段顺序分配）。
+    /// 环状图分段、图例、下钻列表色点共用，保证三处颜色一致。
+    private var majorColorMap: [String: Color] {
+        let palette = Theme.ExpenseColor.palette
+        var map: [String: Color] = [:]
+        for (index, m) in majors.enumerated() {
+            map[m.major] = palette[index % palette.count]
+        }
+        return map
+    }
+
+    /// 环状图分段数据（大类名 + 金额 + 色）。颜色取自 majorColorMap（同图不重复）。
     private var segments: [DonutChart.Segment] {
         majors.map { m in
             DonutChart.Segment(
                 label: m.major,
                 value: NSDecimalNumber(decimal: m.amount).doubleValue,
-                color: ExpenseCategoryAppearance.shared.appearance(major: m.major).color)
+                color: majorColorMap[m.major] ?? Theme.ExpenseColor.other)
         }
     }
 
@@ -39,7 +50,8 @@ struct ExpenseAnalysisView: View {
                     } else {
                         DonutChart(segments: segments,
                                    centerTitle: direction == .expense ? "总支出" : "总收入",
-                                   centerValue: ExpenseFormat.amount(total, signed: false))
+                                   centerValue: ExpenseFormat.compact(total))
+                            .frame(height: 230)
                             .frame(height: 230)
                     }
                 }
@@ -78,7 +90,7 @@ struct ExpenseAnalysisView: View {
 
     private func majorRow(_ m: (major: String, amount: Decimal, count: Int)) -> some View {
         let pct = total > 0 ? NSDecimalNumber(decimal: m.amount / total).doubleValue : 0
-        let color = ExpenseCategoryAppearance.shared.appearance(major: m.major).color
+        let color = majorColorMap[m.major] ?? Theme.ExpenseColor.other
         return Button {
             withAnimation(.snappy) {
                 expandedMajor = (expandedMajor == m.major) ? nil : m.major
@@ -187,12 +199,17 @@ struct DonutChart: View {
                     Text(centerValue)
                         .font(.system(.title3, design: .rounded).weight(.bold))
                         .monospacedDigit().foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
                 }
+                .frame(width: radius * 1.5)          // 限宽在内圆内，配合缩放防溢出
                 .position(center)
 
-                // 引线标注
+                // 引线标注：只标占比 ≥ 5% 的扇区，太小的不引线（避免密集引线打架）
                 ForEach(Array(cumulative().enumerated()), id: \.offset) { _, arc in
-                    leaderLine(arc: arc, center: center, radius: radius, lineWidth: lineWidth)
+                    if arc.end - arc.start >= 0.05 {
+                        leaderLine(arc: arc, center: center, radius: radius, lineWidth: lineWidth)
+                    }
                 }
             }
         }
@@ -230,10 +247,12 @@ struct DonutChart: View {
         ZStack {
             Path { p in p.move(to: p1); p.addLine(to: p2); p.addLine(to: p3) }
                 .stroke(Theme.sub.opacity(0.4), lineWidth: 0.8)
+            // 文字限宽 + 单行缩放，防长分类名冲出卡片；按左右侧对齐向外排
             Text("\(arc.segment.label) \(Int((pct * 100).rounded()))%")
                 .font(.system(size: 10)).foregroundStyle(Theme.text)
-                .fixedSize()
-                .position(x: p3.x + (isRight ? 26 : -26), y: p3.y)
+                .lineLimit(1).minimumScaleFactor(0.7)
+                .frame(width: 58, alignment: isRight ? .leading : .trailing)
+                .position(x: p3.x + (isRight ? 29 : -29), y: p3.y)
         }
     }
 }

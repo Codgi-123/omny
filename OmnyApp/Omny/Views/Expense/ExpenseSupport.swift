@@ -20,6 +20,28 @@ enum ExpenseFormat {
         numberFormatter.string(from: NSDecimalNumber(decimal: value)) ?? "\(value)"
     }
 
+    /// 紧凑金额（带 ¥）：给饼图中心等窄空间用。上万显示「¥X.X万」，否则整数千分位。
+    /// 避免大金额在小圆心里溢出。
+    static func compact(_ value: Decimal) -> String {
+        let d = NSDecimalNumber(decimal: value).doubleValue
+        if d >= 10000 {
+            let wan = d / 10000
+            // 1.0万 → 1万；1.25万 → 1.3万（一位小数）
+            let s = String(format: "%.1f", wan)
+            let trimmed = s.hasSuffix(".0") ? String(s.dropLast(2)) : s
+            return "¥\(trimmed)万"
+        }
+        return "¥" + (compactInt.string(from: NSDecimalNumber(decimal: value)) ?? "\(Int(d))")
+    }
+
+    private static let compactInt: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.maximumFractionDigits = 0
+        f.groupingSeparator = ","
+        return f
+    }()
+
     private static let numberFormatter: NumberFormatter = {
         let f = NumberFormatter()
         f.numberStyle = .decimal

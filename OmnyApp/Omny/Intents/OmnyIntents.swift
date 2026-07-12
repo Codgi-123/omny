@@ -16,8 +16,10 @@ struct ParseTextIntent: AppIntent {
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let context = OmnyApp.sharedModelContainer.mainContext
         // 解析文本通道只过滤收藏；快递/行程/待办/记账（含会议通知、动账短信等）都入库
+        // awaitEnrichment：App Intent perform 返回后进程会挂起，必须同步等记账分类/收藏打标补完
         let items = await Ingestor.ingest(text: text, source: .sms,
-                                          allowedTypes: [.package, .trip, .todo, .expense], context: context)
+                                          allowedTypes: [.package, .trip, .todo, .expense],
+                                          awaitEnrichment: true, context: context)
         guard !items.isEmpty else {
             return .result(dialog: "没有识别到快递、行程、待办或记账")
         }
@@ -48,8 +50,10 @@ struct RecognizeTodoIntent: AppIntent {
         let context = OmnyApp.sharedModelContainer.mainContext
         // OCR 由快捷指令完成，故无原图；sourceImage 传 nil（后续走内置 OCR 时再带原图）
         // 走截图专用解析器：一屏多条多类一次抽取（快递/行程/待办/记账），忽略 OCR 噪声。
+        // awaitEnrichment：Intent 返回后进程挂起，同步等记账分类补完，否则识屏记账永远无分类
         let items = await Ingestor.ingest(text: trimmed, source: .screenshot,
-                                          parser: AppSettings.shared.screenParser, context: context)
+                                          parser: AppSettings.shared.screenParser,
+                                          awaitEnrichment: true, context: context)
         guard !items.isEmpty else {
             return .result(dialog: "没有识别到内容")
         }
@@ -86,5 +90,10 @@ struct OmnyShortcuts: AppShortcutsProvider {
         AppShortcut(intent: RecognizeTodoIntent(),
                     phrases: ["用 \(.applicationName) 屏幕识别"],
                     shortTitle: "屏幕识别", systemImageName: "text.viewfinder")
+        // 「确认记账」用 interactive snippet（requestConfirmation content 重载，iOS 18+）
+        // 部署目标已是 18，@available(iOS 18) 恒满足，直接注册（AppShortcutsBuilder 不支持 if #available）
+        AppShortcut(intent: ConfirmExpenseIntent(),
+                    phrases: ["用 \(.applicationName) 确认记账"],
+                    shortTitle: "确认记账", systemImageName: "checklist")
     }
 }
