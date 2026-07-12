@@ -25,7 +25,7 @@ struct ConfirmExpenseIntent: AppIntent {
     // 以下为循环内承接每轮选择/输入的工作参数（非用户在快捷指令里填的输入）
     @Parameter(title: "选择") var choice: String?
     @Parameter(title: "金额") var amountInput: Double?
-    @Parameter(title: "备注") var noteInput: String?
+    @Parameter(title: "商户") var merchantInput: String?
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
@@ -53,11 +53,12 @@ struct ConfirmExpenseIntent: AppIntent {
         // 2. 逐笔确认记账
         var savedCount = 0
         for entity in expenseEntities {
-            var draft = entity.expenseInfo
-            var occurredAt = entity.occurredAt ?? .now
-            // 有 LLM 且无分类 → 预补两级分类，供列表预填
+            let p = entity.payload
+            var draft = p.expenseInfo
+            var occurredAt = p.occurredAt ?? .now
+            // 有 LLM 且无分类 → 预补两级分类，供列表预填（用原文喂 LLM，对齐直接入库路径）
             if draft.categoryMajor == nil {
-                await Self.precategorize(&draft, rawText: entity.merchant ?? "")
+                await Self.precategorize(&draft, rawText: p.rawText ?? "")
             }
 
             let confirmed = try await confirmOne(&draft, occurredAt: &occurredAt)
@@ -88,9 +89,9 @@ struct ConfirmExpenseIntent: AppIntent {
             let amtLabel = "金额：" + (draft.amount.map { ExpenseFormat.plain($0) } ?? "未填")
             let catLabel = "分类：" + categoryText(draft)
             let timeLabel = "时间：" + Self.timeText(occurredAt)
-            let noteLabel = "备注：" + (draft.merchant ?? "无")
+            let merchantLabel = "商户：" + (draft.merchant ?? "无")
 
-            let options = [dirLabel, amtLabel, catLabel, timeLabel, noteLabel, doneLabel, cancelLabel]
+            let options = [dirLabel, amtLabel, catLabel, timeLabel, merchantLabel, doneLabel, cancelLabel]
             let picked = try await $choice.requestDisambiguation(
                 among: options,
                 dialog: IntentDialog(stringLiteral: "确认记账（点项目可修改）"))
@@ -117,21 +118,43 @@ struct ConfirmExpenseIntent: AppIntent {
                     draft.categorySub = parts.count > 1 ? parts[1] : nil
                 }
             case timeLabel:
-                // 时间修改：提供「现在」及保持不变两项（App Intents 无原生日期滚轮弹窗，
-                // 复杂日期编辑建议在 App 内完成；这里给最常用的「改为现在」）
-                let now = "改为现在"
-                let keep = "保持不变"
-                let sel = try await $choice.requestDisambiguation(
-                    among: [now, keep], dialog: IntentDialog(stringLiteral: "修改时间"))
-                if sel == now { occurredAt = .now }
-            case noteLabel:
-                let v = try await $noteInput.requestValue(
-                    IntentDialog(stringLiteral: "输入备注（商户）"))
+                // 时间修改：App Intents 无原生日期滚轮，给常用相对日期快捷项
+                // （保留原时分，只挪日期），外加「此刻」和「保持不变」
+                occurredAt = try await Self.pickTime(current: occurredAt, choice: $choice)
+            case merchantLabel:
+                let v = try await $merchantInput.requestValue(
+                    IntentDialog(stringLiteral: "输入商户"))
                 let t = v.trimmingCharacters(in: .whitespacesAndNewlines)
                 draft.merchant = t.isEmpty ? nil : t
             default:
                 return true   // 兜底
             }
+        }
+    }
+
+    /// 时间选择：今天/昨天/前天（保留当前时分，只改日期）+ 此刻 + 保持不变。
+    @MainActor
+    private static func pickTime(current: Date, choice: IntentParameter<String?>) async throws -> Date {
+        let cal = Calendar.current
+        let today = "今天"; let yesterday = "昨天"; let dayBefore = "前天"
+        let now = "此刻"; let keep = "保持不变"
+        let sel = try await choice.requestDisambiguation(
+            among: [today, yesterday, dayBefore, now, keep],
+            dialog: IntentDialog(stringLiteral: "修改时间"))
+        // 保留 current 的时分，只把日期挪到目标那天
+        func withDate(daysAgo: Int) -> Date {
+            let base = cal.date(byAdding: .day, value: -daysAgo, to: .now) ?? .now
+            let t = cal.dateComponents([.hour, .minute], from: current)
+            var d = cal.dateComponents([.year, .month, .day], from: base)
+            d.hour = t.hour; d.minute = t.minute
+            return cal.date(from: d) ?? current
+        }
+        switch sel {
+        case today: return withDate(daysAgo: 0)
+        case yesterday: return withDate(daysAgo: 1)
+        case dayBefore: return withDate(daysAgo: 2)
+        case now: return .now
+        default: return current   // 保持不变
         }
     }
 

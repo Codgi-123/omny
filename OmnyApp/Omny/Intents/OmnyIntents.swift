@@ -54,7 +54,8 @@ struct ParseTextIntent: AppIntent {
         guard let result = try? await parser.parse(text) else { return [] }
         var payloads = result.payload.flattened
         if let allowed { payloads = payloads.filter { allowed.contains($0.itemType) } }
-        return InboxItemEntity.from(payloads: payloads)
+        // 带上原文：确认阶段补分类要靠原文喂 LLM（口语句子常无独立商户名）
+        return InboxItemEntity.from(payloads: payloads, rawText: text)
     }
 }
 
