@@ -2,6 +2,8 @@
 
 ## 2026-07-10 — 公司电脑装机测试
 
+> **2026-07-12 更新：此条大概率已被 TestFlight 自动发布取代**——公司手机直接装 TestFlight 就能用上最新构建，不再依赖公司电脑侧载。仅当需要在公司改代码、即时真机调试时才值得做，优先级降低。
+
 ### 我（用户）要做
 - [ ] 在公司电脑上跑命令行装机流程，验证能否绕过导致 command+R 失败的限制
 
@@ -36,11 +38,12 @@ xcrun devicectl device install app --device <设备ID> \
     - `ExpenseEditView` 添加/编辑（方向切换内联导航行 + 分类宫格 + 细分展开 + 时间常驻 + 更多信息折叠 + **自制计算器键盘**）；取代旧 `ManualExpenseView`（已删）
     - `ExpenseCalculator`（OmnyCore，+−×÷/乘除优先级/Decimal 精度，19 单测全绿）；`ExpenseSupport`（金额格式化 + 月/天/分类聚合 + ExpenseRow）
     - 设置页入口：「记账」→ ExpenseHomeView（正式）；「解析测试（调试）」→ ExpenseDebugView（保留）
-  - 待验证（需 macOS/真机，本机无法测）：① **XcodeGen 需重新 generate 收录 Views/Expense/ 新文件**；② CI macOS job 编译（含 DonutChart/日历网格/计算器 UI，及 SF Symbol 名存在性）；③ 环状图引线在分类多时是否拥挤；④ 配 LLM Key 后真实抽取+打标；⑤ 去重多渠道效果。
+  - 待验证：~~① XcodeGen 收录 Views/Expense/ 新文件；② macOS 编译（含 DonutChart/日历网格/计算器 UI、SF Symbol 名）~~——已验证（2026-07-12 TestFlight CI 的 xcodegen generate + Release 归档全绿，build 18/19 已上传）；剩余需真机实测（装 TestFlight build 19）：③ 环状图引线在分类多时是否拥挤；④ 配 LLM Key 后真实抽取+打标；⑤ 去重多渠道效果。
   - 待细化：需处理页 expense 低置信项文案；needsReview 阈值（0.8）；设置页「记账分类自定义」UI（图标/颜色选择器，映射器接口已预留）。
   - 设计文档：`docs/expense-module-design.md`。
 
 ### 已完成
+- [x] TestFlight 自动发布上线（2026-07-12，PR #5 已合入 main）：打 `tf-*` tag 或 Actions 页面手动触发即云端归档上传，约 4 分钟；构建号 CI 自动生成（run_number + 偏移），多人发布不撞号、不用改 project.yml；签名走 ASC API Key 云签名，协作者无需任何 Apple 凭据。用法见 `docs/testflight-release.md`。**@zhanghaha：在 dev-zhanghaha 上 merge 一次 main 即可使用**（顺带会拿到 ci.yml 更新——未签名 ipa job 已改为仅手动触发，push 不再自动出包）。
 - [x] 快递卡取件交互按 HIG 重做（2026-07-11，dev-kiwi 发布 build 7）：取件码/单号改 SF Rounded 圆润数字并随 Dynamic Type 缩放；点取件码即复制；「确认取件」改为提醒事项式勾选圈（空心圈→绿色对勾，symbol 替换动画 + 成功触感，与数字中心对齐）；快递列表页整条右滑完成/撤销；首页卡片取消长按菜单；全局日期锁 zh_CN。同批把 dev-zhanghaha 的屏幕识别（ScreenParser）、需处理「重新识别」等功能合并进 dev-kiwi
 - [x] 快捷指令导入接线（2026-07-10）：「解析文本」（`78b9cbce…`）与「截图识别待办」（`f37dc8b6…`）两条 iCloud 链接接入 SettingsView，各有导入按钮 + 图文引导；后者手动触发（背面轻点 / 控制中心，iOS 无"截屏就运行"触发器）
 - [x] SettingsView 加「快捷指令」Section：「解析文本」导入按钮（占位链接）+ 两步图文引导
