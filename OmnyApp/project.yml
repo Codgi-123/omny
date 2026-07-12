@@ -2,7 +2,7 @@ name: Omny
 options:
   bundleIdPrefix: xin.codgi
   deploymentTarget:
-    iOS: "18.0"
+    iOS: "17.0"
 packages:
   OmnyCore:
     path: ../OmnyCore
@@ -42,7 +42,7 @@ targets:
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic
-        IPHONEOS_DEPLOYMENT_TARGET: "18.0"
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
 
   # 分享扩展：其他 App 分享面板里的「Omny」入口，见 OmnyShare/ShareViewController.swift
   OmnyShare:
@@ -80,5 +80,5 @@ targets:
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic
-        IPHONEOS_DEPLOYMENT_TARGET: "18.0"
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
         SKIP_INSTALL: YES

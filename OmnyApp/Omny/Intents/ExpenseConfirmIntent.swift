@@ -5,13 +5,15 @@ import OmnyCore
 
 // MARK: - 主确认指令
 //
-// 「确认记账」快捷指令：输入文本/OCR → 内部解析出记账笔 → 逐笔用 interactive snippet 弹窗
-// 展示可编辑表单（金额/类型/分类/时间/备注，点字段弹二级选择）→ 用户确认后入库。
+// 「确认记账」快捷指令：输入文本/OCR → 内部解析出记账笔（预补分类）→ 逐笔用 interactive
+// snippet 弹窗展示可编辑表单（收支/分类/金额/备注，点字段触发子编辑 Intent）→ 确认后入库。
 // 不打开 App（snippet 内联在快捷指令弹窗）。参考钱迹式交互。
 //
-// ⚠️ 真机验证重点：interactive snippet（iOS 18）的 requestConfirmation + Button(intent:) 子编辑 +
-// reloadSnippet 的精确配合，本机无法验证，真机若行为异常据此调整（结构已隔离）。
+// API 依据：Apple「Displaying static and interactive snippets」+ SnippetIntent（iOS 26）。
+// 机制：requestConfirmation(actionName:snippetIntent:) 展示可交互确认 snippet；
+// snippet 里 Button(intent:) 触发子编辑 Intent，完成后系统自动重调 SnippetIntent.perform 重渲染。
 
+@available(iOS 26, *)
 struct ConfirmExpenseIntent: AppIntent {
     static let title: LocalizedStringResource = "确认记账"
     static let description = IntentDescription(
@@ -25,11 +27,11 @@ struct ConfirmExpenseIntent: AppIntent {
     var isScreenshot: Bool
 
     @MainActor
-    func perform() async throws -> some IntentResult & ProvidesDialog {
+    func perform() async throws -> some IntentResult {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return .result(dialog: "没有可解析的文本") }
 
-        // 1. 解析出记账笔（只取 expense，不入库）
+        // 1. 解析出记账笔（只取 expense，不入库；有 LLM 预补两级分类供表单预填）
         let drafts = await Self.parseExpenses(trimmed, isScreenshot: isScreenshot)
         guard !drafts.isEmpty else { return .result(dialog: "未识别到记账信息") }
 
@@ -37,27 +39,22 @@ struct ConfirmExpenseIntent: AppIntent {
         let context = OmnyApp.sharedModelContainer.mainContext
         var savedCount = 0
 
-        // 2. 逐笔确认（多笔逐个弹）
-        for (index, draft) in drafts.enumerated() {
+        // 2. 逐笔确认（多笔逐个弹可编辑 snippet）
+        for draft in drafts {
             store.put(draft)
             defer { store.remove(draft.id) }
             do {
-                // 展示可编辑 snippet（字段行可点触发子编辑），用户点「记账」确认、点取消跳过
-                let title: LocalizedStringResource = drafts.count > 1
-                    ? "第 \(index + 1)/\(drafts.count) 笔 · 核对后记账" : "核对后记账"
+                // 展示可交互确认 snippet：ExpenseSnippetIntent 渲染表单，用户可点字段改；
+                // 点「记账」确认继续、点取消 throw → catch 跳过该笔
                 try await requestConfirmation(
-                    result: .result(dialog: title) {
-                        ExpenseConfirmSnippet(draftID: draft.id)
-                    },
-                    confirmationActionName: .go)
+                    actionName: .go,
+                    snippetIntent: ExpenseSnippetIntent(draftID: draft.id.uuidString))
                 // 确认后读回（子编辑 Intent 可能已改过）最终草稿入库
                 let final = store.get(draft.id) ?? draft
-                Ingestor.addManualExpense(final.info, occurredAt: final.occurredAt,
-                                          context: context)
+                Ingestor.addManualExpense(final.info, occurredAt: final.occurredAt, context: context)
                 savedCount += 1
             } catch {
-                // 取消该笔 → 跳过
-                continue
+                continue   // 取消该笔 → 跳过
             }
         }
 
@@ -65,7 +62,7 @@ struct ConfirmExpenseIntent: AppIntent {
         return .result(dialog: "已记账 \(savedCount) 笔")
     }
 
-    /// 解析文本抽出记账笔；有 LLM 时预补两级分类，让确认表单预填分类。
+    /// 解析文本抽出记账笔；有 LLM 时预补两级分类，让确认表单预填。
     @MainActor
     static func parseExpenses(_ text: String, isScreenshot: Bool) async -> [ExpenseDraft] {
         let parser: any Parser = isScreenshot
@@ -74,13 +71,11 @@ struct ConfirmExpenseIntent: AppIntent {
         let result = try? await parser.parse(text)
         guard let payload = result?.payload else { return [] }
 
-        // 展平取所有 expense
         let infos: [ExpenseInfo] = payload.flattened.compactMap {
             if case .expense(let info) = $0 { return info }
             return nil
         }
 
-        // 预补分类（有 LLM 才补，让表单预填；用户仍可改）
         var drafts: [ExpenseDraft] = []
         for var info in infos {
             if info.categoryMajor == nil, let cfg = AppSettings.shared.llmConfig {
@@ -100,10 +95,31 @@ struct ConfirmExpenseIntent: AppIntent {
     }
 }
 
-// MARK: - 子编辑指令（点 snippet 字段触发，改草稿后刷新 snippet）
+// MARK: - 记账确认 snippet 指令
 //
-// 每个字段一个子 Intent：@Parameter 承载新值 + draftID，perform 写 store 并 reloadSnippet。
+// SnippetIntent（iOS 26）：渲染可交互记账表单。系统在其字段的子编辑 Intent 完成后会自动重调
+// perform()，故 perform 必须无副作用、每次从共享 store 读最新草稿。draftID 是传入的最小不可变数据。
 
+@available(iOS 26, *)
+struct ExpenseSnippetIntent: SnippetIntent {
+    static let title: LocalizedStringResource = "记账确认卡片"
+
+    @Parameter(title: "草稿ID") var draftID: String
+
+    init() {}
+    init(draftID: String) { self.draftID = draftID }
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ShowsSnippetView {
+        // 每次从 store 读最新（子编辑 Intent 改过后系统重调 perform 会拿到新值）
+        let draft = UUID(uuidString: draftID).flatMap { ExpenseDraftStore.shared.get($0) }
+        return .result(view: ExpenseConfirmSnippet(draftID: draftID, draft: draft))
+    }
+}
+
+// MARK: - 子编辑指令（点 snippet 字段触发；改草稿后系统自动重调 ExpenseSnippetIntent 重渲染）
+
+@available(iOS 26, *)
 struct EditExpenseAmountIntent: AppIntent {
     static let title: LocalizedStringResource = "改金额"
     static let openAppWhenRun = false
@@ -120,6 +136,7 @@ struct EditExpenseAmountIntent: AppIntent {
     }
 }
 
+@available(iOS 26, *)
 struct EditExpenseDirectionIntent: AppIntent {
     static let title: LocalizedStringResource = "切换收支"
     static let openAppWhenRun = false
@@ -138,6 +155,7 @@ struct EditExpenseDirectionIntent: AppIntent {
 }
 
 /// 分类候选：从设置页分类池扁平化成「大类/细分」列表，供选分类子 Intent 弹出选择。
+@available(iOS 26, *)
 struct ExpenseCategoryOptionsProvider: DynamicOptionsProvider {
     @MainActor
     func results() async throws -> [String] {
@@ -145,12 +163,12 @@ struct ExpenseCategoryOptionsProvider: DynamicOptionsProvider {
     }
 }
 
+@available(iOS 26, *)
 struct EditExpenseCategoryIntent: AppIntent {
     static let title: LocalizedStringResource = "选分类"
     static let openAppWhenRun = false
 
     @Parameter(title: "草稿ID") var draftID: String
-    // 扁平「大类/细分」，与 LLMExpenseCategorizer 一致，用户从池里选（动态候选）
     @Parameter(title: "分类", optionsProvider: ExpenseCategoryOptionsProvider())
     var category: String
 
@@ -167,6 +185,7 @@ struct EditExpenseCategoryIntent: AppIntent {
     }
 }
 
+@available(iOS 26, *)
 struct EditExpenseNoteIntent: AppIntent {
     static let title: LocalizedStringResource = "改备注"
     static let openAppWhenRun = false
