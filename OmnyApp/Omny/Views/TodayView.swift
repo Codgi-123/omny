@@ -62,7 +62,7 @@ struct TodayView: View {
                     CarouselSection(icon: "shippingbox.fill", tint: Theme.express, title: "快递",
                                     count: "\(awaitingPackages.filter { $0.packageStatus == .awaitingPickup }.count) 件待取",
                                     items: awaitingPackages, margin: margin,
-                                    widthFraction: n == 1 ? 1.0 : (n == 2 ? 0.47 : 0.44),
+                                    widthFraction: n == 1 ? 1.0 : (n == 2 ? 0.5 : 0.44),
                                     barIndicator: n >= 3,
                                     onDetail: { selectedTab = 1 }) {
                         if n == 1 {
@@ -240,7 +240,12 @@ private struct CarouselSection<Content: View>: View {
                 HStack(spacing: Theme.Space.gap) {
                     ForEach(items) {
                         content($0)
-                            .containerRelativeFrame(.horizontal) { w, _ in w * widthFraction }
+                            // 宽度按内容区（去掉左右 margin 与可视卡间距）折算，
+                            // 否则整宽/半宽卡会超出屏幕右缘、贴边无间距。
+                            .containerRelativeFrame(.horizontal) { w, _ in
+                                let cols = CGFloat(visibleCount)
+                                return (w - margin * 2 - Theme.Space.gap * (cols - 1)) * widthFraction
+                            }
                             // 卡片移除时渐隐缩小，右侧后续卡片平滑补位；
                             // 减弱动效时只保留淡入淡出、去掉缩放位移。
                             .transition(reduceMotion ? .opacity
