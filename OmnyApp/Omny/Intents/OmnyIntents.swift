@@ -90,5 +90,8 @@ struct OmnyShortcuts: AppShortcutsProvider {
         AppShortcut(intent: RecognizeTodoIntent(),
                     phrases: ["用 \(.applicationName) 屏幕识别"],
                     shortTitle: "屏幕识别", systemImageName: "text.viewfinder")
+        AppShortcut(intent: ConfirmExpenseIntent(),
+                    phrases: ["用 \(.applicationName) 确认记账"],
+                    shortTitle: "确认记账", systemImageName: "checklist")
     }
 }
