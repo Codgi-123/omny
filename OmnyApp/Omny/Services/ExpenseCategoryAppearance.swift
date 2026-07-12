@@ -80,13 +80,38 @@ final class ExpenseCategoryAppearance {
     private func userOverride(_ name: String) -> CategoryAppearance? {
         guard let map = defaults.dictionary(forKey: userKey) as? [String: String],
               let raw = map[name] else { return nil }
-        // 存储格式 "symbol|colorHex"；colorHex 缺省时颜色回退到 hash
+        // 存储格式 "symbol|colorKey"：colorKey 优先按签名色 key 映射（保留深色适配），
+        // 查不到再当作旧的 hex 兜底解析。
         let parts = raw.components(separatedBy: "|")
         let symbol = parts.first.flatMap { $0.isEmpty ? nil : $0 }
-        let color = parts.count > 1 ? Color(hex: parts[1]) : nil
+        let color: Color? = {
+            guard parts.count > 1, !parts[1].isEmpty else { return nil }
+            return Theme.ExpenseColor.color(forKey: parts[1]) ?? Color(hex: parts[1])
+        }()
         guard symbol != nil || color != nil else { return nil }
         return CategoryAppearance(symbol: symbol ?? Self.fallbackSymbol,
                                   color: color ?? Self.hashedColor(for: name))
+    }
+
+    // MARK: 写入用户覆盖（设置页自定义分类时调用）
+
+    /// 记住某分类名的图标 + 颜色 key。colorKey 传 Theme.ExpenseColor.keys 之一。
+    func setOverride(name: String, symbol: String, colorKey: String) {
+        var map = (defaults.dictionary(forKey: userKey) as? [String: String]) ?? [:]
+        map[name] = "\(symbol)|\(colorKey)"
+        defaults.set(map, forKey: userKey)
+    }
+
+    /// 删除某分类名的覆盖（删分类时清理）
+    func removeOverride(name: String) {
+        guard var map = defaults.dictionary(forKey: userKey) as? [String: String] else { return }
+        map.removeValue(forKey: name)
+        defaults.set(map, forKey: userKey)
+    }
+
+    /// 读某分类名当前生效的图标（供选择器回显：用户覆盖 → 预置 → 兜底）
+    func currentSymbol(major: String?, sub: String? = nil) -> String {
+        appearance(major: major, sub: sub).symbol
     }
 
     // MARK: - 内置预置库（覆盖 AppSettings.defaultExpenseCategoryPool 全部大类 + 常见细分）
@@ -131,6 +156,27 @@ final class ExpenseCategoryAppearance {
         // 收入
         "工资": "banknote.fill", "报销": "doc.text.fill", "退款": "arrow.uturn.backward.circle.fill",
         "其他": "ellipsis.circle.fill",
+    ]
+
+    /// 图标选择器候选库：精选常见消费/收入类 SF Symbol（不做全量浏览器，够用即可）。
+    /// 用户新建/编辑分类时从这里挑。逐个在真机核对存在性（个别旧系统可能缺，缺则显示空白，不崩）。
+    static let pickerSymbols: [String] = [
+        // 餐饮
+        "fork.knife", "cup.and.saucer.fill", "takeoutbag.and.cup.and.straw.fill", "birthday.cake.fill", "wineglass.fill",
+        // 交通
+        "car.fill", "tram.fill", "bus.fill", "fuelpump.fill", "parkingsign", "airplane", "bicycle",
+        // 购物
+        "bag.fill", "cart.fill", "basket.fill", "tshirt.fill", "handbag.fill", "gift.fill",
+        // 居家 / 数码
+        "house.fill", "sofa.fill", "bolt.fill", "key.fill", "laptopcomputer", "iphone", "lightbulb.fill",
+        // 娱乐 / 生活
+        "gamecontroller.fill", "film.fill", "music.note", "book.fill", "figure.run", "pawprint.fill",
+        // 医疗 / 教育
+        "cross.case.fill", "pills.fill", "stethoscope", "graduationcap.fill",
+        // 收入 / 金融
+        "yensign.circle.fill", "banknote.fill", "creditcard.fill", "chart.line.uptrend.xyaxis", "gift.circle.fill",
+        // 通用
+        "tag.fill", "star.fill", "heart.fill", "briefcase.fill", "ellipsis.circle.fill",
     ]
 }
 

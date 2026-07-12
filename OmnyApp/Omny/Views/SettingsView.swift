@@ -106,14 +106,19 @@ struct SettingsView: View {
                     Label("记账", systemImage: "yensign.circle")
                 }
                 NavigationLink {
+                    ExpenseCategoryManageView()
+                } label: {
+                    LabeledContent("消费分类", value: "\(settings.expenseCategoryPool.count) 个大类")
+                }
+                NavigationLink {
                     ExpenseDebugView()
                 } label: {
-                    LabeledContent("解析测试（调试）", value: "\(settings.expenseCategoryPool.count) 个大类")
+                    Label("解析测试（调试）", systemImage: "ladybug")
                 }
             } header: {
                 Text("记账")
             } footer: {
-                Text("「记账」为正式页（明细/日历/分析 + 手动记账），入口暂放这里，后续做 tab 调整时迁移。调试项用于粘贴动账短信测试解析入库。")
+                Text("「记账」为正式页（明细/日历/分析 + 手动记账），入口暂放这里，后续做 tab 调整时迁移。「消费分类」管理两级分类池 + 图标颜色。调试项用于粘贴动账短信测试解析。")
             }
 
             Section {
