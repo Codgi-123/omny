@@ -10,6 +10,10 @@ enum Theme {
     static let sub      = Color(.secondaryLabel)
     static let line     = Color(.separator)
 
+    /// 卡片内小控件的统一铺底（搜索框底 / tag·chip 底 / 输入框底 / 圆钮底）。
+    /// 用半透明填充档 tertiarySystemFill：叠在白卡或灰底上都协调；全 App 只用这一档，不混用其它 systemFill/systemGray。
+    static let fill     = Color(.tertiarySystemFill)
+
     /// 品牌强调色：iOS 系统蓝（Apple 最经典的默认强调色）。原陶土橙已弃用。
     static let accent = Color(.systemBlue)
     static let green  = Color(.systemGreen)
@@ -67,7 +71,7 @@ struct CardBackground: ViewModifier {
     func body(content: Content) -> some View {
         content
             .padding(pad)
-            .background(Theme.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background(Theme.card, in: .rect(cornerRadius: 12))
             // 收紧阴影，避免晕影渗到卡片外的边距、看起来像背景色不均
             .shadow(color: .black.opacity(0.05), radius: 5, y: 2)
     }
@@ -148,7 +152,7 @@ struct IconChip: View {
             .font(.system(size: size * 0.46, weight: .semibold))
             .foregroundStyle(.white)
             .frame(width: size, height: size)
-            .background(color.gradient, in: RoundedRectangle(cornerRadius: size * 0.28, style: .continuous))
+            .background(color.gradient, in: .rect(cornerRadius: size * 0.28))
     }
 }
 
@@ -383,8 +387,8 @@ struct TodoPriorityPicker: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 9)
-                    .background(selected ? p.color.opacity(0.14) : Color(.tertiarySystemFill),
-                               in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .background(selected ? p.color.opacity(0.14) : Theme.fill,
+                               in: .rect(cornerRadius: 10))
                     .overlay {
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
                             .stroke(selected ? p.color.opacity(0.55) : .clear, lineWidth: 1.5)
@@ -455,8 +459,8 @@ struct TodoDuePicker: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 11)
-            .background(selected ? tint : Color(.tertiarySystemFill),
-                        in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background(selected ? tint : Theme.fill,
+                        in: .rect(cornerRadius: 12))
         }
         .buttonStyle(PressableStyle())
     }

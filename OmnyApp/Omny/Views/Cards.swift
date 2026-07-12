@@ -559,7 +559,7 @@ struct TodoEditSheet: View {
                     .font(.system(size: 16))
                     .foregroundStyle(priority == 0 ? Theme.accent : TodoPriority(raw: priority).color)
                     .frame(width: 40, height: 40)
-                    .background(Color(.tertiarySystemFill), in: Circle())
+                    .background(Theme.fill, in: Circle())
             }
             .buttonStyle(PressableStyle(scale: 0.9))
 

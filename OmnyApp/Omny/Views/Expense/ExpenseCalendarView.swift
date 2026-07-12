@@ -118,7 +118,7 @@ struct ExpenseCalendarView: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 44)
                 .background(isSelected ? Theme.accent : Color.clear,
-                            in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            in: .rect(cornerRadius: 8))
             }
             .buttonStyle(.plain)
         } else {

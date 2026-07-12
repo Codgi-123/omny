@@ -120,7 +120,7 @@ struct ExpenseEditView: View {
         }
         .padding(.vertical, 12)
         .background(Color(.tertiarySystemGroupedBackground),
-                    in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    in: .rect(cornerRadius: 14))
         .padding(.horizontal, Theme.Space.page)
     }
 
@@ -158,7 +158,7 @@ struct ExpenseEditView: View {
                 .padding(.horizontal, Theme.Space.cardPad)
                 .padding(.vertical, 8)
         }
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(Theme.card, in: .rect(cornerRadius: 14))
         .padding(.horizontal, Theme.Space.page)
     }
 
@@ -193,7 +193,7 @@ struct ExpenseEditView: View {
                 fieldRow("卡尾号", text: $cardTail, placeholder: "选填", keyboard: .numberPad)
             }
         }
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(Theme.card, in: .rect(cornerRadius: 14))
         .padding(.horizontal, Theme.Space.page)
     }
 
@@ -256,7 +256,7 @@ struct ExpenseEditView: View {
                     Text(calc.hasPendingOperation ? "＝" : "完成")
                         .font(.title3.weight(.semibold)).foregroundStyle(.white)
                         .frame(maxWidth: .infinity).frame(height: 54)
-                        .background(Theme.accent, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .background(Theme.accent, in: .rect(cornerRadius: 8))
                 }
                 .disabled(!calc.hasPendingOperation && !canSave)
             }
@@ -277,7 +277,7 @@ struct ExpenseEditView: View {
         } label: {
             Text(label).font(.title2)
                 .frame(maxWidth: .infinity).frame(height: 54)
-                .background(Theme.card, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .background(Theme.card, in: .rect(cornerRadius: 8))
                 .foregroundStyle(Theme.text)
         }
     }
@@ -286,7 +286,7 @@ struct ExpenseEditView: View {
         Button(action: action) {
             Text(label).font(.title3)
                 .frame(maxWidth: .infinity).frame(height: 54)
-                .background(Theme.card, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .background(Theme.card, in: .rect(cornerRadius: 8))
                 .foregroundStyle(Theme.sub)
         }
     }
@@ -295,7 +295,7 @@ struct ExpenseEditView: View {
         Button { calc.input(op: op) } label: {
             Text(op.rawValue).font(.title2.weight(.medium))
                 .frame(maxWidth: .infinity).frame(height: 54)
-                .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .background(Theme.fill, in: .rect(cornerRadius: 8))
                 .foregroundStyle(Theme.accent)
         }
     }

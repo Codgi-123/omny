@@ -472,7 +472,7 @@ struct BookmarkCard: View {
                     .resizable()
                     .scaledToFill()
                     .frame(width: 38, height: 38)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .clipShape(.rect(cornerRadius: 10))
             } else {
                 IconChip(symbol: url != nil ? "link" : "text.alignleft", color: Theme.bookmark, size: 38)
             }
@@ -569,7 +569,7 @@ struct BookmarkAddSheet: View {
                             Image(uiImage: ui)
                                 .resizable().scaledToFill()
                                 .frame(width: 64, height: 64)
-                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                .clipShape(.rect(cornerRadius: 10))
                             Text("已添加图片").font(.subheadline).foregroundStyle(Theme.sub)
                             Spacer()
                             Button(role: .destructive) {
@@ -836,7 +836,7 @@ private struct ReviewCard: View {
                     .resizable()
                     .scaledToFill()
                     .frame(height: 90)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .clipShape(.rect(cornerRadius: 12))
                     .opacity(0.9)
             }
             if let error = retryError {
@@ -1062,7 +1062,7 @@ struct BookmarkDetailSheet: View {
                     Section("图片") {
                         Image(uiImage: ui).resizable().scaledToFit()
                             .frame(maxHeight: 280)
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .clipShape(.rect(cornerRadius: 12))
                         if editing {
                             PhotosPicker(selection: $pickedItem, matching: .images) {
                                 Label("更换图片", systemImage: "photo")
@@ -1280,7 +1280,7 @@ struct TodoQuickAdd: View {
         .foregroundStyle(tint)
         .padding(.horizontal, active ? 11 : 0)
         .frame(minWidth: 34, minHeight: 34)
-        .background(active ? tint.opacity(0.12) : Color(.tertiarySystemFill), in: Capsule())
+        .background(active ? tint.opacity(0.12) : Theme.fill, in: Capsule())
         .animation(.snappy(duration: 0.18), value: active)
     }
 
@@ -1363,7 +1363,7 @@ struct DueDateSheet: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.text)
                     .frame(width: 38, height: 38)
-                    .background(Color(.tertiarySystemFill), in: Circle())
+                    .background(Theme.fill, in: Circle())
             }
             .buttonStyle(PressableStyle(scale: 0.9))
 
@@ -1454,8 +1454,8 @@ struct DueDateSheet: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(Color(.secondarySystemBackground),
-                    in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(Theme.card,
+                    in: .rect(cornerRadius: 12))
     }
 
     /// 开启具体时间：在当前所选日期上落到 9:00（可再点 compact 控件调整）。
