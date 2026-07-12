@@ -1,6 +1,9 @@
 # 密钥，禁止提交
 Secrets.local.json
 OmnyApp/Omny/Services/Secrets.swift
+# App Store Connect 上传凭证（Issuer/Key ID），本地专用
+asc.local.env
+*.local.env
 
 # 构建产物
 OmnyCore/.build/
@@ -16,3 +19,10 @@ xcuserdata/
 
 # 打包产物
 dist/
+AuthKey_*.p8
+
+# ML 训练工具与数据（含真实短信 PII / 大体积公开数据集，仅本地）
+MLTraining/
+
+# 设计预览原型（Windows 无法渲染 SwiftUI 的降级手段，仅本地看效果，不进仓库）
+.design-preview/

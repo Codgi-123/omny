@@ -2,10 +2,14 @@ name: Omny
 options:
   bundleIdPrefix: xin.codgi
   deploymentTarget:
-    iOS: "17.0"
+    iOS: "18.0"
 packages:
   OmnyCore:
     path: ../OmnyCore
+# 项目级签名：Team ID 写在这里，避免每次 xcodegen generate 后丢失（两个 target 都继承）
+settings:
+  base:
+    DEVELOPMENT_TEAM: "46SC6UDH48"
 targets:
   Omny:
     type: application
@@ -28,15 +32,17 @@ targets:
         PRODUCT_NAME: Omny
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         MARKETING_VERSION: 0.1.0
-        CURRENT_PROJECT_VERSION: 1
+        CURRENT_PROJECT_VERSION: 18
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_CFBundleDisplayName: Omny
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        # 导出合规：仅用 HTTPS（LLM/滴答），属豁免加密，声明后 TestFlight 上传不再追问出口合规
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic
-        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        IPHONEOS_DEPLOYMENT_TARGET: "18.0"
 
   # 分享扩展：其他 App 分享面板里的「Omny」入口，见 OmnyShare/ShareViewController.swift
   OmnyShare:
@@ -49,6 +55,9 @@ targets:
       path: OmnyShare/Info.plist
       properties:
         CFBundleDisplayName: Omny
+        # 版本号引用构建变量，跟主 App 保持一致（否则 XcodeGen 默认写死 1.0/1，上传报 90473 版本不一致）
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
@@ -56,6 +65,7 @@ targets:
             NSExtensionActivationRule:
               NSExtensionActivationSupportsWebURLWithMaxCount: 1
               NSExtensionActivationSupportsText: true
+              NSExtensionActivationSupportsImageWithMaxCount: 10
     entitlements:
       path: OmnyShare/OmnyShare.entitlements
       properties:
@@ -67,9 +77,9 @@ targets:
         PRODUCT_NAME: OmnyShare
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         MARKETING_VERSION: 0.1.0
-        CURRENT_PROJECT_VERSION: 1
+        CURRENT_PROJECT_VERSION: 18
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic
-        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        IPHONEOS_DEPLOYMENT_TARGET: "18.0"
         SKIP_INSTALL: YES

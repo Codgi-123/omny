@@ -25,6 +25,11 @@ public struct RuleParser: Parser {
         case .bookmark:
             guard let info = Self.extractBookmark(text) else { return nil }
             return ParseResult(payload: .bookmark(info), confidence: 0.95, rawText: text)
+        case .expense:
+            guard let info = Self.extractExpense(text) else { return nil }
+            // 抽出金额高置信，只有方向/尾号等零散字段则低置信 → 下游标 needsReview
+            let confidence = info.amount != nil ? 0.9 : 0.6
+            return ParseResult(payload: .expense(info), confidence: confidence, rawText: text)
         case .todo, nil:
             // 待办识别是语义任务，规则层不做，交给 LLM
             return nil
@@ -35,14 +40,33 @@ public struct RuleParser: Parser {
 
     static let packageKeywords = ["快递", "快件", "包裹", "取件", "取货", "驿站", "运单", "派送", "签收", "丰巢", "代收"]
     static let tripKeywords = ["列车", "车次", "次列车", "航班", "起飞", "登机", "检票", "乘车", "开车前"]
+    /// 记账交易动词：出现其一才可能是记账文本（配合金额特征双命中，降低误判）。
+    /// 两类措辞并存：① 银行短信正式词（消费/入账/扣款…）；② 手输/语音的口语词（买/花/充值…）。
+    /// 单字口语词（买/花）靠"必须同时命中金额特征"兜底——无金额的「买了个表真好看」不会误判。
+    static let expenseVerbs = [
+        // 银行短信正式措辞
+        "消费", "支出", "支付", "付款", "收入", "入账", "到账", "转账", "交易", "扣款", "扣费", "还款",
+        // 口语措辞（手动输入 / 语音转文字）
+        "买", "花", "充值", "充了", "付了", "收到", "赚", "卖",
+    ]
 
     static func classify(_ text: String) -> ItemType? {
         let packageScore = packageKeywords.count { text.contains($0) }
         let tripScore = tripKeywords.count { text.contains($0) }
         if tripScore > 0 && tripScore >= packageScore { return .trip }
         if packageScore > 0 { return .package }
+        // 记账：要求「金额特征 + 交易动词」双命中。放在快递/行程之后（那些短信偶尔也带金额，
+        // 但快递/行程关键词更强、更该优先），bookmark 之前。
+        if hasAmount(text) && expenseVerbs.contains(where: text.contains) { return .expense }
         if text.contains("http://") || text.contains("https://") { return .bookmark }
         return nil
+    }
+
+    /// 是否含金额特征：￥/¥ 前缀、"数字元"、或带两位小数的金额（避免把纯序号/单号误判成金额）
+    static func hasAmount(_ text: String) -> Bool {
+        text.firstMatch(of: /[¥￥]\s*\d/) != nil
+            || text.firstMatch(of: /\d(?:[\d,]*\d)?(?:\.\d{1,2})?\s*元/) != nil
+            || text.firstMatch(of: /\d[\d,]*\.\d{2}(?![\d])/) != nil
     }
 
     // MARK: - 快递
@@ -199,6 +223,48 @@ public struct RuleParser: Parser {
         c.day = Int(m.output.2)
         if let y = text.firstMatch(of: /(20\d{2})年/) { c.year = Int(y.output.1) }
         return c
+    }
+
+    // MARK: - 记账
+
+    /// 收入措辞：命中其一判为收入，否则默认支出（消费文本支出居多）。
+    /// 含银行短信正式词与口语词（收到/赚/卖），口语支出词（买/花）不在此列，故默认走支出。
+    static let incomeKeywords = ["收入", "入账", "到账", "退款", "退回", "转入", "工资", "报销", "收到", "赚", "卖"]
+
+    /// 无 LLM 时的记账降级：正则抠金额 + 卡尾号 + 方向。银行短信金额格式相对规整。
+    /// 抽不出金额则返回 nil（交管线兜底/降级），不产"空账单"。
+    static func extractExpense(_ text: String) -> ExpenseInfo? {
+        var info = ExpenseInfo()
+        info.amount = extractAmount(text)
+
+        // 方向：命中收入词判收入，否则默认支出
+        info.direction = incomeKeywords.contains(where: text.contains) ? .income : .expense
+
+        // 卡尾号："尾号1234""尾号为1234"
+        if let m = text.firstMatch(of: /尾号[为是]?\s*(\d{3,6})/) {
+            info.cardTail = String(m.output.1)
+        }
+        info.occurredAt = extractMonthDay(text)
+
+        // 金额抽不出、也没尾号 → 太弱，不产出
+        guard info.amount != nil || info.cardTail != nil else { return nil }
+        return info
+    }
+
+    /// 抠金额：优先 ￥/¥ 前缀，其次"数字元"，最后带两位小数的裸金额。支持千分位逗号。
+    static func extractAmount(_ text: String) -> Decimal? {
+        let patterns: [Regex<(Substring, Substring)>] = [
+            /[¥￥]\s*([\d,]+(?:\.\d{1,2})?)/,
+            /(?:人民币)?\s*([\d,]+(?:\.\d{1,2})?)\s*元/,
+            /([\d,]+\.\d{2})(?![\d])/,
+        ]
+        for pattern in patterns {
+            if let m = text.firstMatch(of: pattern) {
+                let cleaned = String(m.output.1).replacingOccurrences(of: ",", with: "")
+                if let value = Decimal(string: cleaned) { return value }
+            }
+        }
+        return nil
     }
 
     // MARK: - 收藏

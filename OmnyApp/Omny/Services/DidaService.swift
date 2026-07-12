@@ -113,8 +113,9 @@ final class SwiftDataTodoStore: TodoSyncStore {
             .map { item in
                 SyncableTodo(localID: item.id, didaTaskID: item.didaTaskID,
                              title: item.todoTitle ?? item.rawText,
-                             note: nil, due: item.todoDue,
+                             note: item.todoNote, due: item.todoDue,
                              isCompleted: item.todoCompleted,
+                             priority: item.todoPriority,
                              needsPush: item.needsPush,
                              isDeletedLocally: item.deletedLocally)
             }
@@ -125,13 +126,17 @@ final class SwiftDataTodoStore: TodoSyncStore {
         let due = task.dueDate.flatMap(DidaDate.date(from:))
         if let existing = todos.first(where: { $0.didaTaskID == task.id }) {
             existing.todoTitle = task.title
+            existing.todoNote = task.content
             existing.todoDue = due
             existing.todoCompleted = task.isCompleted
+            existing.todoPriority = task.priority ?? 0
         } else {
             let item = InboxItem(kind: .todo, source: .dida, rawText: task.title)
             item.todoTitle = task.title
+            item.todoNote = task.content
             item.todoDue = due
             item.todoCompleted = task.isCompleted
+            item.todoPriority = task.priority ?? 0
             item.didaTaskID = task.id
             item.needsPush = false
             context.insert(item)

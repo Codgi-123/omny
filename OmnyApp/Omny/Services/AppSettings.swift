@@ -43,12 +43,44 @@ final class AppSettings: ObservableObject {
                               fallback: LLMTodoParser(config: llmConfig))
     }
 
+    /// 截图 OCR 专用解析器：一屏多条多类一次抽取（快递/行程/待办），忽略噪声。
+    /// 未配 LLM 时 ScreenParser 内部按行走规则降级，故 config 传 nil 也可用。
+    var screenParser: ScreenParser {
+        ScreenParser(config: llmConfig)
+    }
+
     // MARK: 收藏 tag（预置一批，设置页可增删改；LLM 打标只从这里选）
 
     static let defaultBookmarkTags = ["技术", "资讯", "视频", "购物", "美食", "旅行", "灵感", "工具", "娱乐"]
 
     @Published var bookmarkTags: [String] {
         didSet { defaults.set(bookmarkTags, forKey: "bookmark.tags") }
+    }
+
+    // MARK: 消费分类池（两级：大类 → 细分；LLM 打标只从这里选，扁平化成"大类/细分"约束）
+
+    static let defaultExpenseCategoryPool: [String: [String]] = [
+        "餐饮": ["早餐", "午餐", "晚餐", "外卖", "咖啡零食"],
+        "交通": ["打车", "公交地铁", "加油", "停车"],
+        "购物": ["日用", "服饰", "数码", "家居"],
+        "居家": ["房租", "水电燃气", "物业"],
+        "娱乐": ["订阅", "游戏", "电影"],
+        "医疗": ["门诊", "药品"],
+        "收入": ["工资", "报销", "退款", "其他"],
+    ]
+
+    /// 两级分类池。UserDefaults 存 JSON（字典嵌套数组无法直接存）。
+    @Published var expenseCategoryPool: [String: [String]] {
+        didSet {
+            if let data = try? JSONEncoder().encode(expenseCategoryPool) {
+                defaults.set(data, forKey: "expense.categoryPool")
+            }
+        }
+    }
+
+    /// 记账消费分类器（LLM 配好才有）
+    var expenseCategorizer: LLMExpenseCategorizer? {
+        llmConfig.map { LLMExpenseCategorizer(config: $0) }
     }
 
     // MARK: 滴答清单绑定状态
@@ -80,10 +112,32 @@ final class AppSettings: ObservableObject {
         llmAPIKey = defaults.string(forKey: "llm.apiKey") ?? ""
         llmModel = defaults.string(forKey: "llm.model") ?? "claude-opus-4-8"
         bookmarkTags = defaults.stringArray(forKey: "bookmark.tags") ?? Self.defaultBookmarkTags
+        if let data = defaults.data(forKey: "expense.categoryPool"),
+           let pool = try? JSONDecoder().decode([String: [String]].self, from: data) {
+            expenseCategoryPool = pool
+        } else {
+            expenseCategoryPool = Self.defaultExpenseCategoryPool
+        }
         didaAccessToken = defaults.string(forKey: "dida.accessToken")
         didaProjectID = defaults.string(forKey: "dida.projectID")
         didaProjectName = defaults.string(forKey: "dida.projectName")
         didaLastSync = defaults.object(forKey: "dida.lastSync") as? Date
         autoAddToCalendar = defaults.object(forKey: "trip.autoCalendar") as? Bool ?? true
+    }
+
+    /// 恢复出厂：LLM 配置、滴答绑定、收藏标签全部重置为默认。
+    /// （不含条目数据——那由 DataMaintenance 清 SwiftData。）赋值经各自 didSet 落回 UserDefaults。
+    func resetToDefaults() {
+        llmProtocol = .claude
+        llmBaseURL = "https://api.anthropic.com"
+        llmAPIKey = ""
+        llmModel = "claude-opus-4-8"
+        bookmarkTags = Self.defaultBookmarkTags
+        expenseCategoryPool = Self.defaultExpenseCategoryPool
+        didaAccessToken = nil
+        didaProjectID = nil
+        didaProjectName = nil
+        didaLastSync = nil
+        autoAddToCalendar = true
     }
 }

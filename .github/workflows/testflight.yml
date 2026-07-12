@@ -1,0 +1,99 @@
+name: TestFlight
+
+# 云端打包上传 TestFlight：打 tag（tf-*，名字随意，如 tf-20260712）或在 Actions 页面手动触发。
+# 签名走 ASC API Key 云签名（-allowProvisioningUpdates），分发证书由 Apple 云端管理，
+# 不需要往 CI 导入 .p12 证书。流程与 docs/testflight-release.md 的本地流程一致。
+#
+# 构建号由 CI 自动生成（run_number + BUILD_OFFSET），不读 project.yml，多人发布不会撞号；
+# 实际用的构建号见运行页面的 Summary。手动触发时填 build_number 可强制覆盖。
+#
+# 所需仓库 Secrets（Settings → Secrets and variables → Actions）：
+#   ASC_KEY_ID             App Store Connect API Key ID（10 位）
+#   ASC_ISSUER_ID          Issuer ID（UUID）
+#   ASC_API_KEY_P8         AuthKey_<KeyID>.p8 文件全文
+#   OMNY_SECRETS_SWIFT_B64 OmnyApp/Omny/Services/Secrets.swift 的 base64（滴答清单密钥，改动后需同步更新）
+
+on:
+  push:
+    tags: ['tf-*']
+  workflow_dispatch:
+    inputs:
+      build_number:
+        description: 覆盖构建号（留空则自动生成 run_number + BUILD_OFFSET）
+        required: false
+        default: ''
+
+# 同一时间只跑一个发布，避免两个 build 抢同一个构建号
+concurrency:
+  group: testflight
+  cancel-in-progress: false
+
+jobs:
+  testflight:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    env:
+      ASC_KEY: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER: ${{ secrets.ASC_ISSUER_ID }}
+      # 构建号偏移：启用自动构建号时（run #2）TestFlight 已用到 build 18，16 + 3 = 19 起步。
+      # 改动它会导致构建号回退/重复，别动；除非 TestFlight 号段乱了需要整体跳号。
+      BUILD_OFFSET: 16
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 写入 ASC API Key 与 Secrets.swift
+        env:
+          ASC_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          SECRETS_B64: ${{ secrets.OMNY_SECRETS_SWIFT_B64 }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          printf '%s\n' "$ASC_P8" > ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY}.p8
+          echo "$SECRETS_B64" | base64 -d > OmnyApp/Omny/Services/Secrets.swift
+          echo "AUTH=-allowProvisioningUpdates -authenticationKeyPath $HOME/.appstoreconnect/private_keys/AuthKey_${ASC_KEY}.p8 -authenticationKeyID ${ASC_KEY} -authenticationKeyIssuerID ${ASC_ISSUER}" >> "$GITHUB_ENV"
+
+      - name: 生成 Xcode 工程
+        run: |
+          brew install xcodegen
+          cd OmnyApp && xcodegen generate
+
+      - name: 准备临时钥匙串（云签名需要已解锁的默认钥匙串存放签名材料）
+        run: |
+          security create-keychain -p ci build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p ci build.keychain
+          security set-keychain-settings -lut 21600 build.keychain
+
+      - name: 归档
+        run: |
+          # 构建号：手动触发可覆盖，否则 run_number + 偏移量自动生成（唯一且递增，多人发布不撞号）。
+          # 命令行传入的 CURRENT_PROJECT_VERSION 对所有 target 生效，OmnyShare 的
+          # CFBundleVersion 引用该变量，扩展版本自动跟主 App 一致。
+          BUILD_NUMBER="${{ inputs.build_number }}"
+          if [ -z "$BUILD_NUMBER" ]; then
+            BUILD_NUMBER=$(( ${{ github.run_number }} + BUILD_OFFSET ))
+          fi
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
+          echo "### TestFlight 构建号：$BUILD_NUMBER" >> "$GITHUB_STEP_SUMMARY"
+          xcodebuild archive \
+            -project OmnyApp/Omny.xcodeproj -scheme Omny -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Omny.xcarchive" -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CURRENT_PROJECT_VERSION=$BUILD_NUMBER $AUTH
+
+      - name: 导出 App Store 签名 ipa
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/Omny.xcarchive" -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist docs/ExportOptions.plist $AUTH
+
+      - name: 预校验并上传 TestFlight
+        run: |
+          xcrun altool --validate-app -f "$RUNNER_TEMP/export/Omny.ipa" -t ios --apiKey "$ASC_KEY" --apiIssuer "$ASC_ISSUER"
+          xcrun altool --upload-app   -f "$RUNNER_TEMP/export/Omny.ipa" -t ios --apiKey "$ASC_KEY" --apiIssuer "$ASC_ISSUER"
+
+      - name: 保留 ipa 为 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Omny-ipa
+          path: ${{ runner.temp }}/export/Omny.ipa
+          retention-days: 30
