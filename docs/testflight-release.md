@@ -3,6 +3,27 @@
 把 `Omny` 打包上传到 TestFlight 的可复用流程。全程命令行，不依赖 Xcode GUI。
 2026-07-10 首次跑通（build 3）；之后按同一流程复跑至 **build 7**（dev-zhanghaha、dev-kiwi 两分支均走通），命令保持有效。每次发布只需按「步骤 0」升构建号后重跑即可。
 
+## GitHub Actions 自动发布（推荐）
+
+本地流程已搬到 CI（`.github/workflows/testflight.yml`），**构建号由 CI 自动生成**
+（工作流运行序号 + 偏移量，唯一且递增），发布不用改 `project.yml`、不用协调构建号，打个 tag 就行：
+
+```sh
+# 方式一：打 tag（tf- 开头即可，名字随意，建议带日期）
+git tag tf-20260712 && git push origin tf-20260712
+
+# 方式二：Actions 页面手动 Run workflow（可选填 build_number 强制覆盖自动号）
+gh workflow run testflight.yml --ref <分支> -f build_number=<构建号>
+```
+
+实际用的构建号看运行页面的 Summary。协作者只需有仓库 push 权限即可触发，无需任何 Apple 凭据。
+签名用 ASC API Key 云签名，无需导出证书。依赖 4 个仓库 Secrets（见 workflow 文件头部注释）；
+**改动 `Secrets.swift` 后要同步更新 Secret**：`base64 -i OmnyApp/Omny/Services/Secrets.swift | gh secret set OMNY_SECRETS_SWIFT_B64`。
+私有仓库 macOS runner 分钟按 10 倍计费，实测一次发布约 4 分钟（计费约 40 分钟）。
+
+以下为本地手动流程（CI 不可用时的备用路径）。⚠️ 构建号已交给 CI 管理（`run_number + BUILD_OFFSET`），
+本地发布前先查 TestFlight 当前最大构建号，且发完后 CI 的自动号可能落在后面导致 409——尽量别混用两条路。
+
 ## 前置条件（一次性）
 
 - **付费 Apple Developer Program 会员**（免费 Apple ID 传不了 TestFlight，只能真机侧载 7 天）。

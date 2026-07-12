@@ -8,30 +8,33 @@ struct RootView: View {
     @EnvironmentObject private var dida: DidaService
     @Query(filter: #Predicate<InboxItem> { $0.needsReview && !$0.deletedLocally })
     private var reviewItems: [InboxItem]
-    @State private var selection = DebugSupport.initialTab
+    // tab 选择提升为 AppStorage：首页各区块「查看详情」写同一键即可切 tab。
+    // 默认值取调试初始 tab（模拟器截图用启动参数 -omnyTab N；正常首次启动为 0）。
+    @AppStorage("omnySelectedTab") private var selection = DebugSupport.initialTab
 
     var body: some View {
         TabView(selection: $selection) {
             NavigationStack { TodayView() }
-                .tabItem { Label("今天", systemImage: "house") }
+                .tabItem { Label("今天", image: "TabToday") }
                 .tag(0)
             NavigationStack { ExpressView() }
-                .tabItem { Label("快递", systemImage: "shippingbox") }
+                .tabItem { Label("快递", image: "TabExpress") }
                 .tag(1)
             NavigationStack { TripView() }
-                .tabItem { Label("行程", systemImage: "tram") }
+                .tabItem { Label("行程", image: "TabTrip") }
                 .tag(2)
             NavigationStack { TodoView() }
-                .tabItem { Label("待办", systemImage: "checkmark.circle") }
+                .tabItem { Label("待办", image: "TabTodo") }
                 .badge(reviewItems.filter { $0.kind == .todo }.count)
                 .tag(3)
             NavigationStack { BookmarkView() }
-                .tabItem { Label("收藏", systemImage: "bookmark") }
+                .tabItem { Label("收藏", image: "TabBookmark") }
                 .tag(4)
         }
         .tint(Theme.accent)
         .task {
             DebugSupport.seedIfNeeded(context)
+            Trash.purgeExpired(context: context)   // 清理满 7 天的回收站条目
             // 启动时先收分享队列，再后台同步一次滴答
             await drainShareQueue()
             await dida.syncNow(context: context)
@@ -46,11 +49,23 @@ struct RootView: View {
         }
     }
 
-    /// 收走分享扩展排队的内容：落成收藏 + LLM 打标
+    /// 收走分享扩展排队的内容：落成收藏 + LLM 打标。
+    /// 图片分享（截图等）在此 OCR，文本 + 原图一起存成收藏卡片。
     private func drainShareQueue() async {
         for shared in SharedInbox.drain() {
-            await Ingestor.ingestBookmark(text: shared.text, urlString: shared.urlString,
-                                          source: .share, context: context)
+            if let imageData = SharedInbox.imageData(for: shared) {
+                let ocr = (try? await OCRService.recognizeText(in: imageData)) ?? ""
+                let text = [shared.text, ocr]
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                    .joined(separator: "\n")
+                await Ingestor.ingestBookmark(text: text, urlString: shared.urlString,
+                                              sourceImage: imageData, source: .share, context: context)
+                SharedInbox.cleanupImage(for: shared)
+            } else {
+                await Ingestor.ingestBookmark(text: shared.text, urlString: shared.urlString,
+                                              source: .share, context: context)
+            }
         }
     }
 }
@@ -58,9 +73,15 @@ struct RootView: View {
 // MARK: - 调试支撑（仅模拟器：灌样例数据 + 启动参数选 tab；真机永不触发）
 
 enum DebugSupport {
-    /// 用启动参数 `-omnyTab N` 指定初始 tab，方便逐屏截图自查
+    /// 用启动参数 `-omnyTab N` 指定初始 tab，方便逐屏截图自查。
+    /// tab 选择改 AppStorage 持久化后，默认值只在首启生效；这里显式覆写持久键，
+    /// 保证带 -omnyTab 启动时（即使模拟器里已切换过 tab）依然直达指定页。
     static var initialTab: Int {
-        UserDefaults.standard.integer(forKey: "omnyTab")
+        let tab = UserDefaults.standard.integer(forKey: "omnyTab")
+        if UserDefaults.standard.object(forKey: "omnyTab") != nil {
+            UserDefaults.standard.set(tab, forKey: "omnySelectedTab")
+        }
+        return tab
     }
 
     /// 仅模拟器 + 启动参数 `-omnySeed YES` + 库为空时，灌入一批展示用样例数据

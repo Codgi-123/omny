@@ -1,6 +1,9 @@
 # 密钥，禁止提交
 Secrets.local.json
 OmnyApp/Omny/Services/Secrets.swift
+# App Store Connect 上传凭证（Issuer/Key ID），本地专用
+asc.local.env
+*.local.env
 
 # 构建产物
 OmnyCore/.build/

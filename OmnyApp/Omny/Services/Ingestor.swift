@@ -164,7 +164,11 @@ enum Ingestor {
     /// 分享面板与收藏页手动添加进来的内容，定位就是收藏：
     /// 带链接的抽出 URL + 标题，纯文本原样保存，随后交给 LLM 自动打标。
     @discardableResult
+    /// manualTags 非空时用用户手选的标签，跳过 LLM 自动打标（尊重手动选择）；
+    /// 为 nil 时走原自动打标流程。
     static func ingestBookmark(text: String, urlString: String? = nil,
+                               sourceImage: Data? = nil,
+                               manualTags: [String]? = nil,
                                source: ItemSource, context: ModelContext) async -> InboxItem {
         var combined = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if let urlString, !combined.contains(urlString) {
@@ -172,29 +176,31 @@ enum Ingestor {
         }
 
         let item = InboxItem(kind: .bookmark, source: source, rawText: combined)
+        item.sourceImage = sourceImage
         if let info = RuleParser.extractBookmark(combined) {
             item.urlString = info.url.absoluteString
             item.bookmarkTitle = info.title
         } else {
             item.urlString = urlString
         }
+        if let manualTags, !manualTags.isEmpty { item.tags = manualTags }
         context.insert(item)
         try? context.save()
-        await enrichBookmark(item, context: context)
+        await enrichBookmark(item, context: context, runAutoTag: manualTags?.isEmpty ?? true)
         return item
     }
 
     /// 收藏的入库后处理：先补标题（分享面板常只给裸链接，X/微博等尤其），再 LLM 打标。
     /// 顺序有讲究：标题抓回来能明显提高打标准确率。
     static func enrichBookmark(_ item: InboxItem, context: ModelContext,
-                               refetchTitle: Bool = false) async {
+                               refetchTitle: Bool = false, runAutoTag: Bool = true) async {
         if refetchTitle || (item.bookmarkTitle ?? "").isEmpty,
            let urlString = item.urlString, let url = URL(string: urlString),
            let title = await LinkTitleFetcher().fetchTitle(for: url) {
             item.bookmarkTitle = title
             try? context.save()
         }
-        await autoTag(item, context: context)
+        if runAutoTag { await autoTag(item, context: context) }
     }
 
     /// LLM 自动打标：从设置页配置的 tag 列表里挑选。

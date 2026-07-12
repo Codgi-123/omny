@@ -15,6 +15,7 @@ final class ShareViewController: UIViewController {
     private func handleShare() async {
         var urlString: String?
         var texts: [String] = []
+        var imageData: Data?
 
         let inputItems = (extensionContext?.inputItems as? [NSExtensionItem]) ?? []
         for provider in inputItems.flatMap({ $0.attachments ?? [] }) {
@@ -31,6 +32,10 @@ final class ShareViewController: UIViewController {
                 if let text = loaded as? String {
                     texts.append(text)
                 }
+            } else if imageData == nil,
+                      provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
+                // 截图/图片：只搬运原始字节，OCR 与入库回主 App 做（扩展不解码大图，省内存）
+                imageData = await loadImageData(from: provider)
             }
         }
         // 有些 App 把描述放在 attributedContentText 而不是附件里
@@ -40,15 +45,36 @@ final class ShareViewController: UIViewController {
         }
 
         let text = texts.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty || urlString != nil else {
+        guard !text.isEmpty || urlString != nil || imageData != nil else {
             extensionContext?.cancelRequest(withError: NSError(
                 domain: "xin.codgi.omny.share", code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "分享内容里没有链接或文本"]))
+                userInfo: [NSLocalizedDescriptionKey: "分享内容里没有链接、文本或图片"]))
             return
         }
 
-        SharedInbox.append(text: text, urlString: urlString)
+        SharedInbox.append(text: text, urlString: urlString, imageData: imageData)
         showToastThenFinish()
+    }
+
+    /// 从 NSItemProvider 取图片字节：优先要原始 data（不解码，省内存），拿不到再退回 loadItem。
+    private func loadImageData(from provider: NSItemProvider) async -> Data? {
+        let typeID = UTType.image.identifier
+        let raw = await withCheckedContinuation { (cont: CheckedContinuation<Data?, Never>) in
+            provider.loadDataRepresentation(forTypeIdentifier: typeID) { data, _ in
+                cont.resume(returning: data)
+            }
+        }
+        if let raw { return raw }
+
+        let loaded = try? await provider.loadItem(forTypeIdentifier: typeID)
+        if let url = loaded as? URL {
+            return try? Data(contentsOf: url)
+        } else if let data = loaded as? Data {
+            return data
+        } else if let image = loaded as? UIImage {
+            return image.jpegData(compressionQuality: 0.9)
+        }
+        return nil
     }
 
     private func showToastThenFinish() {

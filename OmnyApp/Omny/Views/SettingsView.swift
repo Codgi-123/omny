@@ -174,6 +174,7 @@ struct SettingsView: View {
 
             Section {
                 NavigationLink("需处理内容") { ReviewView() }
+                NavigationLink("回收站") { TrashView() }
                 Button(role: .destructive) {
                     showClearItemsConfirm = true
                 } label: {
@@ -199,6 +200,7 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("设置")
+        .toolbar(.hidden, for: .tabBar)   // 进设置隐藏底部 tab 栏
         .confirmationDialog("清空所有条目？", isPresented: $showClearItemsConfirm, titleVisibility: .visible) {
             Button("清空", role: .destructive) { clearAllItems() }
             Button("取消", role: .cancel) {}

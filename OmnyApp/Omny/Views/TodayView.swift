@@ -5,28 +5,39 @@ import SwiftData
 /// 自定义仪表盘（非分组表），所有内容统一到 16pt 左边距网格，保证轮播卡与待办卡左对齐。
 struct TodayView: View {
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var items: [InboxItem]
+    /// 与 RootView 的 TabView selection 共享同一 UserDefaults 键：各区块「查看详情」写入即切 tab。
+    @AppStorage("omnySelectedTab") private var selectedTab = 0
 
     private let margin: CGFloat = Theme.Space.page
 
     private var upcomingTrips: [InboxItem] {
-        items.filter { $0.kind == .trip && ($0.departAt ?? .distantPast) > .now }
+        items.filter { $0.kind == .trip && $0.deletedAt == nil && ($0.departAt ?? .distantPast) > .now }
             .sorted { ($0.departAt ?? .distantFuture) < ($1.departAt ?? .distantFuture) }
     }
 
     private var awaitingPackages: [InboxItem] {
-        items.filter { $0.kind == .package && $0.packageStatus != .pickedUp }
+        items.filter { $0.kind == .package && $0.deletedAt == nil && $0.packageStatus != .pickedUp }
     }
 
     private var openTodos: [InboxItem] {
-        items.filter { $0.kind == .todo && !$0.todoCompleted && !$0.needsReview && !$0.deletedLocally }
+        items.filter { $0.kind == .todo && !$0.todoCompleted && !$0.todoAbandoned && !$0.needsReview && !$0.deletedLocally && $0.deletedAt == nil }
+            // 优先级降序（高→无），同级按创建时间倒序
+            .sorted { ($0.todoPriority, $0.createdAt) > ($1.todoPriority, $1.createdAt) }
     }
 
     private var reviewItems: [InboxItem] {
-        items.filter { $0.needsReview && !$0.deletedLocally }
+        items.filter { $0.needsReview && !$0.deletedLocally && $0.deletedAt == nil }
+    }
+
+    /// 今天新增的收藏（未删除），首页「今日收藏」区块用
+    private var todayBookmarks: [InboxItem] {
+        items.filter { $0.kind == .bookmark && $0.deletedAt == nil
+            && Calendar.current.isDateInToday($0.createdAt) }
     }
 
     private var everythingEmpty: Bool {
-        upcomingTrips.isEmpty && awaitingPackages.isEmpty && openTodos.isEmpty && reviewItems.isEmpty
+        upcomingTrips.isEmpty && awaitingPackages.isEmpty && openTodos.isEmpty
+            && todayBookmarks.isEmpty && reviewItems.isEmpty
     }
 
     var body: some View {
@@ -35,26 +46,63 @@ struct TodayView: View {
             ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 if !upcomingTrips.isEmpty {
-                    CarouselSection(icon: "tram.fill", tint: Theme.trip, title: "行程",
-                                    count: "\(upcomingTrips.count) 个即将出行", items: upcomingTrips, margin: margin) {
+                    // 只有一个行程时卡片占满内容区（无 peek/指示器）；两个及以上留出后卡的 peek。
+                    let single = upcomingTrips.count == 1
+                    CarouselSection(icon: "airplane.departure", tint: Theme.trip, title: "行程",
+                                    count: "\(upcomingTrips.count) 个即将出行", items: upcomingTrips, margin: margin,
+                                    widthFraction: single ? 1.0 : 0.82,
+                                    onDetail: { selectedTab = 2 }) {
                         TripCard(item: $0).cardStyle()
                     }
                 }
 
                 if !awaitingPackages.isEmpty {
+                    // 卡片数量自适应：1 件→大卡占满、无进度条；2 件→两张小卡、无进度条；≥3→紧凑小卡 + 进度条
+                    let n = awaitingPackages.count
                     CarouselSection(icon: "shippingbox.fill", tint: Theme.express, title: "快递",
                                     count: "\(awaitingPackages.filter { $0.packageStatus == .awaitingPickup }.count) 件待取",
-                                    items: awaitingPackages, margin: margin) {
-                        PackageCard(item: $0, showsContextMenu: false).cardStyle()
+                                    items: awaitingPackages, margin: margin,
+                                    widthFraction: n == 1 ? 1.0 : (n == 2 ? 0.5 : 0.44),
+                                    barIndicator: n >= 3,
+                                    onDetail: { selectedTab = 1 }) {
+                        if n == 1 {
+                            PackageCard(item: $0, showsContextMenu: false).cardStyle()
+                        } else {
+                            PackageCardCompact(item: $0).cardStyle()
+                        }
                     }
                 }
 
                 if !openTodos.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
                         SectionHeader(icon: "checkmark.circle.fill", tint: Theme.todo, title: "待办",
-                                      count: "\(openTodos.count) 项未完成")
+                                      count: "\(openTodos.count) 项未完成",
+                                      onDetail: { selectedTab = 3 })
+                        // 待办整体合并为一张卡片，条目列在卡内、以分隔线区隔（一.8）
+                        let homeTodos = Array(openTodos.prefix(5))
+                        VStack(spacing: 0) {
+                            ForEach(Array(homeTodos.enumerated()), id: \.element.id) { idx, todo in
+                                TodoRow(item: todo, showsContextMenu: false)
+                                    .padding(.vertical, 11)
+                                if idx < homeTodos.count - 1 {
+                                    Divider().padding(.leading, 44)
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 14)
+                        .background(Theme.card, in: .rect(cornerRadius: 12))
+                        .shadow(color: .black.opacity(0.05), radius: 5, y: 2)
+                    }
+                    .padding(.horizontal, margin)
+                }
+
+                if !todayBookmarks.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        SectionHeader(icon: "bookmark.fill", tint: Theme.bookmark, title: "今日收藏",
+                                      count: "\(todayBookmarks.count) 条",
+                                      onDetail: { selectedTab = 4 })
                         VStack(spacing: 10) {
-                            ForEach(openTodos.prefix(5)) { TodoRow(item: $0, showsContextMenu: false).cardStyle() }
+                            ForEach(todayBookmarks.prefix(5)) { TodayBookmarkRow(item: $0).cardStyle(pad: 11) }
                         }
                     }
                     .padding(.horizontal, margin)
@@ -107,6 +155,55 @@ struct TodayView: View {
     }
 }
 
+/// 首页「今日收藏」精简卡：缩略图/类型图标 + 标题 + 域名或标签。
+/// 完整交互（打开/编辑/删标签）留在收藏页的 BookmarkCard，这里只做一眼概览。
+private struct TodayBookmarkRow: View {
+    let item: InboxItem
+
+    private var url: URL? { item.urlString.flatMap(URL.init(string:)) }
+
+    private var title: String {
+        if let t = item.bookmarkTitle, !t.isEmpty { return t }
+        if let url { return url.host() ?? "链接" }
+        return item.rawText.components(separatedBy: .newlines).first ?? item.rawText
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            if let data = item.sourceImage, let ui = UIImage(data: data) {
+                Image(uiImage: ui)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 36, height: 36)
+                    .clipShape(.rect(cornerRadius: 9))
+            } else {
+                IconChip(symbol: url != nil ? "link" : "text.alignleft", color: Theme.bookmark, size: 36)
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(1)
+                if let url {
+                    Text(url.host() ?? url.absoluteString)
+                        .font(.caption2)
+                        .foregroundStyle(Theme.sub)
+                        .lineLimit(1)
+                } else if item.tags.isEmpty {
+                    Text("未打标")
+                        .font(.caption2)
+                        .foregroundStyle(Theme.sub.opacity(0.7))
+                } else {
+                    HStack(spacing: 6) {
+                        ForEach(item.tags.prefix(3), id: \.self) { Badge(text: "#\($0)", color: Theme.green) }
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+    }
+}
+
 /// 带分类色标题的横滑轮播：标题对齐 16pt，卡片整宽左起 16pt、向右溢出可滑。
 /// 底部带一条只读位置指示滑块，展示总数与当前前后位置（不可拖动）。
 private struct CarouselSection<Content: View>: View {
@@ -116,40 +213,58 @@ private struct CarouselSection<Content: View>: View {
     let count: String
     let items: [InboxItem]
     let margin: CGFloat
+    var widthFraction: CGFloat = 0.82
+    var barIndicator: Bool = false        // true：底部位置指示强制用细长进度条
+    var onDetail: (() -> Void)? = nil     // 非 nil 时区头行尾出现「查看详情」跳转
     @ViewBuilder let content: (InboxItem) -> Content
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var currentID: InboxItem.ID?
 
     private var currentIndex: Int {
         guard let currentID, let i = items.firstIndex(where: { $0.id == currentID }) else { return 0 }
         return i
     }
+    /// 一屏能放下几张卡（由卡片宽度占比推算）
+    private var visibleCount: Int { max(1, Int((1 / widthFraction).rounded(.down))) }
+    /// 实际可滚动的"页数"：多卡可视时，最左卡片只能翻到 count-visibleCount，据此折算
+    private var pageCount: Int { max(items.count - visibleCount + 1, 1) }
+    /// 当前页（最左卡片序号夹到有效页范围内 → 滑到底就是最后一页）
+    private var activePage: Int { min(max(currentIndex, 0), pageCount - 1) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(icon: icon, tint: tint, title: title, count: count)
+            SectionHeader(icon: icon, tint: tint, title: title, count: count, onDetail: onDetail)
                 .padding(.horizontal, margin)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Theme.Space.gap) {
                     ForEach(items) {
                         content($0)
-                            .containerRelativeFrame(.horizontal) { w, _ in w * 0.82 }
-                            // 卡片移除时渐隐缩小，右侧后续卡片平滑补位
-                            .transition(.scale(scale: 0.9).combined(with: .opacity))
+                            // 宽度按内容区（去掉左右 margin 与可视卡间距）折算，
+                            // 否则整宽/半宽卡会超出屏幕右缘、贴边无间距。
+                            .containerRelativeFrame(.horizontal) { w, _ in
+                                let cols = CGFloat(visibleCount)
+                                return (w - margin * 2 - Theme.Space.gap * (cols - 1)) * widthFraction
+                            }
+                            // 卡片移除时渐隐缩小，右侧后续卡片平滑补位；
+                            // 减弱动效时只保留淡入淡出、去掉缩放位移。
+                            .transition(reduceMotion ? .opacity
+                                        : .scale(scale: 0.9).combined(with: .opacity))
                     }
                 }
                 .scrollTargetLayout()
                 .padding(.horizontal, margin)
                 .padding(.vertical, 8)   // 给卡片阴影留出不被裁切的空间
                 // 绑定 id 列表：条目增减（如快递标记已取移出）时触发过渡动画
-                .animation(.easeInOut(duration: 0.35), value: items.map(\.persistentModelID))
+                .animation(.snappy(duration: 0.3), value: items.map(\.persistentModelID))
             }
             .scrollTargetBehavior(.viewAligned)
             .scrollPosition(id: $currentID)
 
-            // 只读位置指示：多于一张才显示
-            if items.count > 1 {
-                CarouselIndicator(count: items.count, index: currentIndex, tint: tint)
+            // 只读位置指示：按实际页数展示（多卡可视时也能翻到最后一页）
+            if pageCount > 1 {
+                CarouselIndicator(count: pageCount, index: activePage,
+                                  tint: tint, forceBar: barIndicator)
                     .padding(.horizontal, margin)
             }
         }
@@ -162,12 +277,13 @@ private struct CarouselIndicator: View {
     let count: Int
     let index: Int
     var tint: Color = Theme.express
+    var forceBar: Bool = false        // 强制用进度条（紧凑多卡轮播用）
 
     private let dotThreshold = 6
 
     var body: some View {
         Group {
-            if count <= dotThreshold { dots } else { bar }
+            if count <= dotThreshold && !forceBar { dots } else { bar }
         }
         .frame(maxWidth: .infinity)
         .animation(.easeInOut(duration: 0.25), value: index)
