@@ -5,7 +5,7 @@ import OmnyCore
 /// 收支日历：通用月历网格，每天显示当日收支；点某天在下方展开当天记账列表。
 /// 网格用 Calendar 算当月首日星期偏移 + 天数，前后补位其他月日期占格。
 struct ExpenseCalendarView: View {
-    let month: Date
+    @Binding var month: Date
     let items: [InboxItem]
 
     @State private var selectedDay: Date?
@@ -84,6 +84,20 @@ struct ExpenseCalendarView: View {
             }
         }
         .cardStyle()
+        .contentShape(Rectangle())   // 让整卡片（含空白）都能接手势
+        // 左右滑动切月：左滑→下月，右滑→上月。阈值 50pt 且横向为主，避开与竖直滚动冲突
+        .gesture(
+            DragGesture(minimumDistance: 20)
+                .onEnded { value in
+                    let dx = value.translation.width
+                    let dy = value.translation.height
+                    guard abs(dx) > 50, abs(dx) > abs(dy) else { return }
+                    withAnimation(.snappy) {
+                        month = MonthTool.adding(dx < 0 ? 1 : -1, to: month)
+                        selectedDay = nil   // 切月后清选中日（不属于新月份）
+                    }
+                }
+        )
     }
 
     @ViewBuilder

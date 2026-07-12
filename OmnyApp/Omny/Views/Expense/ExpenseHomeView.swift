@@ -12,6 +12,7 @@ struct ExpenseHomeView: View {
     @State private var mode: Mode = .detail
     @State private var month: Date = Calendar.current.startOfDay(for: .now)
     @State private var showAdd = false
+    @State private var showMonthPicker = false
 
     /// 当月记账（用 occurredAt/createdAt 判月）
     private var monthItems: [InboxItem] {
@@ -52,6 +53,9 @@ struct ExpenseHomeView: View {
         .sheet(isPresented: $showAdd) {
             ExpenseEditView(editing: nil, defaultDate: month)
         }
+        .sheet(isPresented: $showMonthPicker) {
+            MonthPickerSheet(month: $month)
+        }
     }
 
     private var monthSwitcher: some View {
@@ -59,9 +63,12 @@ struct ExpenseHomeView: View {
             Button { month = MonthTool.adding(-1, to: month) } label: {
                 Image(systemName: "chevron.left")
             }
-            Text(MonthTool.title(month))
-                .font(.subheadline).fontWeight(.semibold)
-                .frame(minWidth: 100)
+            // 点月份标题唤起年+月滚轮选择弹窗
+            Button { showMonthPicker = true } label: {
+                Text(MonthTool.title(month))
+                    .font(.subheadline).fontWeight(.semibold)
+                    .frame(minWidth: 100)
+            }
             Button { month = MonthTool.adding(1, to: month) } label: {
                 Image(systemName: "chevron.right")
             }
@@ -76,7 +83,7 @@ struct ExpenseHomeView: View {
         case .detail:
             ExpenseDetailList(summary: summary)
         case .calendar:
-            ExpenseCalendarView(month: month, items: monthItems)
+            ExpenseCalendarView(month: $month, items: monthItems)
         case .analysis:
             ExpenseAnalysisView(summary: summary)
         }

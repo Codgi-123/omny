@@ -127,6 +127,71 @@ enum MonthTool {
     static func adding(_ months: Int, to month: Date) -> Date {
         Calendar.current.date(byAdding: .month, value: months, to: month) ?? month
     }
+
+    /// 拆出年、月（1...12）
+    static func components(_ month: Date) -> (year: Int, month: Int) {
+        let c = Calendar.current.dateComponents([.year, .month], from: month)
+        return (c.year ?? 2026, c.month ?? 1)
+    }
+
+    /// 由年、月合成该月 1 号（保留 startOfDay 语义，供月份选择器回写）
+    static func make(year: Int, month: Int) -> Date {
+        var c = DateComponents()
+        c.year = year; c.month = month; c.day = 1
+        return Calendar.current.date(from: c) ?? .now
+    }
+}
+
+// MARK: - 年+月双列滚轮选择弹窗
+
+/// 点月份标题唤起：年、月两列滚轮选择，选完回写绑定月份。放 sheet 里用。
+struct MonthPickerSheet: View {
+    @Binding var month: Date
+    @Environment(\.dismiss) private var dismiss
+
+    /// 年份范围：当前年往前 10 年、往后 1 年（够用，避免无限滚）
+    private let years: [Int] = {
+        let thisYear = Calendar.current.component(.year, from: .now)
+        return Array((thisYear - 10)...(thisYear + 1))
+    }()
+    private let months = Array(1...12)
+
+    @State private var selYear = 2026
+    @State private var selMonth = 1
+
+    var body: some View {
+        NavigationStack {
+            HStack(spacing: 0) {
+                Picker("年", selection: $selYear) {
+                    ForEach(years, id: \.self) { Text("\($0)年").tag($0) }
+                }
+                .pickerStyle(.wheel)
+                Picker("月", selection: $selMonth) {
+                    ForEach(months, id: \.self) { Text("\($0)月").tag($0) }
+                }
+                .pickerStyle(.wheel)
+            }
+            .padding(.horizontal, Theme.Space.page)
+            .navigationTitle("选择月份")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") {
+                        month = MonthTool.make(year: selYear, month: selMonth)
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .presentationDetents([.height(280)])
+        .onAppear {
+            let c = MonthTool.components(month)
+            selYear = c.year; selMonth = c.month
+        }
+    }
 }
 
 // MARK: - 记账行（明细/日历共用）
