@@ -60,10 +60,14 @@ struct PackageCard: View {
                         copy(code)
                     } label: {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(copied ? "已复制取件码" : "取件码 · 点按复制")
-                                .font(.caption)
-                                .foregroundStyle(copied ? Theme.green : Theme.sub)
-                                .contentTransition(.opacity)
+                            HStack(spacing: 4) {
+                                Text(copied ? "已复制取件码" : "取件码 · 点按复制")
+                                    .font(.caption)
+                                    .foregroundStyle(copied ? Theme.green : Theme.sub)
+                                    .contentTransition(.opacity)
+                                // 细线条复制图标（tab 栏同风格），复制成功切成对勾
+                                CopyGlyph(copied: copied, size: 12)
+                            }
                             Text(code)
                                 // SF Rounded：原生圆润数字，比默认更柔和；用文本样式随 Dynamic Type 缩放
                                 .font(.system(.largeTitle, design: .rounded).weight(.bold))
@@ -128,7 +132,7 @@ struct PackageCard: View {
         let done = item.packageStatus == .pickedUp
         return Button(action: togglePickup) {
             Image(systemName: done ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 27))
+                .font(.system(size: 24))
                 .foregroundStyle(done ? Theme.green : Theme.express.opacity(0.85))
                 .contentTransition(.symbolEffect(.replace))
                 .frame(width: 44, height: 44)          // ≥44pt 触控目标
@@ -217,10 +221,8 @@ struct PackageCardCompact: View {
                         .monospacedDigit()
                         .foregroundStyle(Theme.express)
                         .lineLimit(1)
-                    Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                        .font(.caption2)
-                        .foregroundStyle(copied ? Theme.green : Theme.sub)
-                        .contentTransition(.symbolEffect(.replace))
+                    // 细线条复制图标（tab 栏同风格），复制成功切成对勾
+                    CopyGlyph(copied: copied, size: 13)
                 }
             }
             .buttonStyle(PressableStyle())
@@ -253,7 +255,7 @@ struct PackageCardCompact: View {
             try? context.save()
         } label: {
             Image(systemName: done ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 24))
+                .font(.system(size: 22))
                 .foregroundStyle(done ? Theme.green : Theme.express.opacity(0.85))
                 .contentTransition(.symbolEffect(.replace))
                 .frame(width: 44, height: 44)
@@ -267,6 +269,51 @@ struct PackageCardCompact: View {
     }
 }
 
+// MARK: - 复制图标（细线条 tab 栏同风格）
+
+/// 快递卡「复制取件码」用的细线条图标：常态是叠放两张纸（Assets 的 IconCopy），
+/// 复制成功后柔和交叉淡入淡出切成对勾。整套走白/灰细线，和底部 tab 图标同一风格。
+struct CopyGlyph: View {
+    let copied: Bool
+    var size: CGFloat = 13
+
+    var body: some View {
+        ZStack {
+            Image("IconCopy")
+                .resizable()
+                .renderingMode(.template)
+                .frame(width: size, height: size)
+                .foregroundStyle(Theme.sub)
+                .opacity(copied ? 0 : 1)
+            Image(systemName: "checkmark")
+                .font(.system(size: size, weight: .semibold))
+                .foregroundStyle(Theme.green)
+                .opacity(copied ? 1 : 0)
+        }
+        .animation(.snappy, value: copied)
+    }
+}
+
+// MARK: - 行程图标块（机票 / 火车）
+
+/// 行程图标块：与 IconChip 同款渐变分类色底 + 白色图标，内嵌自绘细线条机票/火车图标
+/// （细线圆头笔画，风格对齐底部 tab 栏 icon.svg；资源见 Assets 的 TripFlight / TripTrain）。
+struct TripIconChip: View {
+    let isFlight: Bool
+    var size: CGFloat = 34
+
+    var body: some View {
+        Image(isFlight ? "TripFlight" : "TripTrain")
+            .resizable()
+            .renderingMode(.template)
+            .aspectRatio(contentMode: .fit)
+            .frame(width: size * 0.58, height: size * 0.58)
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(Theme.trip.gradient, in: .rect(cornerRadius: size * 0.28))
+    }
+}
+
 // MARK: - 行程卡（时间路线 + 倒计时）
 
 struct TripCard: View {
@@ -275,10 +322,16 @@ struct TripCard: View {
 
     private var isFlight: Bool { item.tripKindRaw == "flight" }
 
+    /// 日期 + 星期（融进时间路线中间，作为出发到达之间的强化标签）
+    private var dateWeekday: String? {
+        item.departAt?.formatted(
+            .dateTime.locale(Locale(identifier: "zh_CN")).month().day().weekday(.abbreviated))
+    }
+
     var body: some View {
         VStack(spacing: 14) {
             HStack(spacing: 10) {
-                IconChip(symbol: isFlight ? "airplane" : "tram.fill", color: Theme.trip, size: 34)
+                TripIconChip(isFlight: isFlight, size: 34)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(item.tripNumber ?? "行程")
                         .font(.headline)
@@ -297,7 +350,8 @@ struct TripCard: View {
                     }
                 }
             }
-            HStack(alignment: .center, spacing: 10) {
+            // 出发 —（日期·星期 + 箭头）— 到达：日期星期升到路线正中，与出发/到达时间同一视觉层，不再是底部孤立小灰字
+            HStack(alignment: .center, spacing: 8) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(item.departAt?.formatted(date: .omitted, time: .shortened) ?? "--:--")
                         .font(.title2)
@@ -306,12 +360,24 @@ struct TripCard: View {
                     Text(item.departPlace ?? "出发")
                         .font(.footnote)
                         .foregroundStyle(Theme.sub)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
-                Spacer()
-                Image(systemName: "arrow.right")
-                    .font(.footnote)
-                    .foregroundStyle(Theme.sub)
-                Spacer()
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                VStack(spacing: 3) {
+                    if let dateWeekday {
+                        Text(dateWeekday)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(Theme.trip)
+                            .lineLimit(1)
+                    }
+                    Image(systemName: "arrow.right")
+                        .font(.caption)
+                        .foregroundStyle(Theme.sub)
+                }
+                .fixedSize()
+
                 VStack(alignment: .trailing, spacing: 4) {
                     Text(item.arriveAt?.formatted(date: .omitted, time: .shortened) ?? "--:--")
                         .font(.title2)
@@ -320,15 +386,10 @@ struct TripCard: View {
                     Text(item.arrivePlace ?? "到达")
                         .font(.footnote)
                         .foregroundStyle(Theme.sub)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
-            }
-            if let date = item.departAt {
-                HStack {
-                    Text(date.formatted(.dateTime.locale(Locale(identifier: "zh_CN")).month().day().weekday()))
-                        .font(.caption)
-                        .foregroundStyle(Theme.sub)
-                    Spacer()
-                }
+                .frame(maxWidth: .infinity, alignment: .trailing)
             }
         }
     }
@@ -368,21 +429,17 @@ struct TodoRow: View {
     var body: some View {
         HStack(alignment: .checkTitle, spacing: 8) {
             Button {
-                withAnimation(.snappy) { item.todoCompleted.toggle() }
-                // 滴答待办：完成/取消完成要标脏并回写滴答；本地待办纯本地，只存不同步
-                if item.isDidaSynced { item.needsPush = true }
-                try? context.save()
-                if item.isDidaSynced { Task { await dida.syncNow(context: context) } }
+                toggleCheck()
             } label: {
-                Image(systemName: item.todoCompleted ? "checkmark.square.fill" : "square")
+                Image(systemName: checkSymbol)
                     .font(.system(size: 18))
-                    .foregroundStyle(item.todoCompleted ? Theme.green : uncheckedTint)
+                    .foregroundStyle(checkTint)
                     .contentTransition(.symbolEffect(.replace))
                     .frame(width: 36, height: 26)
                     .contentShape(Rectangle())
             }
             .buttonStyle(PressableStyle(scale: 0.9))
-            .accessibilityLabel(item.todoCompleted ? "标记为未完成" : "标记为完成")
+            .accessibilityLabel(checkLabel)
             .sensoryFeedback(trigger: item.todoCompleted) { _, done in
                 done ? .success : nil
             }
@@ -390,52 +447,62 @@ struct TodoRow: View {
             .alignmentGuide(.checkTitle) { $0[VerticalAlignment.center] }
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(item.todoTitle ?? item.rawText)
-                    .font(.body)
-                    .strikethrough(item.todoCompleted)
-                    .foregroundStyle(item.todoCompleted ? Theme.sub : Theme.text)
-                    // 标题中心对齐到方框中心
-                    .alignmentGuide(.checkTitle) { $0[VerticalAlignment.center] }
+                // 标题 + 紧跟其后的来源 tag（本地/滴答）
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(item.todoTitle ?? item.rawText)
+                        .font(.body)
+                        // 只有「放弃」才划线；「已完成」仅变灰不划线
+                        .strikethrough(item.todoAbandoned)
+                        .foregroundStyle(item.todoCompleted || item.todoAbandoned ? Theme.sub : Theme.text)
+                    sourceTag
+                }
+                // 标题行中心对齐到方框中心
+                .alignmentGuide(.checkTitle) { $0[VerticalAlignment.center] }
                 if let note = item.todoNote?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
                     Text(note)
                         .font(.footnote)
                         .foregroundStyle(Theme.sub)
                         .lineLimit(2)
                 }
+                // 截止时间移到标题/描述下方；有具体时分才带时分，纯日期只显示日期
+                if let due = item.todoDue {
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock")
+                            .font(.caption2)
+                        Text(dueLabel(due))
+                            .font(.caption)
+                            .fontWeight(.medium)
+                    }
+                    .foregroundStyle(dueColor(due))
+                }
             }
 
             Spacer(minLength: 4)
-
-            // 右侧：来源 tag → 截止时间 → 旗帜，均与方框对齐到同一中线
-            sourceTag
-                .alignmentGuide(.checkTitle) { $0[VerticalAlignment.center] }
-            if let due = item.todoDue {
-                Text(dueLabel(due))
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundStyle(dueColor(due))
-                    .alignmentGuide(.checkTitle) { $0[VerticalAlignment.center] }
-            }
-            if item.todoPriority != 0 {
-                Image(systemName: "flag.fill")
-                    .font(.system(size: 16))
-                    .foregroundStyle(TodoPriority(raw: item.todoPriority).color)
-                    .alignmentGuide(.checkTitle) { $0[VerticalAlignment.center] }
-            }
         }
         // 本地待办：点按编辑、左滑删除/编辑；滴答待办只读（仅完成勾选可用）
         .contentShape(Rectangle())
         .onTapGesture { if isLocal { editing = true } }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             if isLocal {
+                // 删除：红色底（role .destructive）；「编辑」改为「放弃」（灰系，与删除的红区分）
                 Button(role: .destructive) { delete() } label: { Label("删除", systemImage: "trash") }
-                Button { editing = true } label: { Label("编辑", systemImage: "pencil") }
-                    .tint(Theme.slate)
+                if item.todoAbandoned {
+                    Button { restore() } label: { Label("恢复", systemImage: "arrow.uturn.backward") }
+                        .tint(Theme.accent)
+                } else {
+                    Button { abandon() } label: { Label("放弃", systemImage: "xmark.bin") }
+                        .tint(Color(.systemGray))
+                }
             }
         }
         .contextMenuIf(showsContextMenu) {
             if isLocal {
                 Button { editing = true } label: { Label("编辑", systemImage: "pencil") }
+                if item.todoAbandoned {
+                    Button { restore() } label: { Label("恢复", systemImage: "arrow.uturn.backward") }
+                } else {
+                    Button { abandon() } label: { Label("放弃", systemImage: "xmark.bin") }
+                }
                 Button(role: .destructive) { delete() } label: { Label("删除", systemImage: "trash") }
             }
         }
@@ -445,6 +512,45 @@ struct TodoRow: View {
     private func delete() {
         // 本地待办软删除进回收站，7 天内可恢复（与快递/收藏一致）
         withAnimation(.snappy) { Trash.softDelete(item, context: context) }
+    }
+
+    /// 勾选：放弃态点按撤销放弃；否则切换完成（滴答待办需标脏回写）。
+    private func toggleCheck() {
+        if item.todoAbandoned {
+            withAnimation(.snappy) { item.todoAbandoned = false }
+            try? context.save()
+            return
+        }
+        withAnimation(.snappy) { item.todoCompleted.toggle() }
+        // 滴答待办：完成/取消完成要标脏并回写滴答；本地待办纯本地，只存不同步
+        if item.isDidaSynced { item.needsPush = true }
+        try? context.save()
+        if item.isDidaSynced { Task { await dida.syncNow(context: context) } }
+    }
+
+    /// 放弃：纯本地展示状态。不改完成态、不标脏 → 不会被当成完成推送滴答；远端拉取也不复活（仅前台过滤展示）。
+    private func abandon() {
+        withAnimation(.snappy) { item.todoAbandoned = true }
+        try? context.save()
+    }
+
+    /// 撤销放弃，回到未完成。
+    private func restore() {
+        withAnimation(.snappy) { item.todoAbandoned = false }
+        try? context.save()
+    }
+
+    private var checkSymbol: String {
+        if item.todoAbandoned { return "xmark.square.fill" }   // 放弃：叉叉方框
+        return item.todoCompleted ? "checkmark.square.fill" : "square"
+    }
+    private var checkTint: Color {
+        if item.todoAbandoned { return Theme.sub }
+        return item.todoCompleted ? Theme.green : uncheckedTint
+    }
+    private var checkLabel: String {
+        if item.todoAbandoned { return "撤销放弃" }
+        return item.todoCompleted ? "标记为未完成" : "标记为完成"
     }
 
     /// 来源标签：本地待办「本地」、滴答待办「滴答」。
@@ -459,10 +565,15 @@ struct TodoRow: View {
     }
 
     private func dueLabel(_ date: Date) -> String {
-        if Calendar.current.isDateInToday(date) {
-            return "今天 " + date.formatted(date: .omitted, time: .shortened)
+        let cal = Calendar.current
+        // 有具体时分才显示时分；纯日期型截止只显示日期
+        let hasTime = cal.component(.hour, from: date) != 0 || cal.component(.minute, from: date) != 0
+        let zh = Locale(identifier: "zh_CN")
+        if cal.isDateInToday(date) {
+            return hasTime ? "今天 " + date.formatted(date: .omitted, time: .shortened) : "今天"
         }
-        return date.formatted(.dateTime.locale(Locale(identifier: "zh_CN")).month().day())
+        return hasTime ? date.formatted(.dateTime.locale(zh).month().day().hour().minute())
+                       : date.formatted(.dateTime.locale(zh).month().day())
     }
 
     /// 截止色：已过期红、今天蓝、其余灰。
@@ -613,8 +724,9 @@ struct TodoEditSheet: View {
             return time ? "今天 " + d.formatted(date: .omitted, time: .shortened) : "今天"
         }
         let zh = Locale(identifier: "zh_CN")
-        return time ? d.formatted(.dateTime.locale(zh).month().day().hour().minute())
-                    : d.formatted(.dateTime.locale(zh).month().day())
+        // 非今天：带上星期（四.5）
+        return time ? d.formatted(.dateTime.locale(zh).month().day().weekday().hour().minute())
+                    : d.formatted(.dateTime.locale(zh).month().day().weekday())
     }
 
     /// 关闭时统一落库（标题为空回退到原文）。

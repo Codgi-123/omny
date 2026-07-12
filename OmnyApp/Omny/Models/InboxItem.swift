@@ -59,6 +59,9 @@ final class InboxItem {
     var didaTaskID: String?
     var needsPush: Bool = false
     var deletedLocally: Bool = false
+    /// 本地「放弃」状态：纯本地展示标记（给默认值保证轻量迁移）。
+    /// 放弃的待办不当成完成推送滴答、也不被远端拉取复活——仅前台过滤展示为「已放弃」分组。
+    var todoAbandoned: Bool = false
 
     // 收藏
     var urlString: String?

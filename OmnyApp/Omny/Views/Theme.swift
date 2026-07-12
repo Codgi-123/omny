@@ -321,11 +321,11 @@ struct FloatingAddButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: "plus")
-                .font(.system(size: 24, weight: .semibold))
+                .font(.system(size: 27, weight: .semibold))
                 .foregroundStyle(.white)
-                .frame(width: 56, height: 56)
+                .frame(width: 64, height: 64)
                 .background(Theme.accent.gradient, in: Circle())
-                .shadow(color: Theme.accent.opacity(0.35), radius: 8, y: 4)
+                .shadow(color: Theme.accent.opacity(0.35), radius: 9, y: 4)
         }
         .buttonStyle(PressableStyle(scale: 0.94))
         .padding(.trailing, Theme.Space.page)
@@ -502,11 +502,14 @@ struct Badge: View {
 }
 
 /// 首页分区头：分类色小图标 + 标题 + 计数。小号彩色 SF Symbol（不是填充色块），加识别度不显廉价。
+/// 传入 `onDetail` 时，行尾出现「查看详情 ›」跳转按钮（首页各区块跳到对应 tab 用）；
+/// 不传则保持纯展示头（记账等其他调用方不受影响）。
 struct SectionHeader: View {
     let icon: String
     let tint: Color
     let title: String
     var count: String? = nil
+    var onDetail: (() -> Void)? = nil
 
     var body: some View {
         HStack(spacing: 7) {
@@ -519,6 +522,17 @@ struct SectionHeader: View {
                 Text(count).font(.subheadline).foregroundStyle(Theme.sub)
             }
             Spacer()
+            if let onDetail {
+                Button(action: onDetail) {
+                    HStack(spacing: 2) {
+                        Text("查看详情").font(.subheadline)
+                        Image(systemName: "chevron.right").font(.caption2.weight(.semibold))
+                    }
+                    .foregroundStyle(Theme.sub)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(PressableStyle())
+            }
         }
         .textCase(nil)
     }

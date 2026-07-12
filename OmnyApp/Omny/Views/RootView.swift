@@ -8,7 +8,9 @@ struct RootView: View {
     @EnvironmentObject private var dida: DidaService
     @Query(filter: #Predicate<InboxItem> { $0.needsReview && !$0.deletedLocally })
     private var reviewItems: [InboxItem]
-    @State private var selection = DebugSupport.initialTab
+    // tab 选择提升为 AppStorage：首页各区块「查看详情」写同一键即可切 tab。
+    // 默认值取调试初始 tab（模拟器截图用启动参数 -omnyTab N；正常首次启动为 0）。
+    @AppStorage("omnySelectedTab") private var selection = DebugSupport.initialTab
 
     var body: some View {
         TabView(selection: $selection) {
@@ -71,9 +73,15 @@ struct RootView: View {
 // MARK: - 调试支撑（仅模拟器：灌样例数据 + 启动参数选 tab；真机永不触发）
 
 enum DebugSupport {
-    /// 用启动参数 `-omnyTab N` 指定初始 tab，方便逐屏截图自查
+    /// 用启动参数 `-omnyTab N` 指定初始 tab，方便逐屏截图自查。
+    /// tab 选择改 AppStorage 持久化后，默认值只在首启生效；这里显式覆写持久键，
+    /// 保证带 -omnyTab 启动时（即使模拟器里已切换过 tab）依然直达指定页。
     static var initialTab: Int {
-        UserDefaults.standard.integer(forKey: "omnyTab")
+        let tab = UserDefaults.standard.integer(forKey: "omnyTab")
+        if UserDefaults.standard.object(forKey: "omnyTab") != nil {
+            UserDefaults.standard.set(tab, forKey: "omnySelectedTab")
+        }
+        return tab
     }
 
     /// 仅模拟器 + 启动参数 `-omnySeed YES` + 库为空时，灌入一批展示用样例数据

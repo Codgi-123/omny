@@ -10,14 +10,17 @@ struct ExpressView: View {
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var items: [InboxItem]
 
     private var packages: [InboxItem] { items.filter { $0.kind == .package && $0.deletedAt == nil } }
+    private var awaiting: [InboxItem] { packages.filter { $0.packageStatus == .awaitingPickup } }
 
     @State private var pendingDelete: InboxItem?   // 待确认删除的快递（非 nil 时弹确认框）
+    @State private var copiedAll = false           // 一键复制所有取件码的成功反馈态
+    @State private var copyResetTask: Task<Void, Never>?
 
     var body: some View {
         VStack(spacing: 0) {
             ScreenHeader("快递") { NavActions() }
             List {
-                group("待取", packages.filter { $0.packageStatus == .awaitingPickup })
+                group("待取", awaiting, showsCopyAll: true)
                 group("在途", packages.filter { $0.packageStatus < .awaitingPickup })
                 group("已签收", packages.filter { $0.packageStatus == .pickedUp }, dimmed: true)
             }
@@ -51,7 +54,8 @@ struct ExpressView: View {
     }
 
     @ViewBuilder
-    private func group(_ title: String, _ list: [InboxItem], dimmed: Bool = false) -> some View {
+    private func group(_ title: String, _ list: [InboxItem], dimmed: Bool = false,
+                       showsCopyAll: Bool = false) -> some View {
         if !list.isEmpty {
             Section {
                 ForEach(list) { pkg in
@@ -68,16 +72,52 @@ struct ExpressView: View {
                         }
                 }
             } header: {
-                sectionHeader(title)
+                sectionHeader(title, count: list.count, copyAll: showsCopyAll ? list : nil)
             }
         }
     }
 
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .font(.subheadline).fontWeight(.semibold)
-            .foregroundStyle(Theme.sub)
-            .textCase(nil)
+    /// 分区头：标题 + 计数；「待取」区额外带「一键复制所有取件码」按钮（有取件码时才显示）。
+    @ViewBuilder
+    private func sectionHeader(_ title: String, count: Int? = nil,
+                              copyAll: [InboxItem]? = nil) -> some View {
+        HStack(spacing: 8) {
+            Text(count.map { "\(title) \($0)" } ?? title)
+                .font(.subheadline).fontWeight(.semibold)
+                .foregroundStyle(Theme.sub)
+            Spacer()
+            if let copyAll, copyAll.contains(where: { !($0.pickupCode ?? "").isEmpty }) {
+                Button { copyAllCodes(copyAll) } label: {
+                    HStack(spacing: 4) {
+                        CopyGlyph(copied: copiedAll, size: 13)
+                        Text(copiedAll ? "已复制" : "复制取件码")
+                            .font(.caption.weight(.medium))
+                    }
+                    .foregroundStyle(copiedAll ? Theme.green : Theme.accent)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(PressableStyle())
+                .sensoryFeedback(.success, trigger: copiedAll) { _, now in now }
+            }
+        }
+        .textCase(nil)
+    }
+
+    /// 复制所有待取件的取件码：每行「驿站/公司 取件码」，可读性优先；复制后轻量成功反馈 1.5s 回退。
+    private func copyAllCodes(_ list: [InboxItem]) {
+        let lines = list.compactMap { item -> String? in
+            guard let code = item.pickupCode, !code.isEmpty else { return nil }
+            let place = [item.carrier, item.station].compactMap { $0 }.joined(separator: " ")
+            return place.isEmpty ? code : "\(place) \(code)"
+        }
+        guard !lines.isEmpty else { return }
+        UIPasteboard.general.string = lines.joined(separator: "\n")
+        withAnimation(.snappy) { copiedAll = true }
+        copyResetTask?.cancel()
+        copyResetTask = Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            if !Task.isCancelled { withAnimation(.snappy) { copiedAll = false } }
+        }
     }
 }
 
@@ -165,12 +205,15 @@ struct TodoView: View {
     @State private var showAdd = false
     /// 已完成区默认收起，只留计数，减少长列表干扰
     @State private var showCompleted = false
+    /// 已放弃区同样默认收起
+    @State private var showAbandoned = false
 
     private var todos: [InboxItem] {
         items.filter { $0.kind == .todo && !$0.deletedLocally && !$0.needsReview && $0.deletedAt == nil }
     }
 
-    private var openTodos: [InboxItem] { todos.filter { !$0.todoCompleted } }
+    /// 未完成 = 未完成且未放弃
+    private var openTodos: [InboxItem] { todos.filter { !$0.todoCompleted && !$0.todoAbandoned } }
 
     /// 组内排序：按截止时间倒序（晚的在前），无截止排在最后，再按创建时间倒序兜底。
     private func sortedByDue(_ list: [InboxItem]) -> [InboxItem] {
@@ -210,7 +253,7 @@ struct TodoView: View {
                 }
             }
 
-            let done = todos.filter(\.todoCompleted)
+            let done = todos.filter { $0.todoCompleted && !$0.todoAbandoned }
             if !done.isEmpty {
                 Section {
                     if showCompleted {
@@ -228,6 +271,35 @@ struct TodoView: View {
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(Theme.sub)
                                 .rotationEffect(.degrees(showCompleted ? 0 : -90))
+                        }
+                        .font(.subheadline.weight(.medium))
+                        .textCase(nil)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .sectionHeaderInset()
+                }
+            }
+
+            // 已放弃分组：参考「已完成」的收起交互；叉叉 + 划线 + 变灰由 TodoRow 呈现
+            let abandoned = todos.filter(\.todoAbandoned)
+            if !abandoned.isEmpty {
+                Section {
+                    if showAbandoned {
+                        ForEach(abandoned) { TodoRow(item: $0).opacity(0.6).cardCell(pad: 8) }
+                    }
+                } header: {
+                    Button {
+                        withAnimation(.snappy) { showAbandoned.toggle() }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text("已放弃")
+                            Text("\(abandoned.count)").foregroundStyle(Theme.sub)
+                            Spacer()
+                            Image(systemName: "chevron.down")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Theme.sub)
+                                .rotationEffect(.degrees(showAbandoned ? 0 : -90))
                         }
                         .font(.subheadline.weight(.medium))
                         .textCase(nil)
@@ -1192,12 +1264,12 @@ struct TodoQuickAdd: View {
 
     private var composer: some View {
         VStack(alignment: .leading, spacing: 12) {
-            TextField("准备做什么？", text: $title, axis: .vertical)
-                .lineLimit(1...4)
+            // 标题单行（不换行）；回车即创建当前待办并清空、保持焦点，实现连续创建
+            TextField("准备做什么？", text: $title)
                 .font(.system(size: 17))
                 .focused($focus, equals: .title)
-                .submitLabel(.next)
-                .onSubmit { focus = .note }
+                .submitLabel(.done)
+                .onSubmit { addAndContinue() }
                 .padding(.top, 4)
 
             TextField("描述", text: $note, axis: .vertical)
@@ -1299,9 +1371,11 @@ struct TodoQuickAdd: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) { isPresented = false }
     }
 
-    private func save() {
+    /// 落库一条待办；返回是否成功（标题非空）。
+    @discardableResult
+    private func persist() -> Bool {
         let t = title.trimmingCharacters(in: .whitespaces)
-        guard !t.isEmpty else { return }
+        guard !t.isEmpty else { return false }
         let n = note.trimmingCharacters(in: .whitespacesAndNewlines)
         let item = InboxItem(kind: .todo, source: .manual, rawText: t)
         item.todoTitle = t
@@ -1311,7 +1385,21 @@ struct TodoQuickAdd: View {
         context.insert(item)
         try? context.save()
         justSaved.toggle()
+        return true
+    }
+
+    private func save() {
+        guard persist() else { return }
         close()
+    }
+
+    /// 连续创建：回车即建，清空内容后停留弹窗、焦点回标题。
+    /// 保留截止时间/优先级，方便批量录入同批待办。
+    private func addAndContinue() {
+        guard persist() else { return }
+        title = ""
+        note = ""
+        focus = .title
     }
 }
 
@@ -1399,7 +1487,7 @@ struct DueDateSheet: View {
                 CalendarGlyph(text: "Mo", color: $0)
             }
             tile("今天傍晚", Color(.systemIndigo), date: todayEvening, time: true) {
-                MoonGlyph(color: $0)
+                SunsetGlyph(color: $0)
             }
         }
     }
@@ -1427,29 +1515,39 @@ struct DueDateSheet: View {
     // MARK: 时间行
 
     private var timeRow: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "clock").foregroundStyle(Theme.accent)
-            Text("时间").foregroundStyle(Theme.text)
-            Spacer()
-            if hasTime {
-                // 已设时间：系统 compact 控件，点一下即弹原生小浮层（就在此处、无箭头）
-                DatePicker("", selection: timeBinding, displayedComponents: .hourAndMinute)
-                    .labelsHidden()
-                Button { withAnimation(.snappy) { hasTime = false } } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.sub)
-                }
-                .buttonStyle(.plain)
-            } else {
-                // 未设时间：默认展示「请选择」，点一下开启（落到 9:00，可再点调整）
-                Button { withAnimation(.snappy) { enableTime() } } label: {
-                    HStack(spacing: 3) {
-                        Text("请选择")
-                        Image(systemName: "chevron.right").font(.caption2.weight(.semibold))
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Image(systemName: "clock").foregroundStyle(Theme.accent)
+                Text("时间").foregroundStyle(Theme.text)
+                Spacer()
+                if hasTime {
+                    // 已设时间：右侧显示当前时分，点 ✕ 清除
+                    Text(timeBinding.wrappedValue.formatted(date: .omitted, time: .shortened))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Theme.accent)
+                    Button { withAnimation(.snappy) { hasTime = false } } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.sub)
                     }
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(Theme.accent)
+                    .buttonStyle(.plain)
+                } else {
+                    // 未设时间：点「请选择」直接展开时分控件（不再有 9:00 静态中间态）
+                    Button { withAnimation(.snappy) { enableTime() } } label: {
+                        HStack(spacing: 3) {
+                            Text("请选择")
+                            Image(systemName: "chevron.down").font(.caption2.weight(.semibold))
+                        }
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Theme.accent)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
+            }
+            // 展开的时分滚轮：点「请选择」后即时出现，直接滚动选择
+            if hasTime {
+                DatePicker("", selection: timeBinding, displayedComponents: .hourAndMinute)
+                    .datePickerStyle(.wheel)
+                    .labelsHidden()
+                    .frame(maxHeight: 160)
             }
         }
         .padding(.horizontal, 14)
@@ -1518,6 +1616,8 @@ struct DueDateSheet: View {
 struct MonthCalendarView: View {
     @Binding var selection: Date?
     @State private var month: Date
+    /// 切月方向：true=向后（下个月，新页从右侧滑入），false=向前
+    @State private var slideForward = true
 
     private let cal: Calendar
     private let lunar = ChineseCalendar()
@@ -1546,8 +1646,12 @@ struct MonthCalendarView: View {
                 }
             }
             .id(month)
-            .transition(.opacity)
+            // 切月：新页从切换方向滑入、旧页反向滑出（左右切换动画，四.4）
+            .transition(.asymmetric(
+                insertion: .move(edge: slideForward ? .trailing : .leading).combined(with: .opacity),
+                removal: .move(edge: slideForward ? .leading : .trailing).combined(with: .opacity)))
         }
+        .clipped()
         .contentShape(Rectangle())
         // 左右滑动切换月份（垂直滚动仍归外层 ScrollView）
         .gesture(
@@ -1596,7 +1700,8 @@ struct MonthCalendarView: View {
 
     private func shift(_ delta: Int) {
         if let m = cal.date(byAdding: .month, value: delta, to: month) {
-            withAnimation(.snappy(duration: 0.2)) { month = m }
+            slideForward = delta > 0
+            withAnimation(.snappy(duration: 0.28)) { month = m }
         }
     }
 
@@ -1711,19 +1816,48 @@ struct SunriseGlyph: View {
     }
 }
 
-/// 月亮图标：外圆挖去偏移的内圆得到月牙（even-odd 填充）。
-struct MoonGlyph: View {
+/// 日落图标：地平线 + 半日 + 下箭头（太阳下沉）+ 两侧短射线。照 SunriseGlyph 的手绘 Path 路子，箭头改朝下。
+struct SunsetGlyph: View {
     var color: Color
     var body: some View {
         Canvas { ctx, size in
-            let r = size.width * 0.34
-            let cx = size.width * 0.5, cy = size.height * 0.5
-            var p = Path()
-            p.addEllipse(in: CGRect(x: cx - r, y: cy - r, width: 2 * r, height: 2 * r))
-            let off = r * 0.66
-            p.addEllipse(in: CGRect(x: cx - r + off, y: cy - r - off * 0.45,
-                                    width: 2 * r, height: 2 * r))
-            ctx.fill(p, with: .color(color), style: FillStyle(eoFill: true))
+            let w = size.width, h = size.height
+            let baseY = h * 0.72
+            let r = w * 0.22
+            let s = StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round)
+
+            // 地平线
+            var horizon = Path()
+            horizon.move(to: CGPoint(x: w * 0.08, y: baseY))
+            horizon.addLine(to: CGPoint(x: w * 0.92, y: baseY))
+            ctx.stroke(horizon, with: .color(color), style: s)
+
+            // 半日（地平线之上）
+            var sun = Path()
+            sun.addArc(center: CGPoint(x: w / 2, y: baseY), radius: r,
+                       startAngle: .degrees(180), endAngle: .degrees(360), clockwise: false)
+            ctx.stroke(sun, with: .color(color), style: s)
+
+            // 下箭头（太阳下沉）：竖线在半日之上，箭头朝下指向地平线
+            let ax = w / 2
+            var stem = Path()
+            stem.move(to: CGPoint(x: ax, y: baseY - r - 7))
+            stem.addLine(to: CGPoint(x: ax, y: baseY - r - 1.5))
+            ctx.stroke(stem, with: .color(color), style: s)
+            var head = Path()
+            head.move(to: CGPoint(x: ax - 3.4, y: baseY - r - 4.5))
+            head.addLine(to: CGPoint(x: ax, y: baseY - r - 1))
+            head.addLine(to: CGPoint(x: ax + 3.4, y: baseY - r - 4.5))
+            ctx.stroke(head, with: .color(color), style: s)
+
+            // 两侧短射线
+            for dx in [-1.0, 1.0] {
+                var ray = Path()
+                let x = w / 2 + CGFloat(dx) * (r + 5)
+                ray.move(to: CGPoint(x: x, y: baseY - 2))
+                ray.addLine(to: CGPoint(x: x, y: baseY - 6))
+                ctx.stroke(ray, with: .color(color), style: s)
+            }
         }
     }
 }
@@ -1755,15 +1889,16 @@ struct PrioritySheet: View {
                         }
                     }
                     .padding(.horizontal, 20)
-                    .padding(.vertical, 15)
+                    // 每个选项加高，与弹窗高度更匹配（四.6）
+                    .padding(.vertical, 20)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 if p != order.last { Divider().padding(.leading, 58) }
             }
         }
-        .padding(.top, 10)
-        .presentationDetents([.height(288)])
+        .padding(.top, 12)
+        .presentationDetents([.height(340)])
         .presentationDragIndicator(.visible)
     }
 }

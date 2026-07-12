@@ -5,6 +5,8 @@ import SwiftData
 /// 自定义仪表盘（非分组表），所有内容统一到 16pt 左边距网格，保证轮播卡与待办卡左对齐。
 struct TodayView: View {
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var items: [InboxItem]
+    /// 与 RootView 的 TabView selection 共享同一 UserDefaults 键：各区块「查看详情」写入即切 tab。
+    @AppStorage("omnySelectedTab") private var selectedTab = 0
 
     private let margin: CGFloat = Theme.Space.page
 
@@ -18,7 +20,7 @@ struct TodayView: View {
     }
 
     private var openTodos: [InboxItem] {
-        items.filter { $0.kind == .todo && !$0.todoCompleted && !$0.needsReview && !$0.deletedLocally && $0.deletedAt == nil }
+        items.filter { $0.kind == .todo && !$0.todoCompleted && !$0.todoAbandoned && !$0.needsReview && !$0.deletedLocally && $0.deletedAt == nil }
             // 优先级降序（高→无），同级按创建时间倒序
             .sorted { ($0.todoPriority, $0.createdAt) > ($1.todoPriority, $1.createdAt) }
     }
@@ -27,8 +29,15 @@ struct TodayView: View {
         items.filter { $0.needsReview && !$0.deletedLocally && $0.deletedAt == nil }
     }
 
+    /// 今天新增的收藏（未删除），首页「今日收藏」区块用
+    private var todayBookmarks: [InboxItem] {
+        items.filter { $0.kind == .bookmark && $0.deletedAt == nil
+            && Calendar.current.isDateInToday($0.createdAt) }
+    }
+
     private var everythingEmpty: Bool {
-        upcomingTrips.isEmpty && awaitingPackages.isEmpty && openTodos.isEmpty && reviewItems.isEmpty
+        upcomingTrips.isEmpty && awaitingPackages.isEmpty && openTodos.isEmpty
+            && todayBookmarks.isEmpty && reviewItems.isEmpty
     }
 
     var body: some View {
@@ -37,27 +46,63 @@ struct TodayView: View {
             ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 if !upcomingTrips.isEmpty {
-                    CarouselSection(icon: "tram.fill", tint: Theme.trip, title: "行程",
-                                    count: "\(upcomingTrips.count) 个即将出行", items: upcomingTrips, margin: margin) {
+                    // 只有一个行程时卡片占满内容区（无 peek/指示器）；两个及以上留出后卡的 peek。
+                    let single = upcomingTrips.count == 1
+                    CarouselSection(icon: "airplane.departure", tint: Theme.trip, title: "行程",
+                                    count: "\(upcomingTrips.count) 个即将出行", items: upcomingTrips, margin: margin,
+                                    widthFraction: single ? 1.0 : 0.82,
+                                    onDetail: { selectedTab = 2 }) {
                         TripCard(item: $0).cardStyle()
                     }
                 }
 
                 if !awaitingPackages.isEmpty {
+                    // 卡片数量自适应：1 件→大卡占满、无进度条；2 件→两张小卡、无进度条；≥3→紧凑小卡 + 进度条
+                    let n = awaitingPackages.count
                     CarouselSection(icon: "shippingbox.fill", tint: Theme.express, title: "快递",
                                     count: "\(awaitingPackages.filter { $0.packageStatus == .awaitingPickup }.count) 件待取",
-                                    items: awaitingPackages, margin: margin, widthFraction: 0.44,
-                                    barIndicator: true) {
-                        PackageCardCompact(item: $0).cardStyle()
+                                    items: awaitingPackages, margin: margin,
+                                    widthFraction: n == 1 ? 1.0 : (n == 2 ? 0.47 : 0.44),
+                                    barIndicator: n >= 3,
+                                    onDetail: { selectedTab = 1 }) {
+                        if n == 1 {
+                            PackageCard(item: $0, showsContextMenu: false).cardStyle()
+                        } else {
+                            PackageCardCompact(item: $0).cardStyle()
+                        }
                     }
                 }
 
                 if !openTodos.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
                         SectionHeader(icon: "checkmark.circle.fill", tint: Theme.todo, title: "待办",
-                                      count: "\(openTodos.count) 项未完成")
+                                      count: "\(openTodos.count) 项未完成",
+                                      onDetail: { selectedTab = 3 })
+                        // 待办整体合并为一张卡片，条目列在卡内、以分隔线区隔（一.8）
+                        let homeTodos = Array(openTodos.prefix(5))
+                        VStack(spacing: 0) {
+                            ForEach(Array(homeTodos.enumerated()), id: \.element.id) { idx, todo in
+                                TodoRow(item: todo, showsContextMenu: false)
+                                    .padding(.vertical, 11)
+                                if idx < homeTodos.count - 1 {
+                                    Divider().padding(.leading, 44)
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 14)
+                        .background(Theme.card, in: .rect(cornerRadius: 12))
+                        .shadow(color: .black.opacity(0.05), radius: 5, y: 2)
+                    }
+                    .padding(.horizontal, margin)
+                }
+
+                if !todayBookmarks.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        SectionHeader(icon: "bookmark.fill", tint: Theme.bookmark, title: "今日收藏",
+                                      count: "\(todayBookmarks.count) 条",
+                                      onDetail: { selectedTab = 4 })
                         VStack(spacing: 10) {
-                            ForEach(openTodos.prefix(5)) { TodoRow(item: $0, showsContextMenu: false).cardStyle(pad: 11) }
+                            ForEach(todayBookmarks.prefix(5)) { TodayBookmarkRow(item: $0).cardStyle(pad: 11) }
                         }
                     }
                     .padding(.horizontal, margin)
@@ -110,6 +155,55 @@ struct TodayView: View {
     }
 }
 
+/// 首页「今日收藏」精简卡：缩略图/类型图标 + 标题 + 域名或标签。
+/// 完整交互（打开/编辑/删标签）留在收藏页的 BookmarkCard，这里只做一眼概览。
+private struct TodayBookmarkRow: View {
+    let item: InboxItem
+
+    private var url: URL? { item.urlString.flatMap(URL.init(string:)) }
+
+    private var title: String {
+        if let t = item.bookmarkTitle, !t.isEmpty { return t }
+        if let url { return url.host() ?? "链接" }
+        return item.rawText.components(separatedBy: .newlines).first ?? item.rawText
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            if let data = item.sourceImage, let ui = UIImage(data: data) {
+                Image(uiImage: ui)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 36, height: 36)
+                    .clipShape(.rect(cornerRadius: 9))
+            } else {
+                IconChip(symbol: url != nil ? "link" : "text.alignleft", color: Theme.bookmark, size: 36)
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(1)
+                if let url {
+                    Text(url.host() ?? url.absoluteString)
+                        .font(.caption2)
+                        .foregroundStyle(Theme.sub)
+                        .lineLimit(1)
+                } else if item.tags.isEmpty {
+                    Text("未打标")
+                        .font(.caption2)
+                        .foregroundStyle(Theme.sub.opacity(0.7))
+                } else {
+                    HStack(spacing: 6) {
+                        ForEach(item.tags.prefix(3), id: \.self) { Badge(text: "#\($0)", color: Theme.green) }
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+    }
+}
+
 /// 带分类色标题的横滑轮播：标题对齐 16pt，卡片整宽左起 16pt、向右溢出可滑。
 /// 底部带一条只读位置指示滑块，展示总数与当前前后位置（不可拖动）。
 private struct CarouselSection<Content: View>: View {
@@ -121,6 +215,7 @@ private struct CarouselSection<Content: View>: View {
     let margin: CGFloat
     var widthFraction: CGFloat = 0.82
     var barIndicator: Bool = false        // true：底部位置指示强制用细长进度条
+    var onDetail: (() -> Void)? = nil     // 非 nil 时区头行尾出现「查看详情」跳转
     @ViewBuilder let content: (InboxItem) -> Content
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -139,7 +234,7 @@ private struct CarouselSection<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(icon: icon, tint: tint, title: title, count: count)
+            SectionHeader(icon: icon, tint: tint, title: title, count: count, onDetail: onDetail)
                 .padding(.horizontal, margin)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Theme.Space.gap) {
