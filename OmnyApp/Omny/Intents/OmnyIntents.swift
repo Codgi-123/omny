@@ -1,6 +1,7 @@
 import AppIntents
 import SwiftData
 import SwiftUI
+import OmnyCore
 
 /// 快捷指令动作 ①：解析文本（短信自动化用）
 /// 自动化：收到信息 → 运行本动作（输入 = 信息内容），无感入库。
