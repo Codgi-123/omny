@@ -1,8 +1,11 @@
 name: TestFlight
 
-# 云端打包上传 TestFlight：打 tag（tf-*）或在 Actions 页面手动触发。
+# 云端打包上传 TestFlight：打 tag（tf-*，名字随意，如 tf-20260712）或在 Actions 页面手动触发。
 # 签名走 ASC API Key 云签名（-allowProvisioningUpdates），分发证书由 Apple 云端管理，
 # 不需要往 CI 导入 .p12 证书。流程与 docs/testflight-release.md 的本地流程一致。
+#
+# 构建号由 CI 自动生成（run_number + BUILD_OFFSET），不读 project.yml，多人发布不会撞号；
+# 实际用的构建号见运行页面的 Summary。手动触发时填 build_number 可强制覆盖。
 #
 # 所需仓库 Secrets（Settings → Secrets and variables → Actions）：
 #   ASC_KEY_ID             App Store Connect API Key ID（10 位）
@@ -16,7 +19,7 @@ on:
   workflow_dispatch:
     inputs:
       build_number:
-        description: 覆盖构建号（留空则用 project.yml 里的 CURRENT_PROJECT_VERSION）
+        description: 覆盖构建号（留空则自动生成 run_number + BUILD_OFFSET）
         required: false
         default: ''
 
@@ -32,6 +35,9 @@ jobs:
     env:
       ASC_KEY: ${{ secrets.ASC_KEY_ID }}
       ASC_ISSUER: ${{ secrets.ASC_ISSUER_ID }}
+      # 构建号偏移：启用自动构建号时（run #2）TestFlight 已用到 build 18，16 + 3 = 19 起步。
+      # 改动它会导致构建号回退/重复，别动；除非 TestFlight 号段乱了需要整体跳号。
+      BUILD_OFFSET: 16
     steps:
       - uses: actions/checkout@v4
 
@@ -59,15 +65,20 @@ jobs:
 
       - name: 归档
         run: |
-          OVERRIDE=""
-          if [ -n "${{ inputs.build_number }}" ]; then
-            OVERRIDE="CURRENT_PROJECT_VERSION=${{ inputs.build_number }}"
+          # 构建号：手动触发可覆盖，否则 run_number + 偏移量自动生成（唯一且递增，多人发布不撞号）。
+          # 命令行传入的 CURRENT_PROJECT_VERSION 对所有 target 生效，OmnyShare 的
+          # CFBundleVersion 引用该变量，扩展版本自动跟主 App 一致。
+          BUILD_NUMBER="${{ inputs.build_number }}"
+          if [ -z "$BUILD_NUMBER" ]; then
+            BUILD_NUMBER=$(( ${{ github.run_number }} + BUILD_OFFSET ))
           fi
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
+          echo "### TestFlight 构建号：$BUILD_NUMBER" >> "$GITHUB_STEP_SUMMARY"
           xcodebuild archive \
             -project OmnyApp/Omny.xcodeproj -scheme Omny -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/Omny.xcarchive" -derivedDataPath "$RUNNER_TEMP/DerivedData" \
-            $OVERRIDE $AUTH
+            CURRENT_PROJECT_VERSION=$BUILD_NUMBER $AUTH
 
       - name: 导出 App Store 签名 ipa
         run: |
