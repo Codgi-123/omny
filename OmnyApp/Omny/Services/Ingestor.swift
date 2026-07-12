@@ -51,14 +51,31 @@ enum Ingestor {
         }
         guard !payloads.isEmpty else { return [] }
 
+        return await ingestParsed(payloads, text: text, source: source,
+                                  sourceImage: sourceImage,
+                                  lowConfidence: result.confidence < 0.8,
+                                  awaitEnrichment: awaitEnrichment, context: context)
+    }
+
+    /// 直接入库已解析好的载荷（跳过解析步骤），复用去重/合并/enrich。
+    /// 供快捷指令「确认记账」等场景：上游已解析成 `InboxItemEntity` 带过来，
+    /// 确认后还原成 payload 走这里入库——快递按单号合并、记账去重逻辑与自动入库完全一致。
+    /// `lowConfidence` 为 true 时把本批标 needsReview（自动解析低置信场景；已确认的传 false）。
+    @discardableResult
+    static func ingestParsed(_ payloads: [ParsedPayload], text: String, source: ItemSource,
+                             sourceImage: Data? = nil,
+                             lowConfidence: Bool = false,
+                             awaitEnrichment: Bool = false,
+                             context: ModelContext) async -> [InboxItem] {
+        guard !payloads.isEmpty else { return [] }
         var items: [InboxItem] = []
         for payload in payloads {
             items.append(contentsOf: ingestPayload(payload, text: text, source: source,
                                                     sourceImage: sourceImage, context: context))
         }
 
-        for item in items where result.confidence < 0.8 {
-            item.needsReview = true
+        if lowConfidence {
+            for item in items { item.needsReview = true }
         }
         // save 失败要如实反映：回滚本次插入并返回空，避免上层误报"已入库"却查无此条
         guard saveOrRollback(items, context: context) else { return [] }

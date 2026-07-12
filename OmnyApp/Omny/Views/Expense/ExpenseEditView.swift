@@ -22,6 +22,8 @@ struct ExpenseEditView: View {
     @State private var channel = ""
     @State private var cardTail = ""
     @State private var showMore = false
+    /// 文本框聚焦时收起底部自制计算器键盘，避免与系统键盘同框（商户/渠道等文字输入）
+    @FocusState private var textFieldFocused: Bool
 
     private var majors: [String] { settings.expenseCategoryPool.keys.sorted() }
     private var subs: [String] { settings.expenseCategoryPool[major] ?? [] }
@@ -40,7 +42,19 @@ struct ExpenseEditView: View {
                 .padding(.vertical, 12)
                 .padding(.bottom, 20)
             }
-            keyboardDock
+            // 文本框聚焦（商户/渠道/卡尾号）时收起计算器键盘，避免双键盘同框
+            if !textFieldFocused {
+                keyboardDock
+                    .transition(.move(edge: .bottom))
+            }
+        }
+        .animation(.snappy, value: textFieldFocused)
+        .toolbar {
+            // 系统键盘上方「完成」：让文本框失焦、收起系统键盘并唤回计算器
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("完成") { textFieldFocused = false }
+            }
         }
         .background(Theme.screen)
         .onAppear(perform: loadInitial)
@@ -204,6 +218,7 @@ struct ExpenseEditView: View {
             Spacer()
             TextField(placeholder, text: text)
                 .keyboardType(keyboard)
+                .focused($textFieldFocused)
                 .multilineTextAlignment(.trailing)
                 .foregroundStyle(Theme.sub)
         }
