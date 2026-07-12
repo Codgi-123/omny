@@ -1,202 +1,163 @@
 import AppIntents
-import SwiftUI
-import SwiftData
+import Foundation
 import OmnyCore
 
-// MARK: - 主确认指令
+// MARK: - 确认记账指令
 //
-// 「确认记账」快捷指令：输入文本/OCR → 内部解析出记账笔（预补分类）→ 逐笔用 interactive
-// snippet 弹窗展示可编辑表单（收支/分类/金额/备注，点字段触发子编辑 Intent）→ 确认后入库。
-// 不打开 App（snippet 内联在快捷指令弹窗）。参考钱迹式交互。
+// 「确认记账」快捷指令：接收上游「解析文本 / 屏幕识别」（直接入库=关）输出的 [InboxItemEntity]，
+// 逐笔记账用 requestDisambiguation/requestValue 参数循环在快捷指令弹窗层核对（钱迹式，不进 App、
+// iOS 16+ 通用、离线可用）；非记账条目（快递/行程/待办）静默入库（复用 Ingestor 去重/合并）。
 //
-// API 依据：Apple「Displaying static and interactive snippets」+ SnippetIntent（iOS 26）。
-// 机制：requestConfirmation(actionName:snippetIntent:) 展示可交互确认 snippet；
-// snippet 里 Button(intent:) 触发子编辑 Intent，完成后系统自动重调 SnippetIntent.perform 重渲染。
+// 交互机制（非 SnippetIntent，那是 iOS 26）：perform() 里 while 循环，每轮对工作参数调
+// $choice.requestDisambiguation(among:) 弹出「金额/收支/分类/时间/备注 + 确认/取消」列表；
+// 用户点字段 → 再 requestValue/requestDisambiguation 改该字段 → 回循环顶重弹（值已更新）；
+// 点「确认」→ addManualExpense 入库该笔并退出循环；点「取消」→ 跳过该笔。
 
-@available(iOS 18, *)
 struct ConfirmExpenseIntent: AppIntent {
     static let title: LocalizedStringResource = "确认记账"
     static let description = IntentDescription(
-        "解析短信/截图里的消费，逐笔弹出可编辑表单，确认后记账。适合对自动记账结果做人工核对。")
+        "逐笔弹出可编辑列表核对记账（收支/分类/金额/备注），确认后入库；非记账条目自动入库。")
     static let openAppWhenRun = false
 
-    @Parameter(title: "文本")
-    var text: String
+    @Parameter(title: "条目")
+    var items: [InboxItemEntity]
 
-    @Parameter(title: "来自截图", default: false)
-    var isScreenshot: Bool
+    // 以下为循环内承接每轮选择/输入的工作参数（非用户在快捷指令里填的输入）
+    @Parameter(title: "选择") var choice: String?
+    @Parameter(title: "金额") var amountInput: Double?
+    @Parameter(title: "备注") var noteInput: String?
 
     @MainActor
-    func perform() async throws -> some IntentResult {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return .result(dialog: "没有可解析的文本") }
-
-        // 1. 解析出记账笔（只取 expense，不入库；有 LLM 预补两级分类供表单预填）
-        let drafts = await Self.parseExpenses(trimmed, isScreenshot: isScreenshot)
-        guard !drafts.isEmpty else { return .result(dialog: "未识别到记账信息") }
-
-        let store = ExpenseDraftStore.shared
+    func perform() async throws -> some IntentResult & ProvidesDialog {
         let context = OmnyApp.sharedModelContainer.mainContext
+
+        // 1. 分流：记账逐笔确认；非记账静默入库（复用去重/合并）
+        let expenseEntities = items.filter { $0.isExpense }
+        let others = items.filter { !$0.isExpense }
+
+        var otherCount = 0
+        if !others.isEmpty {
+            let payloads = others.compactMap { $0.toPayload() }
+            let ingested = await Ingestor.ingestParsed(payloads, text: "", source: .screenshot,
+                                                       awaitEnrichment: true, context: context)
+            otherCount = ingested.count
+        }
+
+        guard !expenseEntities.isEmpty else {
+            if otherCount > 0 {
+                return .result(dialog: IntentDialog(stringLiteral: "已入库 \(otherCount) 条（快递/行程/待办）"))
+            }
+            return .result(dialog: "没有记账信息")
+        }
+
+        // 2. 逐笔确认记账
         var savedCount = 0
+        for entity in expenseEntities {
+            var draft = entity.expenseInfo
+            var occurredAt = entity.occurredAt ?? .now
+            // 有 LLM 且无分类 → 预补两级分类，供列表预填
+            if draft.categoryMajor == nil {
+                await Self.precategorize(&draft, rawText: entity.merchant ?? "")
+            }
 
-        // 2. 逐笔确认（多笔逐个弹可编辑 snippet）
-        for draft in drafts {
-            store.put(draft)
-            defer { store.remove(draft.id) }
-            do {
-                // 展示可交互确认 snippet（content 内联视图，iOS 18）：视图里点字段触发子编辑 Intent，
-                // 其 perform 返回后系统重绘 content（同 widget 交互刷新机制）。点「记账」确认、取消 throw → 跳过。
-                let id = draft.id.uuidString
-                try await requestConfirmation(actionName: .go) {
-                    ExpenseConfirmSnippet(draftID: id)
-                }
-                // 确认后读回（子编辑 Intent 可能已改过）最终草稿入库
-                let final = store.get(draft.id) ?? draft
-                Ingestor.addManualExpense(final.info, occurredAt: final.occurredAt, context: context)
+            let confirmed = try await confirmOne(&draft, occurredAt: &occurredAt)
+            if confirmed {
+                Ingestor.addManualExpense(draft, occurredAt: occurredAt, context: context)
                 savedCount += 1
-            } catch {
-                continue   // 取消该笔 → 跳过
             }
         }
 
-        guard savedCount > 0 else { return .result(dialog: "没有记账") }
-        return .result(dialog: "已记账 \(savedCount) 笔")
+        // 3. 汇总
+        var parts: [String] = []
+        if savedCount > 0 { parts.append("已记账 \(savedCount) 笔") }
+        if otherCount > 0 { parts.append("另入库 \(otherCount) 条快递/待办") }
+        let msg = parts.isEmpty ? "没有记账" : parts.joined(separator: "，")
+        return .result(dialog: IntentDialog(stringLiteral: msg))
     }
 
-    /// 解析文本抽出记账笔；有 LLM 时预补两级分类，让确认表单预填。
+    /// 单笔确认循环：弹字段列表，点字段编辑后回列表重弹，直到确认/取消。
+    /// 返回 true=确认入库，false=取消跳过。
     @MainActor
-    static func parseExpenses(_ text: String, isScreenshot: Bool) async -> [ExpenseDraft] {
-        let parser: any Parser = isScreenshot
-            ? AppSettings.shared.screenParser
-            : AppSettings.shared.parserPipeline
-        let result = try? await parser.parse(text)
-        guard let payload = result?.payload else { return [] }
+    private func confirmOne(_ draft: inout ExpenseInfo, occurredAt: inout Date) async throws -> Bool {
+        // 列表项标签（固定标签 + 动态值），用标签前缀区分点了哪项
+        let doneLabel = "✅ 确认记账"
+        let cancelLabel = "❌ 取消这笔"
 
-        let infos: [ExpenseInfo] = payload.flattened.compactMap {
-            if case .expense(let info) = $0 { return info }
-            return nil
-        }
+        while true {
+            let dirLabel = "收支：" + (draft.direction == .income ? "收入" : "支出")
+            let amtLabel = "金额：" + (draft.amount.map { ExpenseFormat.plain($0) } ?? "未填")
+            let catLabel = "分类：" + categoryText(draft)
+            let timeLabel = "时间：" + Self.timeText(occurredAt)
+            let noteLabel = "备注：" + (draft.merchant ?? "无")
 
-        var drafts: [ExpenseDraft] = []
-        for var info in infos {
-            if info.categoryMajor == nil, let cfg = AppSettings.shared.llmConfig {
-                let pool = AppSettings.shared.expenseCategoryPool
-                let content = [info.merchant, info.amount.map { "\($0)元" }, text]
-                    .compactMap { $0 }.joined(separator: "\n")
-                if let picked = try? await LLMExpenseCategorizer(config: cfg)
-                    .classify(content, pool: pool) {
-                    info.categoryMajor = picked.major
-                    info.categorySub = picked.sub
+            let options = [dirLabel, amtLabel, catLabel, timeLabel, noteLabel, doneLabel, cancelLabel]
+            let picked = try await $choice.requestDisambiguation(
+                among: options,
+                dialog: IntentDialog(stringLiteral: "确认记账（点项目可修改）"))
+
+            switch picked {
+            case doneLabel:
+                return true
+            case cancelLabel:
+                return false
+            case dirLabel:
+                // 收支直接翻转
+                draft.direction = (draft.direction == .expense) ? .income : .expense
+            case amtLabel:
+                let v = try await $amountInput.requestValue(
+                    IntentDialog(stringLiteral: "输入金额"))
+                if v > 0 { draft.amount = Decimal(v) }
+            case catLabel:
+                let pool = LLMExpenseCategorizer.flatten(AppSettings.shared.expenseCategoryPool)
+                if !pool.isEmpty {
+                    let sel = try await $choice.requestDisambiguation(
+                        among: pool, dialog: IntentDialog(stringLiteral: "选择分类"))
+                    let parts = sel.components(separatedBy: "/")
+                    draft.categoryMajor = parts.first
+                    draft.categorySub = parts.count > 1 ? parts[1] : nil
                 }
-            }
-            let occurredAt = Ingestor.resolveDate(info.occurredAt) ?? .now
-            drafts.append(ExpenseDraft(info: info, occurredAt: occurredAt, rawText: text))
-        }
-        return drafts
-    }
-}
-
-// MARK: - 子编辑指令（点 snippet 字段触发；perform 返回后系统重绘 content snippet）
-
-@available(iOS 18, *)
-struct EditExpenseAmountIntent: AppIntent {
-    static let title: LocalizedStringResource = "改金额"
-    static let openAppWhenRun = false
-
-    @Parameter(title: "草稿ID") var draftID: String
-    @Parameter(title: "金额") var amount: Double
-
-    @MainActor
-    func perform() async throws -> some IntentResult {
-        if let id = UUID(uuidString: draftID) {
-            ExpenseDraftStore.shared.update(id) { $0.amount = Decimal(amount) }
-        }
-        return .result()
-    }
-}
-
-@available(iOS 18, *)
-extension EditExpenseAmountIntent {
-    init(draftID: String) { self.draftID = draftID }
-}
-
-@available(iOS 18, *)
-struct EditExpenseDirectionIntent: AppIntent {
-    static let title: LocalizedStringResource = "切换收支"
-    static let openAppWhenRun = false
-
-    @Parameter(title: "草稿ID") var draftID: String
-
-    @MainActor
-    func perform() async throws -> some IntentResult {
-        if let id = UUID(uuidString: draftID) {
-            ExpenseDraftStore.shared.update(id) {
-                $0.direction = ($0.direction == .expense) ? .income : .expense
+            case timeLabel:
+                // 时间修改：提供「现在」及保持不变两项（App Intents 无原生日期滚轮弹窗，
+                // 复杂日期编辑建议在 App 内完成；这里给最常用的「改为现在」）
+                let now = "改为现在"
+                let keep = "保持不变"
+                let sel = try await $choice.requestDisambiguation(
+                    among: [now, keep], dialog: IntentDialog(stringLiteral: "修改时间"))
+                if sel == now { occurredAt = .now }
+            case noteLabel:
+                let v = try await $noteInput.requestValue(
+                    IntentDialog(stringLiteral: "输入备注（商户）"))
+                let t = v.trimmingCharacters(in: .whitespacesAndNewlines)
+                draft.merchant = t.isEmpty ? nil : t
+            default:
+                return true   // 兜底
             }
         }
-        return .result()
     }
-}
 
-@available(iOS 18, *)
-extension EditExpenseDirectionIntent {
-    init(draftID: String) { self.draftID = draftID }
-}
-
-/// 分类候选：从设置页分类池扁平化成「大类/细分」列表，供选分类子 Intent 弹出选择。
-@available(iOS 18, *)
-struct ExpenseCategoryOptionsProvider: DynamicOptionsProvider {
-    @MainActor
-    func results() async throws -> [String] {
-        LLMExpenseCategorizer.flatten(AppSettings.shared.expenseCategoryPool)
+    private func categoryText(_ d: ExpenseInfo) -> String {
+        let s = [d.categoryMajor, d.categorySub].compactMap { $0 }.filter { !$0.isEmpty }
+            .joined(separator: " / ")
+        return s.isEmpty ? "未分类" : s
     }
-}
 
-@available(iOS 18, *)
-struct EditExpenseCategoryIntent: AppIntent {
-    static let title: LocalizedStringResource = "选分类"
-    static let openAppWhenRun = false
-
-    @Parameter(title: "草稿ID") var draftID: String
-    @Parameter(title: "分类", optionsProvider: ExpenseCategoryOptionsProvider())
-    var category: String
-
+    /// LLM 预补两级分类（有 Key 时），供列表预填
     @MainActor
-    func perform() async throws -> some IntentResult {
-        if let id = UUID(uuidString: draftID) {
-            let parts = category.components(separatedBy: "/")
-            ExpenseDraftStore.shared.update(id) {
-                $0.categoryMajor = parts.first
-                $0.categorySub = parts.count > 1 ? parts[1] : nil
-            }
+    private static func precategorize(_ info: inout ExpenseInfo, rawText: String) async {
+        guard let cfg = AppSettings.shared.llmConfig else { return }
+        let pool = AppSettings.shared.expenseCategoryPool
+        let content = [info.merchant, info.amount.map { "\($0)元" }, rawText]
+            .compactMap { $0 }.joined(separator: "\n")
+        if let picked = try? await LLMExpenseCategorizer(config: cfg).classify(content, pool: pool) {
+            info.categoryMajor = picked.major
+            info.categorySub = picked.sub
         }
-        return .result()
     }
-}
 
-@available(iOS 18, *)
-extension EditExpenseCategoryIntent {
-    init(draftID: String) { self.draftID = draftID }
-}
-
-@available(iOS 18, *)
-struct EditExpenseNoteIntent: AppIntent {
-    static let title: LocalizedStringResource = "改备注"
-    static let openAppWhenRun = false
-
-    @Parameter(title: "草稿ID") var draftID: String
-    @Parameter(title: "备注") var note: String
-
-    @MainActor
-    func perform() async throws -> some IntentResult {
-        if let id = UUID(uuidString: draftID) {
-            ExpenseDraftStore.shared.update(id) { $0.note = note.isEmpty ? nil : note }
-        }
-        return .result()
+    private static func timeText(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        f.dateFormat = "M月d日 HH:mm"
+        return f.string(from: date)
     }
-}
-
-@available(iOS 18, *)
-extension EditExpenseNoteIntent {
-    init(draftID: String) { self.draftID = draftID }
 }
