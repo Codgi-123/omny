@@ -79,9 +79,7 @@ struct ExpenseDebugView: View {
         }
         .navigationTitle("记账（调试）")
         .sheet(item: $editingSheet) { sheet in
-            NavigationStack {
-                ManualExpenseView(editing: sheet.item)
-            }
+            ExpenseEditView(editing: sheet.item)
         }
     }
 
@@ -115,7 +113,19 @@ private struct ExpenseDebugRow: View {
         [item.categoryMajor, item.categorySub].compactMap { $0 }.joined(separator: " / ")
     }
 
+    /// 分类外观（图标 + 签名色），按分类名从预置库/兜底查
+    private var appearance: CategoryAppearance {
+        ExpenseCategoryAppearance.shared.appearance(major: item.categoryMajor, sub: item.categorySub)
+    }
+
     var body: some View {
+        HStack(spacing: 12) {
+            IconChip(symbol: appearance.symbol, color: appearance.color)
+            detail
+        }
+    }
+
+    private var detail: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(item.merchant ?? item.channel ?? "未知")

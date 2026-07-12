@@ -26,9 +26,18 @@ xcrun devicectl device install app --device <设备ID> \
 ### 进行中
 - **记账模块 v1 首版**（2026-07-11，dev-zhanghaha）：OmnyCore 全链路已实现并测过（114 测试全绿）。
   - 已完成：`ItemType.expense` / `ExpenseDirection` / `ExpenseInfo` / `ParsedPayload.expense`；`RuleParser.classify` 记账双命中判定 + `extractExpense` 正则降级；`LLMStructuredParser.parseExpense`（prompt+schema）；`LLMExpenseCategorizer` 两级 enum-schema 打标；`ExpenseParserTests` + `RealSMSTests` 补脱敏银行短信基线。App 侧：`InboxItem` 记账字段 + `expenseDirection`；`Ingestor.ingestExpense`（txnID 精确 / 金额+时间窗±10min+尾号/商户 模糊去重）+ 异步补分类；`.expense` 进「解析文本」白名单 + `intentSummary`；`AppSettings` 两级分类池（JSON 存 UserDefaults）+ `expenseCategorizer`；设置页临时调试入口 `ExpenseDebugView`（粘贴短信解析入库 + expense 列表）。
-  - **手动记账**（2026-07-11 追加）：新增 `Ingestor.addManualExpense`（用户填的字段直接入库，**不走解析、不模糊去重、不异步 LLM 补分类**——尊重用户明确输入；支持 `editing:` 回写已有条目）；新建 `ManualExpenseView` 表单页（方向切换 / 金额 Decimal 校验 / 两级分类选择器从池里选 / 商户·渠道·卡尾号·时间）；`ExpenseDebugView` 加「手动记账」入口按钮 + 列表行点击进表单编辑（sheet 弹出）。
-  - 待验证（需 macOS/真机，本机无法测）：① CI macOS job 编 App 是否过；② 配 LLM Key 后真实银行短信抽取 + 两级打标准确率；③ 去重在多渠道重复时的实际效果。
-  - 待细化：需处理页 expense 低置信项目前显示为「未分类」Badge，正式化时区分文案；expense 低置信标 needsReview 的阈值（当前沿用 0.8）。
+  - **手动记账**（2026-07-11 追加）：新增 `Ingestor.addManualExpense`（用户填的字段直接入库，**不走解析、不模糊去重、不异步 LLM 补分类**——尊重用户明确输入；支持 `editing:` 回写已有条目）。
+  - **识屏记账 + 口语解析**（2026-07-12）：`ScreenParser` 补第四类 expenses（此前识屏不认记账，支付截图落未分类）；`RuleParser` expenseVerbs/incomeKeywords 增口语措辞（买/花/充值/收到/卖…）让手输/语音文本能记账。
+  - **分类图标方案**（2026-07-12）：图标/颜色与分类池解耦（LLM 只用名字打标，不需外观）。`Theme.ExpenseColor` 签名色板；`ExpenseCategoryAppearance` 映射器（用户覆盖→预置库→tag.fill+按名 hash 兜底），复用 IconChip 渲染。
+  - **正式记账页**（2026-07-12）：`Views/Expense/` 下全套 SwiftUI，风格沿用现有体系（ScreenHeader/cardCell/IconChip/Theme）：
+    - `ExpenseHomeView` 容器（明细/日历/分析 分段内联标题行 + 月份切换 + FAB，三视图共享月份）
+    - 明细（结余/支出/收入大卡 + 天分组 ExpenseRow）；日历（月历网格每天收支 + 选中展开）；分析（DonutChart 原生环状图 + 引线图例 + 大类→细分→单据下钻）
+    - `ExpenseDetailView` 详情（大图标+字段，空字段隐藏，编辑/删除）
+    - `ExpenseEditView` 添加/编辑（方向切换内联导航行 + 分类宫格 + 细分展开 + 时间常驻 + 更多信息折叠 + **自制计算器键盘**）；取代旧 `ManualExpenseView`（已删）
+    - `ExpenseCalculator`（OmnyCore，+−×÷/乘除优先级/Decimal 精度，19 单测全绿）；`ExpenseSupport`（金额格式化 + 月/天/分类聚合 + ExpenseRow）
+    - 设置页入口：「记账」→ ExpenseHomeView（正式）；「解析测试（调试）」→ ExpenseDebugView（保留）
+  - 待验证（需 macOS/真机，本机无法测）：① **XcodeGen 需重新 generate 收录 Views/Expense/ 新文件**；② CI macOS job 编译（含 DonutChart/日历网格/计算器 UI，及 SF Symbol 名存在性）；③ 环状图引线在分类多时是否拥挤；④ 配 LLM Key 后真实抽取+打标；⑤ 去重多渠道效果。
+  - 待细化：需处理页 expense 低置信项文案；needsReview 阈值（0.8）；设置页「记账分类自定义」UI（图标/颜色选择器，映射器接口已预留）。
   - 设计文档：`docs/expense-module-design.md`。
 
 ### 已完成

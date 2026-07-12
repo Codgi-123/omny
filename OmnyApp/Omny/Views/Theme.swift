@@ -22,6 +22,22 @@ enum Theme {
     static let todo     = Color(.systemGreen)   // 待办 · 绿
     static let bookmark = Color(.systemPink)    // 收藏 · 粉
 
+    /// 记账消费分类的签名色板：给各消费大类一组成体系的色。
+    /// 与 IconChip 组合（渐变色底 + 白 SF Symbol），和快递卡同一套渲染。
+    /// 命名按语义（餐饮/交通…），未命中的分类由 ExpenseCategoryAppearance 按名 hash 从这里取一个兜底。
+    enum ExpenseColor {
+        static let food     = Color(.systemOrange)  // 餐饮 · 橙
+        static let trans    = Color(.systemBlue)    // 交通 · 蓝
+        static let shopping = Color(.systemPurple)  // 购物 · 紫
+        static let home     = Color(.systemIndigo)  // 居家 · 靛
+        static let fun      = Color(.systemPink)    // 娱乐 · 粉
+        static let medical  = Color(.systemRed)     // 医疗 · 红
+        static let income   = Color(.systemGreen)   // 收入 · 绿
+        static let other    = Color(.systemTeal)    // 其他 · 青
+        /// 兜底取色用的有序色板（未命中分类按名 hash 稳定落到其中一个）
+        static let palette: [Color] = [food, trans, shopping, home, fun, medical, income, other]
+    }
+
     /// 统一的间距刻度（4/8pt 栅格）
     enum Space {
         static let page: CGFloat = 16

@@ -29,6 +29,19 @@ final class ExpenseParserTests: XCTestCase {
         XCTAssertNil(RuleParser.classify("这件商品128元很划算"))
     }
 
+    func testClassifyColloquialExpense() {
+        // 口语措辞（手输/语音）+ 金额 → expense
+        XCTAssertEqual(RuleParser.classify("昨天微信买了一包薯片，花了20.25元"), .expense)
+        XCTAssertEqual(RuleParser.classify("打车花了35元"), .expense)
+        XCTAssertEqual(RuleParser.classify("给手机充值100元"), .expense)
+    }
+
+    func testClassifyColloquialWithoutAmountNotExpense() {
+        // 口语动词但无金额 → 不误判（单字词"买/花"靠金额特征兜底）
+        XCTAssertNil(RuleParser.classify("买了个表真好看"))
+        XCTAssertNil(RuleParser.classify("周末花时间陪家人"))
+    }
+
     func testClassifyRejectsVerbWithoutAmount() {
         // 有交易动词没金额 → 不判为 expense
         XCTAssertNil(RuleParser.classify("请尽快完成本月还款"))
@@ -57,6 +70,20 @@ final class ExpenseParserTests: XCTestCase {
     func testExtractExpenseYenPrefix() throws {
         let info = try XCTUnwrap(RuleParser.extractExpense("微信支付￥1,234.56"))
         XCTAssertEqual(info.amount, Decimal(string: "1234.56"))
+    }
+
+    func testExtractColloquialExpense() throws {
+        // 口语支出：抠出金额，方向默认支出
+        let info = try XCTUnwrap(RuleParser.extractExpense("昨天微信买了一包薯片，花了20.25元"))
+        XCTAssertEqual(info.amount, Decimal(string: "20.25"))
+        XCTAssertEqual(info.direction, .expense)
+    }
+
+    func testExtractColloquialIncome() throws {
+        // 口语收入：命中"卖/收到"判收入
+        let info = try XCTUnwrap(RuleParser.extractExpense("卖了旧手机，收到500元"))
+        XCTAssertEqual(info.amount, Decimal(string: "500"))
+        XCTAssertEqual(info.direction, .income)
     }
 
     // MARK: - LLM 结构化：parseExpense

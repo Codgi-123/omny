@@ -64,6 +64,76 @@ final class ScreenParserTests: XCTestCase {
         XCTAssertEqual(todos?.first?.title, "去天府广场拿水果")
     }
 
+    /// 支付成功页截图 → 记账。回归用户实测：整段被识屏送进未分类（旧 ScreenParser 不认记账）。
+    /// 现在应抽出 expense，字段对齐（含 txnID，支付截图有交易单号）。
+    func testExtractsExpenseFromPaymentScreenshot() async throws {
+        let paymentOCR = """
+        账单
+        美团
+        钢管厂五区小郡肝串串香（新华公园总店）
+        -19.00
+        支付成功
+        支付时间 2026年7月10日 19:41:59
+        商户全称 成都五区顾大妈餐饮管理有限公司
+        支付方式 成都银行储蓄卡（8164）
+        交易单号 4200003170202607105997164744
+        商户单号 0461368606697779658001632
+        """
+        // 模拟 LLM 抽出：direction 支出、amount 去负号、merchant 取店名、txnID 取交易单号
+        let inner = #"""
+        {"todos":[],"packages":[],"trips":[],
+         "expenses":[{"direction":"expense","amount":"19.00",
+                      "merchant":"钢管厂五区小郡肝串串香","occurredAt":"2026-07-10T19:41:59",
+                      "channel":"成都银行储蓄卡","cardTail":"8164",
+                      "txnID":"4200003170202607105997164744"}]}
+        """#
+        let parser = ScreenParser(config: .claude(apiKey: "sk-test"),
+                                  transport: MockTransport { _ in (envelope(inner), 200) })
+        let result = try await parser.parse(paymentOCR)
+
+        // 单条 → 不包 mixed，直接是 .expense
+        guard case .expense(let info) = try XCTUnwrap(result).payload else {
+            return XCTFail("应抽出 expense，而非落未分类")
+        }
+        XCTAssertEqual(info.direction, .expense)
+        XCTAssertEqual(info.amount, Decimal(string: "19.00"))
+        XCTAssertEqual(info.merchant, "钢管厂五区小郡肝串串香")
+        XCTAssertEqual(info.channel, "成都银行储蓄卡")
+        XCTAssertEqual(info.cardTail, "8164")
+        XCTAssertEqual(info.txnID, "4200003170202607105997164744")
+        // 分类不由结构化抽取打，留空交 categorizer
+        XCTAssertNil(info.categoryMajor)
+    }
+
+    /// 记账金额抽不出（只有噪声字段）→ 该 expense 条目被丢弃，不产空账单卡
+    func testExpenseWithoutAmountDropped() async throws {
+        let inner = #"""
+        {"todos":[],"packages":[],"trips":[],
+         "expenses":[{"direction":"expense","amount":null,"merchant":"某商户",
+                      "occurredAt":null,"channel":null,"cardTail":null,"txnID":null}]}
+        """#
+        let parser = ScreenParser(config: .claude(apiKey: "sk-test"),
+                                  transport: MockTransport { _ in (envelope(inner), 200) })
+        let result = try await parser.parse("some noise")
+        XCTAssertNil(result, "无金额的记账条目应被丢弃")
+    }
+
+    /// 一屏同时有快递和记账（如账单页夹带取件通知）→ mixed 含两类
+    func testMixedExpenseAndPackage() async throws {
+        let inner = #"""
+        {"todos":[],
+         "packages":[{"carrier":"顺丰速运","trackingNumber":null,"trackingTail":null,"pickupCode":"1-2-3","station":null}],
+         "trips":[],
+         "expenses":[{"direction":"expense","amount":"19.00","merchant":"串串香",
+                      "occurredAt":null,"channel":null,"cardTail":null,"txnID":null}]}
+        """#
+        let parser = ScreenParser(config: .claude(apiKey: "sk-test"),
+                                  transport: MockTransport { _ in (envelope(inner), 200) })
+        let result = try await parser.parse("...")
+        let flat = try XCTUnwrap(result).payload.flattened
+        XCTAssertEqual(Set(flat.map(\.itemType)), [.package, .expense])
+    }
+
     /// 展平：mixed 能被 Ingestor 递归展开成逐条单类
     func testMixedFlattens() async throws {
         let inner = #"""
