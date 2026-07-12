@@ -20,6 +20,7 @@ enum Ingestor {
                        sourceImage: Data? = nil,
                        allowedTypes: Set<ItemType>? = nil,
                        parser: (any Parser)? = nil,
+                       awaitEnrichment: Bool = false,
                        context: ModelContext) async -> [InboxItem] {
         let result: ParseResult?
         do {
@@ -61,7 +62,36 @@ enum Ingestor {
         }
         // save 失败要如实反映：回滚本次插入并返回空，避免上层误报"已入库"却查无此条
         guard saveOrRollback(items, context: context) else { return [] }
+
+        // 入库后处理（收藏补标题+打标、记账补分类）：默认游离 Task 不阻塞前台 UI；
+        // 快捷指令入口（App Intent）传 awaitEnrichment=true——Intent perform 返回后进程会被系统
+        // 挂起，游离 Task 来不及跑完，必须在返回前同步 await，否则记账分类/收藏标签永远补不上。
+        await enrich(items, context: context, awaitEnrichment: awaitEnrichment)
         return items
+    }
+
+    /// 对入库条目做异步补全（收藏→补标题+打标；记账→补两级分类）。
+    /// awaitEnrichment=true 时同步等待全部完成（快捷指令入口）；否则每条起游离 Task（前台入口）。
+    private static func enrich(_ items: [InboxItem], context: ModelContext,
+                               awaitEnrichment: Bool) async {
+        for item in items {
+            let work: () async -> Void
+            switch item.kind {
+            case .bookmark:
+                work = { await enrichBookmark(item, context: context) }
+            case .expense:
+                // 已有分类的（去重命中的存量条目）跳过，避免重复调 LLM
+                guard item.categoryMajor == nil else { continue }
+                work = { await categorizeExpense(item, context: context) }
+            default:
+                continue
+            }
+            if awaitEnrichment {
+                await work()
+            } else {
+                Task { await work() }
+            }
+        }
     }
 
     /// 单条载荷 → InboxItem（快递按单号合并；一条 .todos 可能展开成多条）。
@@ -88,8 +118,7 @@ enum Ingestor {
             item.urlString = info.url.absoluteString
             item.bookmarkTitle = info.title
             context.insert(item)
-            // 补标题和打标不阻塞入库（短信快捷指令等入口要求即时返回）
-            Task { await enrichBookmark(item, context: context) }
+            // 补标题+打标由 ingest 统一 enrich（前台游离 / 快捷指令同步 await），此处不再起游离 Task
             return [item]
         case .expense(let info):
             return [ingestExpense(info, text: text, source: source, context: context)]
@@ -260,8 +289,7 @@ enum Ingestor {
         item.cardTail = info.cardTail
         item.txnID = info.txnID
         context.insert(item)
-        // 分类不阻塞入库，异步补（同收藏打标）
-        Task { await categorizeExpense(item, context: context) }
+        // 两级分类由 ingest 统一 enrich（前台游离 / 快捷指令同步 await），此处不再起游离 Task
         return item
     }
 
