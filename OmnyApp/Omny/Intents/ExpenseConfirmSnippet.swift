@@ -18,17 +18,17 @@ struct ExpenseConfirmSnippet: View {
             VStack(spacing: 0) {
                 amountHeader(draft)
                 Divider()
-                fieldRow("收支", value: draft.direction == .income ? "收入" : "支出",
-                         intent: EditExpenseDirectionIntent(draftID: draftID))
-                fieldRow("分类", value: categoryText(draft),
-                         intent: EditExpenseCategoryIntent(draftID: draftID))
-                fieldRow("金额", value: amountText(draft),
-                         intent: EditExpenseAmountIntent(draftID: draftID))
-                fieldRow("时间", value: timeText(draft.occurredAt), intent: Optional<EditExpenseNoteIntent>.none)
-                fieldRow("备注", value: draft.note ?? "无",
-                         intent: EditExpenseNoteIntent(draftID: draftID))
+                editRow("收支", value: draft.direction == .income ? "收入" : "支出",
+                        intent: EditExpenseDirectionIntent(draftID: draftID))
+                editRow("分类", value: categoryText(draft),
+                        intent: EditExpenseCategoryIntent(draftID: draftID))
+                editRow("金额", value: amountText(draft),
+                        intent: EditExpenseAmountIntent(draftID: draftID))
+                readRow("时间", value: timeText(draft.occurredAt))
+                editRow("备注", value: draft.note ?? "无",
+                        intent: EditExpenseNoteIntent(draftID: draftID))
                 if let merchant = draft.merchant, !merchant.isEmpty {
-                    fieldRow("商户", value: merchant, intent: Optional<EditExpenseNoteIntent>.none)
+                    readRow("商户", value: merchant)
                 }
             }
             .padding(4)
@@ -49,17 +49,17 @@ struct ExpenseConfirmSnippet: View {
         .padding(.vertical, 6).padding(.horizontal, 4)
     }
 
-    /// 一行字段：有 intent 的可点（触发子编辑），无 intent 的只读
-    @ViewBuilder
-    private func fieldRow<I: AppIntent>(_ key: String, value: String, intent: I?) -> some View {
-        if let intent {
-            Button(intent: intent) {
-                rowContent(key, value, tappable: true)
-            }
-            .buttonStyle(.plain)
-        } else {
-            rowContent(key, value, tappable: false)
+    /// 可点字段：点击触发子编辑 Intent（系统随后自动重调 SnippetIntent.perform 刷新）
+    private func editRow<I: AppIntent>(_ key: String, value: String, intent: I) -> some View {
+        Button(intent: intent) {
+            rowContent(key, value, tappable: true)
         }
+        .buttonStyle(.plain)
+    }
+
+    /// 只读字段
+    private func readRow(_ key: String, value: String) -> some View {
+        rowContent(key, value, tappable: false)
     }
 
     private func rowContent(_ key: String, _ value: String, tappable: Bool) -> some View {

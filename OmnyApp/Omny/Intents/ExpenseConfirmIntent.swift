@@ -106,15 +106,18 @@ struct ExpenseSnippetIntent: SnippetIntent {
 
     @Parameter(title: "草稿ID") var draftID: String
 
-    init() {}
-    init(draftID: String) { self.draftID = draftID }
-
     @MainActor
     func perform() async throws -> some IntentResult & ShowsSnippetView {
         // 每次从 store 读最新（子编辑 Intent 改过后系统重调 perform 会拿到新值）
         let draft = UUID(uuidString: draftID).flatMap { ExpenseDraftStore.shared.get($0) }
         return .result(view: ExpenseConfirmSnippet(draftID: draftID, draft: draft))
     }
+}
+
+// 自定义便捷 init 放 extension，保留编译器为 @Parameter 合成的 init()（App Intents 要求）
+@available(iOS 26, *)
+extension ExpenseSnippetIntent {
+    init(draftID: String) { self.draftID = draftID }
 }
 
 // MARK: - 子编辑指令（点 snippet 字段触发；改草稿后系统自动重调 ExpenseSnippetIntent 重渲染）
