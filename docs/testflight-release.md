@@ -3,6 +3,24 @@
 把 `Omny` 打包上传到 TestFlight 的可复用流程。全程命令行，不依赖 Xcode GUI。
 2026-07-10 首次跑通（build 3）；之后按同一流程复跑至 **build 7**（dev-zhanghaha、dev-kiwi 两分支均走通），命令保持有效。每次发布只需按「步骤 0」升构建号后重跑即可。
 
+## GitHub Actions 自动发布（推荐）
+
+本地流程已搬到 CI（`.github/workflows/testflight.yml`），两种触发方式：
+
+```sh
+# 方式一：升构建号提交后打 tag（推荐，tag 名对应构建号方便追溯）
+git tag tf-<构建号> && git push origin tf-<构建号>
+
+# 方式二：Actions 页面手动 Run workflow（可临时覆盖构建号，不用改 project.yml）
+gh workflow run testflight.yml --ref <分支> -f build_number=<构建号>
+```
+
+签名用 ASC API Key 云签名，无需导出证书。依赖 4 个仓库 Secrets（见 workflow 文件头部注释）；
+**改动 `Secrets.swift` 后要同步更新 Secret**：`base64 -i OmnyApp/Omny/Services/Secrets.swift | gh secret set OMNY_SECRETS_SWIFT_B64`。
+注意私有仓库 macOS runner 分钟按 10 倍计费，一次发布约消耗 150~250 计费分钟。
+
+以下为本地手动流程（CI 不可用时的备用路径）。
+
 ## 前置条件（一次性）
 
 - **付费 Apple Developer Program 会员**（免费 Apple ID 传不了 TestFlight，只能真机侧载 7 天）。
