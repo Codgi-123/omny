@@ -25,9 +25,9 @@ public struct ScreenParser: Parser {
     }
 
     static let systemPrompt = """
-    你从手机截图 OCR 出的文本里提取待办、快递、行程三类信息。文本来自任意 App 的截图\
-    （备忘录、聊天、通知列表等），夹杂大量噪声：时间戳（如"22:40""今天"）、\
-    界面元素（"搜索""无更多文本""个备忘录"）、按钮文字、以及被截断的残句。\
+    你从手机截图 OCR 出的文本里提取待办、快递、行程、记账四类信息。文本来自任意 App 的截图\
+    （备忘录、聊天、通知列表、支付成功页/账单详情等），夹杂大量噪声：时间戳（如"22:40""今天"）、\
+    界面元素（"搜索""无更多文本""个备忘录""发起群收款"）、按钮文字、以及被截断的残句。\
     请只提取有实际意义的条目，忽略所有噪声；被截断残缺的条目尽量补全能确定的字段，\
     无法确定的字段填 null，绝不臆造。今天是 {TODAY}。
     输出 JSON，格式：
@@ -35,7 +35,15 @@ public struct ScreenParser: Parser {
     "packages":[{"carrier":"快递公司或 null","trackingNumber":"运单号或 null",\
     "trackingTail":"运单尾号或 null","pickupCode":"取件码或 null","station":"存放点或 null"}],\
     "trips":[{"kind":"train 或 flight","number":"车次/航班号","departure":"ISO8601 或 null",\
-    "departurePlace":"出发地或 null","arrival":"ISO8601 或 null","arrivalPlace":"到达地或 null","seat":"座位或 null"}]}
+    "departurePlace":"出发地或 null","arrival":"ISO8601 或 null","arrivalPlace":"到达地或 null","seat":"座位或 null"}],\
+    "expenses":[{"direction":"expense 或 income","amount":"金额数字字符串或 null",\
+    "merchant":"商户/交易对方或 null","occurredAt":"交易时间 ISO8601 或 null",\
+    "channel":"支付方式/银行/平台或 null","cardTail":"卡尾号或 null","txnID":"交易单号或 null"}]}
+    记账字段说明（支付成功页/账单截图）：direction 支出填 expense、收入/退款/到账填 income\
+    （金额带负号"-19.00"是支出，带正号是收入）；amount 只填数字（如"19.00"），不带货币符号/正负号/千分位逗号；\
+    merchant 是收款商户名（如"美团""串串香"，取店名而非"商户全称"里的公司名）；\
+    channel 是支付方式（如"成都银行储蓄卡""零钱""支付宝"）；cardTail 是支付卡尾号；\
+    txnID 取"交易单号"（优先）而非"商户单号"。不要判断消费分类（餐饮/交通等），那由后续步骤处理。
     日期表述（明天、周五、7月10日）换算成 ISO8601；短信/OCR 常缺年份，缺年份就省略年份部分。\
     某一类没有就给空数组。只输出 JSON，不要任何其他文字。
     """
@@ -51,9 +59,14 @@ public struct ScreenParser: Parser {
             let departure: String?; let departurePlace: String?
             let arrival: String?; let arrivalPlace: String?; let seat: String?
         }
+        struct Expense: Decodable {
+            let direction: String?; let amount: String?; let merchant: String?
+            let occurredAt: String?; let channel: String?; let cardTail: String?; let txnID: String?
+        }
         let todos: [Todo]?
         let packages: [Package]?
         let trips: [Trip]?
+        let expenses: [Expense]?
     }
 
     public func parse(_ text: String) async throws -> ParseResult? {
@@ -105,6 +118,18 @@ public struct ScreenParser: Parser {
                 arrivalPlace: t.arrivalPlace?.nilIfEmpty, seat: t.seat?.nilIfEmpty)))
         }
 
+        // 记账：金额是硬要求（抠不出金额的记账条目无意义，交由噪声忽略）
+        for e in extracted.expenses ?? [] {
+            guard let amount = e.amount?.nilIfEmpty.flatMap({ Decimal(string: $0) }) else { continue }
+            let direction = ExpenseDirection(rawValue: e.direction ?? "") ?? .expense
+            payloads.append(.expense(ExpenseInfo(
+                direction: direction, amount: amount,
+                merchant: e.merchant?.nilIfEmpty,
+                occurredAt: e.occurredAt.flatMap(LLMClient.dateComponents(fromISO:)),
+                channel: e.channel?.nilIfEmpty, cardTail: e.cardTail?.nilIfEmpty,
+                txnID: e.txnID?.nilIfEmpty)))
+        }
+
         // 待办
         let todos = (extracted.todos ?? []).compactMap { todo -> TodoInfo? in
             let title = todo.title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -128,9 +153,9 @@ public struct ScreenParser: Parser {
             let trimmedLine = line.trimmingCharacters(in: .whitespaces)
             guard trimmedLine.count >= 4 else { continue }  // 太短的行多是噪声
             guard let r = rule.parseSync(trimmedLine) else { continue }
-            // 规则不产出待办；收藏在截图里不作为目标，只收快递/行程
+            // 规则不产出待办；收藏在截图里不作为目标，只收快递/行程/记账
             switch r.payload {
-            case .package, .trip: payloads.append(r.payload)
+            case .package, .trip, .expense: payloads.append(r.payload)
             default: break
             }
         }
@@ -185,14 +210,29 @@ public struct ScreenParser: Parser {
             "required": ["title", "due"],
             "additionalProperties": false,
         ]
+        let expenseItem: [String: Any] = [
+            "type": "object",
+            "properties": [
+                "direction": ["type": "string", "enum": ["expense", "income"]] as [String: Any],
+                "amount": ["type": ["string", "null"]],
+                "merchant": ["type": ["string", "null"]],
+                "occurredAt": ["type": ["string", "null"]],
+                "channel": ["type": ["string", "null"]],
+                "cardTail": ["type": ["string", "null"]],
+                "txnID": ["type": ["string", "null"]],
+            ],
+            "required": ["direction", "amount", "merchant", "occurredAt", "channel", "cardTail", "txnID"],
+            "additionalProperties": false,
+        ]
         return [
             "type": "object",
             "properties": [
                 "todos": ["type": "array", "items": todoItem] as [String: Any],
                 "packages": ["type": "array", "items": packageItem] as [String: Any],
                 "trips": ["type": "array", "items": tripItem] as [String: Any],
+                "expenses": ["type": "array", "items": expenseItem] as [String: Any],
             ],
-            "required": ["todos", "packages", "trips"],
+            "required": ["todos", "packages", "trips", "expenses"],
             "additionalProperties": false,
         ]
     }

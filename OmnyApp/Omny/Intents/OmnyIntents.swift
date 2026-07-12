@@ -6,7 +6,7 @@ import SwiftUI
 /// 自动化：收到信息 → 运行本动作（输入 = 信息内容），无感入库。
 struct ParseTextIntent: AppIntent {
     static let title: LocalizedStringResource = "解析文本"
-    static let description = IntentDescription("把短信或任意文本交给 Omny 解析入库（快递、行程、待办）。")
+    static let description = IntentDescription("把短信或任意文本交给 Omny 解析入库（快递、行程、待办、记账）。")
     static let openAppWhenRun = false
 
     @Parameter(title: "文本")
@@ -28,11 +28,12 @@ struct ParseTextIntent: AppIntent {
 
 /// 快捷指令动作 ②：屏幕识别（截屏 → 快捷指令内置 OCR → 文本传入）
 /// iOS 快捷指令自带「识别图像文本」动作，OCR 在快捷指令侧完成，本动作直接收文本，
-/// 走完整解析管线通用识别（快递/行程/待办/收藏四类都支持），按识别结果落到对应分类。
+/// 走截图专用解析器 ScreenParser（一屏多条多类：快递/行程/待办/记账），按识别结果落到对应分类。
+/// 收藏不作为截图识别目标（截图里的链接少见且噪声多，收藏走分享面板入口）。
 /// （struct 名沿用 RecognizeTodoIntent 以保持已导入快捷指令的绑定不失效。）
 struct RecognizeTodoIntent: AppIntent {
     static let title: LocalizedStringResource = "屏幕识别"
-    static let description = IntentDescription("对截图 OCR 出的文本做识别入库（快递、行程、待办、收藏）。")
+    static let description = IntentDescription("对截图 OCR 出的文本做识别入库（快递、行程、待办、记账）。")
     static let openAppWhenRun = false
 
     @Parameter(title: "文本")
@@ -46,7 +47,7 @@ struct RecognizeTodoIntent: AppIntent {
         }
         let context = OmnyApp.sharedModelContainer.mainContext
         // OCR 由快捷指令完成，故无原图；sourceImage 传 nil（后续走内置 OCR 时再带原图）
-        // 走截图专用解析器：一屏多条多类一次抽取（快递/行程/待办），忽略 OCR 噪声。
+        // 走截图专用解析器：一屏多条多类一次抽取（快递/行程/待办/记账），忽略 OCR 噪声。
         let items = await Ingestor.ingest(text: trimmed, source: .screenshot,
                                           parser: AppSettings.shared.screenParser, context: context)
         guard !items.isEmpty else {
