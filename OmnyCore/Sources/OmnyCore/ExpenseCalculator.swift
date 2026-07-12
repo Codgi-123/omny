@@ -182,7 +182,8 @@ public struct ExpenseCalculator: Equatable, Sendable {
 
     /// Decimal → 显示串：最多两位小数（钱），四舍五入；NSDecimalNumber.stringValue 天然去尾零
     /// （如 54.00 → "54"、1.50 → "1.5"），整数不显示 ".00"。
-    static func format(_ value: Decimal) -> String {
+    /// public：App 层编辑记账时用它把已有金额还原成字符串逐位填回计算器。
+    public static func format(_ value: Decimal) -> String {
         var v = value
         var rounded = Decimal()
         NSDecimalRound(&rounded, &v, 2, .plain)
