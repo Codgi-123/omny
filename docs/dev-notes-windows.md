@@ -99,4 +99,4 @@ rm -rf .build && swift test
 ## 已验证
 
 - Ubuntu 24.04.4 LTS on WSL2（G 盘），Swift 由 swiftly 管理。
-- `OmnyCore` 全部 45 个测试通过。（补 import 修复后）
+- `OmnyCore` 全部单测在 Linux 通过（补 import 修复后）。测试量随模块增长（记账/识屏/计算器等），以 `swift test` 实跑数为准，截至 2026-07 为 146。

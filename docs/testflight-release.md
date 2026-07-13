@@ -1,7 +1,7 @@
 # 发布到 TestFlight（命令行全流程）
 
-把 `Omny` 打包上传到 TestFlight 的可复用流程。全程命令行，不依赖 Xcode GUI。
-2026-07-10 首次跑通（build 3）；之后按同一流程复跑至 **build 7**（dev-zhanghaha、dev-kiwi 两分支均走通），命令保持有效。每次发布只需按「步骤 0」升构建号后重跑即可。
+把 `Omny` 打包上传到 TestFlight 的可复用流程。**现已首选 CI 自动发布**（见下节），本地命令行流程作为 CI 不可用时的备用路径，全程不依赖 Xcode GUI。
+2026-07-10 首次跑通（build 3）；此后 CI 自动发布上线，构建号交 CI 管理，已复跑至 **build 19**，流程与命令保持有效。
 
 ## GitHub Actions 自动发布（推荐）
 
