@@ -73,6 +73,9 @@ struct LLMClient {
             body = [
                 "model": config.model,
                 "max_tokens": maxTokens,
+                // 关闭思考模式（Qwen 系端点参数）：解析/打标只要 JSON 结果，
+                // thinking 白白拖慢首包，识屏/确认记账等同步等待的链路尤其明显
+                "enable_thinking": false,
                 "messages": [
                     ["role": "system", "content": system],
                     ["role": "user", "content": user],
