@@ -2,6 +2,8 @@ name: CI
 
 on:
   push:
+    # 只在打 tag 时跑（发布前守门）；日常分支 push 不跑，PR 仍然全量测
+    tags: ['**']
   pull_request:
   # 需要临时出包时可在 Actions 页面对任意分支手动触发
   workflow_dispatch:
