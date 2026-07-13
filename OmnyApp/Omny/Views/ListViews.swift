@@ -207,6 +207,8 @@ struct TodoView: View {
     @State private var showCompleted = false
     /// 已放弃区同样默认收起
     @State private var showAbandoned = false
+    /// 收起的优先级组（存 rawValue）：默认全部展开，各组独立记忆
+    @State private var collapsedPriorities: Set<Int> = []
 
     private var todos: [InboxItem] {
         items.filter { $0.kind == .todo && !$0.deletedLocally && !$0.needsReview && $0.deletedAt == nil }
@@ -227,6 +229,31 @@ struct TodoView: View {
         }
     }
 
+    /// 优先级组内的一行：行样式对齐首页「今日待办」（TodoRow + 纵向 11pt、条目间无分隔线），
+    /// 首/末行圆角、中间行直角，视觉上拼成一张整卡；行间 inset 归零使其无缝相接。
+    private func priorityGroupRow(_ todo: InboxItem, isFirst: Bool, isLast: Bool) -> some View {
+        let radius: CGFloat = 12
+        return TodoRow(item: todo)
+            .padding(.vertical, 11)
+            .padding(.horizontal, 14)
+            // 卡片底画在 listRowBackground 上：内容背景盖不满整个 cell（部分行会在边缘漏出
+            // 一条屏幕底色的细缝），row 背景铺满 cell 才能无缝拼卡。水平缩进对齐卡片边缘，
+            // 首/末行再缩回各自的 5pt 行间距。阴影没法整卡挂（行级阴影会在接缝渗灰线），不加。
+            .listRowBackground(
+                UnevenRoundedRectangle(topLeadingRadius: isFirst ? radius : 0,
+                                       bottomLeadingRadius: isLast ? radius : 0,
+                                       bottomTrailingRadius: isLast ? radius : 0,
+                                       topTrailingRadius: isFirst ? radius : 0)
+                    .fill(Theme.card)
+                    .padding(.horizontal, Theme.Space.page)
+                    .padding(.top, isFirst ? 5 : 0)
+                    .padding(.bottom, isLast ? 5 : 0)
+            )
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: isFirst ? 5 : 0, leading: Theme.Space.page,
+                                      bottom: isLast ? 5 : 0, trailing: Theme.Space.page))
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             todoHeader
@@ -236,18 +263,43 @@ struct TodoView: View {
             ForEach([TodoPriority.high, .medium, .low, .none]) { p in
                 let group = sortedByDue(open.filter { $0.todoPriority == p.rawValue })
                 if !group.isEmpty {
+                    let expanded = !collapsedPriorities.contains(p.rawValue)
                     Section {
-                        ForEach(group) { TodoRow(item: $0).cardCell(pad: 8) }
-                    } header: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "flag.fill")
-                                .font(.caption2)
-                                .foregroundStyle(p.color)
-                            Text(p.label)
-                            Text("\(group.count)").foregroundStyle(Theme.sub)
+                        // 组内行样式与首页「今日待办」一致：条目列在一张整卡内、以分隔线区隔；
+                        // 每条仍是独立 List row（首/末行圆角拼卡），横滑删除/放弃按条生效
+                        if expanded {
+                            ForEach(Array(group.enumerated()), id: \.element.id) { idx, todo in
+                                priorityGroupRow(todo, isFirst: idx == 0, isLast: idx == group.count - 1)
+                            }
                         }
-                        .font(.subheadline.weight(.medium))
-                        .textCase(nil)
+                    } header: {
+                        // 折叠交互与「已完成」分组同款：点头部整行切换，chevron 旋转指示
+                        Button {
+                            withAnimation(.snappy) {
+                                if expanded {
+                                    collapsedPriorities.insert(p.rawValue)
+                                } else {
+                                    collapsedPriorities.remove(p.rawValue)
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "flag.fill")
+                                    .font(.caption2)
+                                    .foregroundStyle(p.color)
+                                Text(p.label)
+                                Text("\(group.count)").foregroundStyle(Theme.sub)
+                                Spacer()
+                                Image(systemName: "chevron.down")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(Theme.sub)
+                                    .rotationEffect(.degrees(expanded ? 0 : -90))
+                            }
+                            .font(.subheadline.weight(.medium))
+                            .textCase(nil)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                         .sectionHeaderInset()
                     }
                 }
@@ -311,6 +363,8 @@ struct TodoView: View {
             }
         }
             .listStyle(.plain)
+            // 优先级组的行要无缝拼成整卡，清掉 List 的默认行距
+            .listRowSpacing(0)
             .scrollContentBackground(.hidden)
             // 包一层非结构化 Task：.refreshable 的任务绑定在刷新手势上，视图刷新时会被
             // SwiftUI 取消并把取消传给 URLSession（表现为"同步失败：cancelled"）。
@@ -1403,6 +1457,14 @@ struct TodoQuickAdd: View {
     }
 }
 
+/// 时间行卡片的位置锚点：供 DueDateSheet 把时分浮层定位到「请选择」按钮上方。
+private struct TimeRowAnchorKey: PreferenceKey {
+    static var defaultValue: Anchor<CGRect>? = nil
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+        value = nextValue() ?? value
+    }
+}
+
 /// 截止时间：从底部弹出的独立页面（仿滴答）。X 取消 / ✓ 确认，
 /// 顶部矢量快捷瓦片 + 自绘月历（农历/节气/节日）+ 时间行。用工作副本，取消不改动原值。
 struct DueDateSheet: View {
@@ -1410,6 +1472,8 @@ struct DueDateSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var working: Date?
     @State private var hasTime: Bool
+    /// 时分浮层是否可见：点「请选择」后在其上方浮出小时间选择器，点外部收起
+    @State private var showTimePicker = false
 
     init(due: Binding<Date?>) {
         _due = due
@@ -1436,6 +1500,27 @@ struct DueDateSheet: View {
                 .padding(.horizontal, 18)
                 .padding(.top, 6)
                 .padding(.bottom, 20)
+            }
+        }
+        // 时分浮层：通过时间行的锚点定位到「请选择」按钮上方（无箭头的小浮窗），
+        // 挂在 body 层而非行内，避免被 ScrollView 裁剪、且能全屏接住"点外部收起"
+        .overlayPreferenceValue(TimeRowAnchorKey.self) { anchor in
+            if showTimePicker, let anchor {
+                GeometryReader { proxy in
+                    let rect = proxy[anchor]
+                    let popW: CGFloat = 220, popH: CGFloat = 190
+                    ZStack {
+                        // 点浮层外任意处收起（近乎透明但可命中，同时挡住底下滚动）
+                        Color.black.opacity(0.001)
+                            .onTapGesture { withAnimation(.snappy) { showTimePicker = false } }
+                        timePopover
+                            .frame(width: popW, height: popH)
+                            // 右缘对齐时间行卡片右缘（即「请选择」一侧），底缘悬在卡片上方 8pt
+                            .position(x: min(rect.maxX - popW / 2, proxy.size.width - popW / 2 - 12),
+                                      y: max(rect.minY - popH / 2 - 8, popH / 2 + 8))
+                            .transition(.scale(scale: 0.9, anchor: .bottomTrailing).combined(with: .opacity))
+                    }
+                }
             }
         }
         .presentationDetents([.height(600)])
@@ -1515,45 +1600,52 @@ struct DueDateSheet: View {
     // MARK: 时间行
 
     private var timeRow: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Image(systemName: "clock").foregroundStyle(Theme.accent)
-                Text("时间").foregroundStyle(Theme.text)
-                Spacer()
-                if hasTime {
-                    // 已设时间：右侧显示当前时分，点 ✕ 清除
+        HStack(spacing: 10) {
+            Image(systemName: "clock").foregroundStyle(Theme.accent)
+            Text("时间").foregroundStyle(Theme.text)
+            Spacer()
+            if hasTime {
+                // 已设时间：右侧显示当前时分（点击可重开浮层微调），点 ✕ 清除
+                Button { withAnimation(.snappy) { showTimePicker.toggle() } } label: {
                     Text(timeBinding.wrappedValue.formatted(date: .omitted, time: .shortened))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Theme.accent)
-                    Button { withAnimation(.snappy) { hasTime = false } } label: {
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.sub)
-                    }
-                    .buttonStyle(.plain)
-                } else {
-                    // 未设时间：点「请选择」直接展开时分控件（不再有 9:00 静态中间态）
-                    Button { withAnimation(.snappy) { enableTime() } } label: {
-                        HStack(spacing: 3) {
-                            Text("请选择")
-                            Image(systemName: "chevron.down").font(.caption2.weight(.semibold))
-                        }
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(Theme.accent)
-                    }
-                    .buttonStyle(.plain)
                 }
-            }
-            // 展开的时分滚轮：点「请选择」后即时出现，直接滚动选择
-            if hasTime {
-                DatePicker("", selection: timeBinding, displayedComponents: .hourAndMinute)
-                    .datePickerStyle(.wheel)
-                    .labelsHidden()
-                    .frame(maxHeight: 160)
+                .buttonStyle(.plain)
+                Button { withAnimation(.snappy) { hasTime = false; showTimePicker = false } } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.sub)
+                }
+                .buttonStyle(.plain)
+            } else {
+                // 未设时间：点「请选择」在按钮上方浮出小时间选择器（不再向下展开占位）
+                Button { withAnimation(.snappy) { enableTime(); showTimePicker = true } } label: {
+                    HStack(spacing: 3) {
+                        Text("请选择")
+                        Image(systemName: "chevron.up").font(.caption2.weight(.semibold))
+                    }
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(Theme.accent)
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.vertical, 18)
         .background(Theme.card,
                     in: .rect(cornerRadius: 12))
+        // 记录时间行卡片位置，供浮层定位到「请选择」上方
+        .anchorPreference(key: TimeRowAnchorKey.self, value: .bounds) { $0 }
+    }
+
+    /// 浮层时间选择器：无箭头的小浮窗（圆角卡片 + 阴影），滚轮直接选，点外部收起。
+    private var timePopover: some View {
+        DatePicker("", selection: timeBinding, displayedComponents: .hourAndMinute)
+            .datePickerStyle(.wheel)
+            .labelsHidden()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
+            .background(Theme.card, in: .rect(cornerRadius: 14))
+            .shadow(color: .black.opacity(0.22), radius: 18, y: 8)
     }
 
     /// 开启具体时间：在当前所选日期上落到 9:00（可再点 compact 控件调整）。

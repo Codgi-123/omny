@@ -78,15 +78,12 @@ struct TodayView: View {
                         SectionHeader(icon: "checkmark.circle.fill", tint: Theme.todo, title: "待办",
                                       count: "\(openTodos.count) 项未完成",
                                       onDetail: { selectedTab = 3 })
-                        // 待办整体合并为一张卡片，条目列在卡内、以分隔线区隔（一.8）
+                        // 待办整体合并为一张卡片，条目列在卡内、不加分隔线（issue #9）
                         let homeTodos = Array(openTodos.prefix(5))
                         VStack(spacing: 0) {
-                            ForEach(Array(homeTodos.enumerated()), id: \.element.id) { idx, todo in
+                            ForEach(homeTodos) { todo in
                                 TodoRow(item: todo, showsContextMenu: false)
                                     .padding(.vertical, 11)
-                                if idx < homeTodos.count - 1 {
-                                    Divider().padding(.leading, 44)
-                                }
                             }
                         }
                         .padding(.horizontal, 14)

@@ -11,27 +11,37 @@ struct RootView: View {
     // tab 选择提升为 AppStorage：首页各区块「查看详情」写同一键即可切 tab。
     // 默认值取调试初始 tab（模拟器截图用启动参数 -omnyTab N；正常首次启动为 0）。
     @AppStorage("omnySelectedTab") private var selection = DebugSupport.initialTab
+    // 每个 tab 各自的导航栈路径：需处理/设置走值驱动 push，切 tab 时统一弹回根部，
+    // 避免这两个全局页面残留在多个 tab 的栈里（issue #9）。
+    @State private var tabPaths: [NavigationPath] = Array(repeating: NavigationPath(), count: 5)
 
     var body: some View {
         TabView(selection: $selection) {
-            NavigationStack { TodayView() }
+            RootTabStack(path: $tabPaths[0]) { TodayView() }
                 .tabItem { Label("今天", image: "TabToday") }
                 .tag(0)
-            NavigationStack { ExpressView() }
+            RootTabStack(path: $tabPaths[1]) { ExpressView() }
                 .tabItem { Label("快递", image: "TabExpress") }
                 .tag(1)
-            NavigationStack { TripView() }
+            RootTabStack(path: $tabPaths[2]) { TripView() }
                 .tabItem { Label("行程", image: "TabTrip") }
                 .tag(2)
-            NavigationStack { TodoView() }
+            RootTabStack(path: $tabPaths[3]) { TodoView() }
                 .tabItem { Label("待办", image: "TabTodo") }
                 .badge(reviewItems.filter { $0.kind == .todo }.count)
                 .tag(3)
-            NavigationStack { BookmarkView() }
+            RootTabStack(path: $tabPaths[4]) { BookmarkView() }
                 .tabItem { Label("收藏", image: "TabBookmark") }
                 .tag(4)
         }
         .tint(Theme.accent)
+        .onChange(of: selection) { _, _ in
+            // 切 tab 时把所有 tab 的导航栈弹回根部：
+            // 需处理/设置是独立页面，不该在切走再切回后仍停留在某个 tab 里
+            for i in tabPaths.indices where !tabPaths[i].isEmpty {
+                tabPaths[i] = NavigationPath()
+            }
+        }
         .task {
             DebugSupport.seedIfNeeded(context)
             Trash.purgeExpired(context: context)   // 清理满 7 天的回收站条目
@@ -151,6 +161,33 @@ enum DebugSupport {
     }
 }
 
+// MARK: - 导航栈与全局入口
+
+/// NavActions 的导航目的地（值驱动，push 记录进 NavigationPath，切 tab 时才能统一弹回）
+enum RootDestination: Hashable {
+    case review    // 需处理
+    case settings  // 设置
+}
+
+/// 单个 tab 的导航栈：绑定各自的 path，并在根视图上注册 RootDestination 的目的地。
+/// 注册点放在每个栈的根视图层级，避免子视图重复注册告警。
+private struct RootTabStack<Content: View>: View {
+    @Binding var path: NavigationPath
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        NavigationStack(path: $path) {
+            content()
+                .navigationDestination(for: RootDestination.self) { destination in
+                    switch destination {
+                    case .review: ReviewView()
+                    case .settings: SettingsView()
+                    }
+                }
+        }
+    }
+}
+
 /// 导航栏右侧：需修正入口 + 设置入口
 struct NavActions: View {
     @Query(filter: #Predicate<InboxItem> { $0.needsReview && !$0.deletedLocally })
@@ -159,9 +196,7 @@ struct NavActions: View {
     var body: some View {
         HStack(spacing: 14) {
             if !reviewItems.isEmpty {
-                NavigationLink {
-                    ReviewView()
-                } label: {
+                NavigationLink(value: RootDestination.review) {
                     Image(systemName: "exclamationmark.circle")
                         .font(.title2)
                         .foregroundStyle(Theme.accent)
@@ -169,9 +204,7 @@ struct NavActions: View {
                         .contentShape(Circle())
                 }
             }
-            NavigationLink {
-                SettingsView()
-            } label: {
+            NavigationLink(value: RootDestination.settings) {
                 Image(systemName: "gearshape")
                     .font(.title2)
                     .foregroundStyle(Theme.sub)

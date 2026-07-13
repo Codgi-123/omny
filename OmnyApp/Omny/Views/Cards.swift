@@ -447,8 +447,8 @@ struct TodoRow: View {
             .alignmentGuide(.checkTitle) { $0[VerticalAlignment.center] }
 
             VStack(alignment: .leading, spacing: 3) {
-                // 标题 + 紧跟其后的来源 tag（本地/滴答）
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                // 标题 + 紧跟其后的来源 tag（本地/滴答）；tag 是小字号胶囊，按基线对齐会视觉偏低，改用居中
+                HStack(alignment: .center, spacing: 6) {
                     Text(item.todoTitle ?? item.rawText)
                         .font(.body)
                         // 只有「放弃」才划线；「已完成」仅变灰不划线
