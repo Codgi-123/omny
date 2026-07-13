@@ -17,10 +17,11 @@ jobs:
         working-directory: OmnyCore
         run: swift test
 
-  # App 编译 + 未签名 ipa：只在 dev-zhanghaha 分支（Windows 协作者的分支）push 时跑，
-  # 或手动触发。main 上的日常提交不消耗 macOS 分钟数（Mac 本地开发不需要 CI 出包）。
+  # App 编译 + 未签名 ipa：仅手动触发（Actions 页面 Run workflow）。
+  # 2026-07-12 起真机验证走 TestFlight 工作流（testflight.yml，打 tf-* tag 即云端打包上传），
+  # 此 job 仅留作验证编译/临时出未签名包，不再随 push 自动跑，省 10 倍计费的 macOS 分钟。
   app-macos:
-    if: github.ref == 'refs/heads/dev-zhanghaha' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
