@@ -399,7 +399,8 @@ enum Ingestor {
                                    source: ItemSource, context: ModelContext) -> InboxItem {
         let item = InboxItem(kind: .trip, source: source, rawText: text)
         item.tripKindRaw = info.kind.rawValue
-        item.tripNumber = info.number
+        // 酒店无班次号（TripInfo.number 约定为空串），存 nil 让 UI 的 ?? 兜底生效
+        item.tripNumber = info.number.isEmpty ? nil : info.number
         item.departAt = resolveDate(info.departure)
         item.departPlace = info.departurePlace
         item.arriveAt = resolveDate(info.arrival)

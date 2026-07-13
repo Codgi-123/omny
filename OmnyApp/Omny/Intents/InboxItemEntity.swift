@@ -104,7 +104,9 @@ extension InboxItemEntity {
             case .package:
                 let code = pickupCode.map { "，取件码 \($0)" } ?? ""
                 return "\(carrier ?? "快递")\(code)"
-            case .trip: return "行程 \(tripNumber ?? "")"
+            case .trip:
+                if tripKindRaw == TripInfo.Kind.hotel.rawValue { return "住宿 \(departPlace ?? "")" }
+                return "行程 \(tripNumber ?? "")"
             case .todo: return "待办 \(todoTitle ?? "")"
             case .bookmark: return "收藏 \(bookmarkTitle ?? urlString ?? "")"
             case .expense:
@@ -134,10 +136,11 @@ extension InboxItemEntity {
                     pickupCode: pickupCode, station: station,
                     status: PackageStatus(rawValue: packageStatusRaw ?? 0) ?? .inTransit))
             case .trip:
-                guard let number = tripNumber,
-                      let kind = tripKindRaw.flatMap(TripInfo.Kind.init) else { return nil }
+                // 酒店无班次号（number 约定为空串）；车/机缺班次号视为无效载荷
+                guard let kind = tripKindRaw.flatMap(TripInfo.Kind.init),
+                      tripNumber != nil || kind == .hotel else { return nil }
                 return .trip(TripInfo(
-                    kind: kind, number: number,
+                    kind: kind, number: tripNumber ?? "",
                     departure: Payload.components(departAt), departurePlace: departPlace,
                     arrival: Payload.components(arriveAt), arrivalPlace: arrivePlace, seat: seat))
             case .todo:
@@ -216,7 +219,7 @@ extension InboxItemEntity.Payload {
         case .trip(let info):
             self.init(typeRaw: ItemType.trip.rawValue)
             tripKindRaw = info.kind.rawValue
-            tripNumber = info.number
+            tripNumber = info.number.isEmpty ? nil : info.number
             departAt = Self.date(info.departure)
             departPlace = info.departurePlace
             arriveAt = Self.date(info.arrival)

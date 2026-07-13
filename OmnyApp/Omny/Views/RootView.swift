@@ -108,6 +108,13 @@ enum DebugSupport {
             i.arriveAt = Date().addingTimeInterval((departIn + 2) * 3600)
             return i
         }
+        func hotel(_ name: String, _ room: String, _ checkInHours: Double, _ nights: Double) -> InboxItem {
+            let i = InboxItem(kind: .trip, source: .screenshot, rawText: "")
+            i.tripKindRaw = "hotel"; i.departPlace = name; i.seat = room
+            i.departAt = Date().addingTimeInterval(checkInHours * 3600)
+            i.arriveAt = Date().addingTimeInterval((checkInHours + nights * 24) * 3600)
+            return i
+        }
         func todo(_ title: String, _ source: ItemSource, _ dueIn: Double?, _ done: Bool) -> InboxItem {
             let i = InboxItem(kind: .todo, source: source, rawText: title)
             i.todoTitle = title; i.todoCompleted = done
@@ -129,6 +136,7 @@ enum DebugSupport {
             trip("CA1831", "flight", "北京 T3", "上海 虹桥", "12A", 3.5),
             trip("G59", "train", "杭州东", "南京南", "07车09F", 28),
             trip("G7", "train", "上海虹桥", "北京南", "03车01A", -48),
+            hotel("莫干山语·山隐民宿", "山景大床房", 50, 2),
             todo("买牛奶和鸡蛋", .manual, 6, false),
             todo("给妈妈打电话", .manual, nil, false),
             todo("写周报", .dida, 30, false),

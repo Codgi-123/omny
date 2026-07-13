@@ -117,7 +117,9 @@ extension InboxItem {
         case .package:
             let code = pickupCode.map { "，取件码 \($0)" } ?? ""
             return "\(carrier ?? "快递")\(code)"
-        case .trip: return "行程 \(tripNumber ?? "")"
+        case .trip:
+            if tripKindRaw == "hotel" { return "住宿 \(departPlace ?? "")" }
+            return "行程 \(tripNumber ?? "")"
         case .todo: return "待办 \(todoTitle ?? "")"
         case .bookmark: return "收藏 \(bookmarkTitle ?? urlString ?? "")"
         case .expense:

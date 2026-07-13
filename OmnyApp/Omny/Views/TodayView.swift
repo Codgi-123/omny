@@ -10,13 +10,20 @@ struct TodayView: View {
 
     private let margin: CGFloat = Theme.Space.page
 
+    // 行程/快递轮播的顺序与列表页一致：手动拖过的按 sortOrder，没拖过按各自默认规则
+
     private var upcomingTrips: [InboxItem] {
         items.filter { $0.kind == .trip && $0.deletedAt == nil && ($0.departAt ?? .distantPast) > .now }
-            .sorted { ($0.departAt ?? .distantFuture) < ($1.departAt ?? .distantFuture) }
+            .manuallySorted { ($0.departAt ?? .distantFuture) < ($1.departAt ?? .distantFuture) }
     }
 
     private var awaitingPackages: [InboxItem] {
-        items.filter { $0.kind == .package && $0.deletedAt == nil && $0.packageStatus != .pickedUp }
+        let open = items.filter { $0.kind == .package && $0.deletedAt == nil && $0.packageStatus != .pickedUp }
+        // 待取排在在途前（对齐快递页的分组次序），组内各按手动顺序
+        return open.filter { $0.packageStatus == .awaitingPickup }
+            .manuallySorted { $0.createdAt > $1.createdAt }
+            + open.filter { $0.packageStatus != .awaitingPickup }
+            .manuallySorted { $0.createdAt > $1.createdAt }
     }
 
     private var openTodos: [InboxItem] {

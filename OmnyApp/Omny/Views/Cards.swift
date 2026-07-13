@@ -294,16 +294,24 @@ struct CopyGlyph: View {
     }
 }
 
-// MARK: - 行程图标块（机票 / 火车）
+// MARK: - 行程图标块（机票 / 火车 / 酒店）
 
-/// 行程图标块：与 IconChip 同款渐变分类色底 + 白色图标，内嵌自绘细线条机票/火车图标
-/// （细线圆头笔画，风格对齐底部 tab 栏 icon.svg；资源见 Assets 的 TripFlight / TripTrain）。
+/// 行程图标块：与 IconChip 同款渐变分类色底 + 白色图标，内嵌自绘细线条机票/火车/床铺图标
+/// （细线圆头笔画，风格对齐底部 tab 栏 icon.svg；资源见 Assets 的 TripFlight / TripTrain / TripHotel）。
 struct TripIconChip: View {
-    let isFlight: Bool
+    let kindRaw: String?
     var size: CGFloat = 34
 
+    private var assetName: String {
+        switch kindRaw {
+        case "flight": "TripFlight"
+        case "hotel": "TripHotel"
+        default: "TripTrain"
+        }
+    }
+
     var body: some View {
-        Image(isFlight ? "TripFlight" : "TripTrain")
+        Image(assetName)
             .resizable()
             .renderingMode(.template)
             .aspectRatio(contentMode: .fit)
@@ -320,7 +328,14 @@ struct TripCard: View {
     let item: InboxItem
     @Environment(\.modelContext) private var context
 
-    private var isFlight: Bool { item.tripKindRaw == "flight" }
+    private var isHotel: Bool { item.tripKindRaw == "hotel" }
+
+    /// 标题：车/机用班次号；酒店无班次号，用酒店/民宿名（departPlace，见 TripInfo.Kind.hotel 的字段映射）
+    private var title: String {
+        if isHotel { return item.departPlace ?? "住宿" }
+        if let number = item.tripNumber, !number.isEmpty { return number }
+        return "行程"
+    }
 
     /// 日期 + 星期（融进时间路线中间，作为出发到达之间的强化标签）
     private var dateWeekday: String? {
@@ -331,66 +346,151 @@ struct TripCard: View {
     var body: some View {
         VStack(spacing: 14) {
             HStack(spacing: 10) {
-                TripIconChip(isFlight: isFlight, size: 34)
+                TripIconChip(kindRaw: item.tripKindRaw, size: 34)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(item.tripNumber ?? "行程")
+                    Text(title)
                         .font(.headline)
-                    if let seat = item.seat {
+                    if let seat = item.seat {  // 酒店时 seat 存的是房型
                         Text(seat)
                             .font(.caption)
                             .foregroundStyle(Theme.sub)
                     }
                 }
                 Spacer()
-                if let depart = item.departAt {
-                    if depart > .now {
-                        StatusTag(text: countdown(to: depart) + "后", color: Theme.trip)
-                    } else {
-                        StatusTag(text: "已结束", color: Theme.sub)
-                    }
-                }
+                statusTag
             }
-            // 出发 —（日期·星期 + 箭头）— 到达：日期星期升到路线正中，与出发/到达时间同一视觉层，不再是底部孤立小灰字
-            HStack(alignment: .center, spacing: 8) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(item.departAt?.formatted(date: .omitted, time: .shortened) ?? "--:--")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .monospacedDigit()
-                    Text(item.departPlace ?? "出发")
-                        .font(.footnote)
-                        .foregroundStyle(Theme.sub)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+            if isHotel { hotelRoute } else { transitRoute }
+        }
+    }
 
-                VStack(spacing: 3) {
-                    if let dateWeekday {
-                        Text(dateWeekday)
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(Theme.trip)
-                            .lineLimit(1)
-                    }
-                    Image(systemName: "arrow.right")
-                        .font(.caption)
-                        .foregroundStyle(Theme.sub)
-                }
-                .fixedSize()
-
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text(item.arriveAt?.formatted(date: .omitted, time: .shortened) ?? "--:--")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .monospacedDigit()
-                    Text(item.arrivePlace ?? "到达")
-                        .font(.footnote)
-                        .foregroundStyle(Theme.sub)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                }
-                .frame(maxWidth: .infinity, alignment: .trailing)
+    /// 车/机：出发前倒计时，出发后已结束；酒店：入住前倒计时 → 入住中 → 离店后已结束
+    @ViewBuilder private var statusTag: some View {
+        if isHotel {
+            if let checkIn = item.departAt, checkIn > .now {
+                StatusTag(text: countdown(to: checkIn) + "后", color: Theme.trip)
+            } else if let checkOut = item.arriveAt, checkOut > .now {
+                StatusTag(text: "入住中", color: Theme.trip)
+            } else if item.departAt != nil || item.arriveAt != nil {
+                StatusTag(text: "已结束", color: Theme.sub)
             }
+        } else if let depart = item.departAt {
+            if depart > .now {
+                StatusTag(text: countdown(to: depart) + "后", color: Theme.trip)
+            } else {
+                StatusTag(text: "已结束", color: Theme.sub)
+            }
+        }
+    }
+
+    // MARK: 酒店路线行（入住 —（N晚 + 箭头）— 离店，复用车/机路线的三栏骨架）
+
+    /// 入住/离店跨天，两侧主文字放日期（车/机放时分）；正中放晚数（车/机放日期星期）
+    private var nights: Int? {
+        guard let checkIn = item.departAt, let checkOut = item.arriveAt else { return nil }
+        let cal = Calendar.current
+        let days = cal.dateComponents([.day], from: cal.startOfDay(for: checkIn),
+                                      to: cal.startOfDay(for: checkOut)).day ?? 0
+        return days > 0 ? days : nil
+    }
+
+    private func hotelDate(_ date: Date?) -> String {
+        date?.formatted(.dateTime.locale(Locale(identifier: "zh_CN")).month().day()) ?? "--"
+    }
+
+    /// 时刻标签：解析常只有日期没有时刻（补年后时刻为 0:00），非零时刻才展示（如「14:00 入住」）
+    private func hotelTimeLabel(_ date: Date?, _ verb: String) -> String {
+        guard let date else { return verb }
+        let c = Calendar.current.dateComponents([.hour, .minute], from: date)
+        guard (c.hour ?? 0) != 0 || (c.minute ?? 0) != 0 else { return verb }
+        return date.formatted(date: .omitted, time: .shortened) + " " + verb
+    }
+
+    private var hotelRoute: some View {
+        HStack(alignment: .center, spacing: 8) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(hotelDate(item.departAt))
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                    .monospacedDigit()
+                Text(hotelTimeLabel(item.departAt, "入住"))
+                    .font(.footnote)
+                    .foregroundStyle(Theme.sub)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            VStack(spacing: 3) {
+                if let nights {
+                    Text("\(nights)晚")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(Theme.trip)
+                        .lineLimit(1)
+                }
+                Image(systemName: "arrow.right")
+                    .font(.caption)
+                    .foregroundStyle(Theme.sub)
+            }
+            .fixedSize()
+
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(hotelDate(item.arriveAt))
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                    .monospacedDigit()
+                Text(hotelTimeLabel(item.arriveAt, "离店"))
+                    .font(.footnote)
+                    .foregroundStyle(Theme.sub)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+    }
+
+    // MARK: 车/机路线行
+
+    // 出发 —（日期·星期 + 箭头）— 到达：日期星期升到路线正中，与出发/到达时间同一视觉层，不再是底部孤立小灰字
+    private var transitRoute: some View {
+        HStack(alignment: .center, spacing: 8) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.departAt?.formatted(date: .omitted, time: .shortened) ?? "--:--")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                    .monospacedDigit()
+                Text(item.departPlace ?? "出发")
+                    .font(.footnote)
+                    .foregroundStyle(Theme.sub)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            VStack(spacing: 3) {
+                if let dateWeekday {
+                    Text(dateWeekday)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(Theme.trip)
+                        .lineLimit(1)
+                }
+                Image(systemName: "arrow.right")
+                    .font(.caption)
+                    .foregroundStyle(Theme.sub)
+            }
+            .fixedSize()
+
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(item.arriveAt?.formatted(date: .omitted, time: .shortened) ?? "--:--")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                    .monospacedDigit()
+                Text(item.arrivePlace ?? "到达")
+                    .font(.footnote)
+                    .foregroundStyle(Theme.sub)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
 

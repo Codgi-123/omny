@@ -3,6 +3,71 @@ import SwiftData
 import PhotosUI
 import OmnyCore
 
+// MARK: - 拖动排序触感
+
+/// 长按抬卡触感：List 原生拖动排序抬起时没有震动反馈，补一个中震。
+/// 不能用 SwiftUI 手势——它与 List 底层 UIKit 拖拽互斥（长按设 0.5s 被系统取消收不到震动，
+/// 设 0.25s 先完成又会抢掉系统拖拽导致拖不动）。改为行背景埋探针视图，向上找到 List 的
+/// UICollectionView，直接监听系统抬卡（长按类）手势的 .began 时刻补震：
+/// 不参与手势竞争，拖动不受影响，且与抬卡时机严格同步。
+extension View {
+    @ViewBuilder
+    func dragLiftHaptic(_ enabled: Bool = true) -> some View {
+        if enabled {
+            background(ReorderLiftHaptic())
+        } else {
+            self
+        }
+    }
+}
+
+private struct ReorderLiftHaptic: UIViewRepresentable {
+    func makeUIView(context: Context) -> Probe {
+        let v = Probe()
+        v.isUserInteractionEnabled = false
+        return v
+    }
+    func updateUIView(_ uiView: Probe, context: Context) {}
+
+    final class Probe: UIView {
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            guard window != nil else { return }
+            var v = superview
+            while let cur = v, !(cur is UICollectionView) { v = cur.superview }
+            guard let cv = v as? UICollectionView else { return }
+            // 抬卡由长按类手势驱动（_UIDragLift… 是 UILongPressGestureRecognizer 子类）；
+            // 这两个列表的行没有长按菜单，不会误触发
+            for g in cv.gestureRecognizers ?? [] where g is UILongPressGestureRecognizer {
+                HapticRelay.hook(g)
+            }
+        }
+    }
+
+    /// addTarget 的接收者 + 按手势去重（行复用时探针会反复挂载，防止同一手势重复加 target 叠加震动）
+    final class HapticRelay: NSObject {
+        static let shared = HapticRelay()
+        private static var hookedKey: UInt8 = 0
+
+        static func hook(_ g: UIGestureRecognizer) {
+            guard objc_getAssociatedObject(g, &hookedKey) == nil else { return }
+            objc_setAssociatedObject(g, &hookedKey, true, .OBJC_ASSOCIATION_RETAIN)
+            g.addTarget(shared, action: #selector(stateChanged(_:)))
+        }
+
+        @objc private func stateChanged(_ g: UIGestureRecognizer) {
+            if g.state == .began {
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            }
+        }
+    }
+}
+
+/// 落位轻震：与抬卡的中震形成「拿起-放下」一对反馈
+func dragDropHaptic() {
+    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+}
+
 // MARK: - 快递页：待取 / 在途 / 已签收
 
 struct ExpressView: View {
@@ -10,7 +75,15 @@ struct ExpressView: View {
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var items: [InboxItem]
 
     private var packages: [InboxItem] { items.filter { $0.kind == .package && $0.deletedAt == nil } }
-    private var awaiting: [InboxItem] { packages.filter { $0.packageStatus == .awaitingPickup } }
+    // 待取/在途支持长按拖动排序（首页轮播同序）；默认（未拖过）按创建时间倒序
+    private var awaiting: [InboxItem] {
+        packages.filter { $0.packageStatus == .awaitingPickup }
+            .manuallySorted { $0.createdAt > $1.createdAt }
+    }
+    private var inTransit: [InboxItem] {
+        packages.filter { $0.packageStatus < .awaitingPickup }
+            .manuallySorted { $0.createdAt > $1.createdAt }
+    }
 
     @State private var pendingDelete: InboxItem?   // 待确认删除的快递（非 nil 时弹确认框）
     @State private var copiedAll = false           // 一键复制所有取件码的成功反馈态
@@ -20,8 +93,8 @@ struct ExpressView: View {
         VStack(spacing: 0) {
             ScreenHeader("快递") { NavActions() }
             List {
-                group("待取", awaiting, showsCopyAll: true)
-                group("在途", packages.filter { $0.packageStatus < .awaitingPickup })
+                group("待取", awaiting, showsCopyAll: true, movable: true)
+                group("在途", inTransit, movable: true)
                 group("已签收", packages.filter { $0.packageStatus == .pickedUp }, dimmed: true)
             }
             .listStyle(.plain)
@@ -55,7 +128,7 @@ struct ExpressView: View {
 
     @ViewBuilder
     private func group(_ title: String, _ list: [InboxItem], dimmed: Bool = false,
-                       showsCopyAll: Bool = false) -> some View {
+                       showsCopyAll: Bool = false, movable: Bool = false) -> some View {
         if !list.isEmpty {
             Section {
                 ForEach(list) { pkg in
@@ -70,7 +143,16 @@ struct ExpressView: View {
                             } label: { Label("删除", systemImage: "trash") }
                                 .tint(Theme.red)
                         }
+                        .dragLiftHaptic(movable)
                 }
+                // 长按拖动排序（List 原生手势，无需编辑模式），落位后重写组内 sortOrder
+                .onMove { from, to in
+                    guard movable else { return }
+                    list.applyManualMove(from: from, to: to)
+                    try? context.save()
+                    dragDropHaptic()
+                }
+                .moveDisabled(!movable)
             } header: {
                 sectionHeader(title, count: list.count, copyAll: showsCopyAll ? list : nil)
             }
@@ -128,12 +210,20 @@ struct TripView: View {
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var items: [InboxItem]
 
     private var trips: [InboxItem] { items.filter { $0.kind == .trip && $0.deletedAt == nil } }
+
+    /// 分组边界：车/机按出发时间；酒店按离店时间——入住期间（卡片显示「入住中」）仍留在上组
+    private func tripEnd(_ item: InboxItem) -> Date {
+        if item.tripKindRaw == "hotel" { return item.arriveAt ?? item.departAt ?? .distantPast }
+        return item.departAt ?? .distantPast
+    }
+
+    /// 即将出行支持长按拖动排序（首页轮播同序）；默认（未拖过）按出发时间升序
     private var upcoming: [InboxItem] {
-        trips.filter { ($0.departAt ?? .distantPast) > .now }
-            .sorted { ($0.departAt ?? .distantFuture) < ($1.departAt ?? .distantFuture) }
+        trips.filter { tripEnd($0) > .now }
+            .manuallySorted { ($0.departAt ?? .distantFuture) < ($1.departAt ?? .distantFuture) }
     }
     private var past: [InboxItem] {
-        trips.filter { ($0.departAt ?? .distantPast) <= .now }
+        trips.filter { tripEnd($0) <= .now }
             .sorted { ($0.departAt ?? .distantPast) > ($1.departAt ?? .distantPast) }
     }
 
@@ -150,6 +240,13 @@ struct TripView: View {
                                     withAnimation(.snappy) { Trash.softDelete(item, context: context) }
                                 } label: { Label("删除", systemImage: "trash") }
                             }
+                            .dragLiftHaptic()
+                    }
+                    // 长按拖动排序（List 原生手势，无需编辑模式），落位后重写组内 sortOrder
+                    .onMove { from, to in
+                        upcoming.applyManualMove(from: from, to: to)
+                        try? context.save()
+                        dragDropHaptic()
                     }
                 } header: {
                     tripHeader("即将出行")
@@ -1080,7 +1177,8 @@ struct TrashView: View {
     private func titleFor(_ i: InboxItem) -> String {
         switch i.kind {
         case .package: i.carrier ?? "快递"
-        case .trip: i.tripNumber ?? "\(i.departPlace ?? "") → \(i.arrivePlace ?? "")"
+        case .trip: i.tripKindRaw == "hotel" ? (i.departPlace ?? "住宿")
+                    : i.tripNumber ?? "\(i.departPlace ?? "") → \(i.arrivePlace ?? "")"
         case .bookmark: i.bookmarkTitle ?? i.urlString ?? i.rawText
         case .todo: i.todoTitle ?? i.rawText
         case .expense: i.merchant ?? i.rawText
