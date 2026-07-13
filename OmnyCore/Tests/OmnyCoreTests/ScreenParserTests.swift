@@ -5,15 +5,26 @@ import FoundationNetworking
 #endif
 @testable import OmnyCore
 
-/// ScreenParser：截图 OCR 脏文本 → 多条多类。
-/// 验收基线来自真实场景——一张备忘录截图同时含一条待办和一条快递，夹杂时间戳/"无更多文本"/界面噪声。
+/// ScreenParser：截图 OCR 脏文本 → 三层管线（规则路由 → LLM 分类兜底 → 分类专用抽取）。
+/// 用 MockTransport 按请求的 system prompt 分流响应，白盒断言「发的是哪个 prompt」。
 private func envelope(_ inner: String) -> Data {
     try! JSONSerialization.data(withJSONObject: ["content": [["type": "text", "text": inner]]])
 }
 
+/// 请求体里的 system prompt 判别：分类请求 / 各类专用抽取请求
+private func promptKind(of request: URLRequest) -> String {
+    let body = String(decoding: request.httpBody ?? Data(), as: UTF8.self)
+    if body.contains("属于哪一类") { return "classify" }
+    if body.contains("提取快递物流信息") { return "package" }
+    if body.contains("提取行程信息") { return "trip" }
+    if body.contains("提取待办事项") { return "todo" }
+    if body.contains("提取交易记录") { return "expense" }
+    return "unknown"
+}
+
 final class ScreenParserTests: XCTestCase {
 
-    /// 用户实测的脏数据：整段被旧管线误判为"快递"，待办被吞、快递缺字段。
+    /// 用户实测的脏数据：一屏同时有备忘录待办和快递通知。
     let dirtyOCR = """
     22:434
     今8
@@ -27,45 +38,30 @@ final class ScreenParserTests: XCTestCase {
     搜索
     """
 
-    // MARK: - LLM 路径：一次抽出多条多类
+    // MARK: - 第一层路由 + 第三层专用抽取
 
-    func testExtractsMixedTodoAndPackage() async throws {
-        // 模拟 LLM 从脏文本抽出：1 条待办 + 1 条快递，噪声被忽略
-        let inner = #"""
-        {"todos":[{"title":"去天府广场拿水果","due":"2026-07-11T00:00:00+08:00"}],
-         "packages":[{"carrier":"韵达快递","trackingNumber":null,"trackingTail":"93136",
-                      "pickupCode":"6-28-93136","station":"经开区某某驿站"}],
-         "trips":[]}
-        """#
-        let parser = ScreenParser(config: .claude(apiKey: "sk-test"),
-                                  transport: MockTransport { _ in (envelope(inner), 200) })
+    /// 备忘录+快递混合截图：混合暂不做——路由取最高分类别（快递 7 > 待办 5），
+    /// 只发快递专用 prompt、只抽快递（待办被舍弃是当前产品决定）。
+    func testMultiSignalRoutesTopCategoryAndExtractsPackage() async throws {
+        let inner = #"{"packages":[{"carrier":"韵达快递","pickupCode":"6-28-93136","station":"经开区某某驿站"}]}"#
+        let transport = MockTransport { _ in (envelope(inner), 200) }
+        let parser = ScreenParser(config: .claude(apiKey: "sk-test"), transport: transport)
         let result = try await parser.parse(dirtyOCR)
 
-        // 多条多类 → mixed
-        guard case .mixed(let payloads) = try XCTUnwrap(result).payload else {
-            return XCTFail("应为 mixed")
+        guard case .package(let info) = try XCTUnwrap(result).payload else {
+            return XCTFail("应抽出单条快递")
         }
-        XCTAssertEqual(payloads.count, 2)
+        XCTAssertEqual(info.carrier, "韵达快递")
+        XCTAssertEqual(info.pickupCode, "6-28-93136")
+        XCTAssertEqual(info.station, "经开区某某驿站")
+        XCTAssertEqual(info.status, .awaitingPickup, "状态由正则从原文措辞推断")
 
-        // 快递条目字段完整（待办不再被吞、快递不再缺字段）
-        let pkg = payloads.compactMap { p -> PackageInfo? in
-            if case .package(let i) = p { return i }; return nil
-        }.first
-        XCTAssertEqual(pkg?.carrier, "韵达快递")
-        XCTAssertEqual(pkg?.pickupCode, "6-28-93136")
-        XCTAssertEqual(pkg?.trackingTail, "93136")
-        XCTAssertEqual(pkg?.station, "经开区某某驿站")
-        XCTAssertEqual(pkg?.status, .awaitingPickup)
-
-        // 待办条目
-        let todos = payloads.compactMap { p -> [TodoInfo]? in
-            if case .todos(let t) = p { return t }; return nil
-        }.first
-        XCTAssertEqual(todos?.first?.title, "去天府广场拿水果")
+        // 白盒：规则路由直达快递抽取，一次调用、没有分类请求
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.map(promptKind(of:)), ["package"])
     }
 
-    /// 支付成功页截图 → 记账。回归用户实测：整段被识屏送进未分类（旧 ScreenParser 不认记账）。
-    /// 现在应抽出 expense，字段对齐（含 txnID，支付截图有交易单号）。
+    /// 支付成功页截图 → 记账。字段瘦身后只抽方向/金额/时间。
     func testExtractsExpenseFromPaymentScreenshot() async throws {
         let paymentOCR = """
         账单
@@ -79,111 +75,139 @@ final class ScreenParserTests: XCTestCase {
         交易单号 4200003170202607105997164744
         商户单号 0461368606697779658001632
         """
-        // 模拟 LLM 抽出：direction 支出、amount 去负号、merchant 取店名、txnID 取交易单号
-        let inner = #"""
-        {"todos":[],"packages":[],"trips":[],
-         "expenses":[{"direction":"expense","amount":"19.00",
-                      "merchant":"钢管厂五区小郡肝串串香","occurredAt":"2026-07-10T19:41:59",
-                      "channel":"成都银行储蓄卡","cardTail":"8164",
-                      "txnID":"4200003170202607105997164744"}]}
-        """#
-        let parser = ScreenParser(config: .claude(apiKey: "sk-test"),
-                                  transport: MockTransport { _ in (envelope(inner), 200) })
+        let inner = #"{"expenses":[{"direction":"expense","amount":"19.00","occurredAt":"2026-07-10T19:41:59"}]}"#
+        let transport = MockTransport { _ in (envelope(inner), 200) }
+        let parser = ScreenParser(config: .claude(apiKey: "sk-test"), transport: transport)
         let result = try await parser.parse(paymentOCR)
 
-        // 单条 → 不包 mixed，直接是 .expense
         guard case .expense(let info) = try XCTUnwrap(result).payload else {
             return XCTFail("应抽出 expense，而非落未分类")
         }
         XCTAssertEqual(info.direction, .expense)
         XCTAssertEqual(info.amount, Decimal(string: "19.00"))
-        XCTAssertEqual(info.merchant, "钢管厂五区小郡肝串串香")
-        XCTAssertEqual(info.channel, "成都银行储蓄卡")
-        XCTAssertEqual(info.cardTail, "8164")
-        XCTAssertEqual(info.txnID, "4200003170202607105997164744")
-        // 分类不由结构化抽取打，留空交 categorizer
+        XCTAssertEqual(info.occurredAt?.month, 7)
+        XCTAssertEqual(info.occurredAt?.day, 10)
+        // 瘦身后不再抽取的字段保持为空；分类留给 categorizer
+        XCTAssertNil(info.merchant)
+        XCTAssertNil(info.txnID)
         XCTAssertNil(info.categoryMajor)
+
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.map(promptKind(of:)), ["expense"], "指纹+身份锚点应直达记账抽取")
     }
 
-    /// 记账金额抽不出（只有噪声字段）→ 该 expense 条目被丢弃，不产空账单卡
-    func testExpenseWithoutAmountDropped() async throws {
-        let inner = #"""
-        {"todos":[],"packages":[],"trips":[],
-         "expenses":[{"direction":"expense","amount":null,"merchant":"某商户",
-                      "occurredAt":null,"channel":null,"cardTail":null,"txnID":null}]}
-        """#
+    /// 方向宽容解析：模型输出 "income" 变体（大小写/中文）不被静默当成支出
+    func testExpenseIncomeDirectionLenient() async throws {
+        let receiveOCR = """
+        红包详情
+        +5.00
+        已存入零钱
+        转账单号 2100003990100051104730174585
+        """
+        let inner = #"{"expenses":[{"direction":"Income","amount":"5.00","occurredAt":null}]}"#
         let parser = ScreenParser(config: .claude(apiKey: "sk-test"),
                                   transport: MockTransport { _ in (envelope(inner), 200) })
-        let result = try await parser.parse("some noise")
+        let result = try await parser.parse(receiveOCR)
+        guard case .expense(let info) = try XCTUnwrap(result).payload else {
+            return XCTFail("应抽出 expense")
+        }
+        XCTAssertEqual(info.direction, .income)
+    }
+
+    /// 酒店/民宿订单页 → 行程 kind=hotel，departure/arrival 映射入住/离店
+    func testExtractsHotelTrip() async throws {
+        let hotelOCR = """
+        ～分享房源
+        四 联系房东
+        10月4日周六-10月6日周一（2晚
+        14:00后入住
+        12:00前离店
+        金桂苑整套民宿
+        """
+        let inner = #"""
+        {"trips":[{"kind":"hotel","number":null,"departure":"10-04T14:00","departurePlace":"金桂苑整套民宿",
+                   "arrival":"10-06T12:00","arrivalPlace":null,"seat":null}]}
+        """#
+        let transport = MockTransport { _ in (envelope(inner), 200) }
+        let parser = ScreenParser(config: .claude(apiKey: "sk-test"), transport: transport)
+        let result = try await parser.parse(hotelOCR)
+
+        guard case .trip(let info) = try XCTUnwrap(result).payload else {
+            return XCTFail("应抽出 hotel 行程")
+        }
+        XCTAssertEqual(info.kind, .hotel)
+        XCTAssertEqual(info.number, "", "酒店无班次号")
+        XCTAssertEqual(info.departurePlace, "金桂苑整套民宿")
+        XCTAssertEqual(info.departure?.month, 10)
+        XCTAssertEqual(info.departure?.day, 4)
+        XCTAssertEqual(info.departure?.hour, 14)
+
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.map(promptKind(of:)), ["trip"])
+    }
+
+    /// 记账金额抽不出 → 该条被硬校验丢弃；规则也兜不出 → 整体 nil，不产空账单卡
+    func testExpenseWithoutAmountDropped() async throws {
+        let paymentOCR = """
+        支付成功
+        某商户
+        交易单号 4200003170202607105997164744
+        """
+        let inner = #"{"expenses":[{"direction":"expense","amount":null,"occurredAt":null}]}"#
+        let parser = ScreenParser(config: .claude(apiKey: "sk-test"),
+                                  transport: MockTransport { _ in (envelope(inner), 200) })
+        let result = try await parser.parse(paymentOCR)
         XCTAssertNil(result, "无金额的记账条目应被丢弃")
     }
 
-    /// 一屏同时有快递和记账（如账单页夹带取件通知）→ mixed 含两类
-    func testMixedExpenseAndPackage() async throws {
-        let inner = #"""
-        {"todos":[],
-         "packages":[{"carrier":"顺丰速运","trackingNumber":null,"trackingTail":null,"pickupCode":"1-2-3","station":null}],
-         "trips":[],
-         "expenses":[{"direction":"expense","amount":"19.00","merchant":"串串香",
-                      "occurredAt":null,"channel":null,"cardTail":null,"txnID":null}]}
-        """#
+    /// 字段全空的快递条目被硬校验丢弃；规则也兜不出（行太短）→ nil，不产空快递卡
+    func testEmptyPackageItemDropped() async throws {
+        let inner = #"{"packages":[{"carrier":null,"pickupCode":null,"station":null}]}"#
         let parser = ScreenParser(config: .claude(apiKey: "sk-test"),
                                   transport: MockTransport { _ in (envelope(inner), 200) })
-        let result = try await parser.parse("...")
-        let flat = try XCTUnwrap(result).payload.flattened
-        XCTAssertEqual(Set(flat.map(\.itemType)), [.package, .expense])
+        // "丰巢" 指纹+词袋直达快递路由，但抽取全空
+        let result = try await parser.parse("丰巢")
+        XCTAssertNil(result, "空快递条目应被丢弃，无有效条目则 nil")
     }
 
-    /// 展平：mixed 能被 Ingestor 递归展开成逐条单类
-    func testMixedFlattens() async throws {
-        let inner = #"""
-        {"todos":[{"title":"交房租","due":null}],
-         "packages":[{"carrier":"顺丰速运","trackingNumber":null,"trackingTail":null,"pickupCode":"1-2-3","station":null}],
-         "trips":[{"kind":"train","number":"G101","departure":null,"departurePlace":null,"arrival":null,"arrivalPlace":null,"seat":null}]}
-        """#
-        let parser = ScreenParser(config: .claude(apiKey: "sk-test"),
-                                  transport: MockTransport { _ in (envelope(inner), 200) })
-        let result = try await parser.parse("...")
-        let flat = try XCTUnwrap(result).payload.flattened
-        XCTAssertEqual(flat.count, 3)
-        XCTAssertEqual(Set(flat.map(\.itemType)), [.todo, .package, .trip])
-    }
+    // MARK: - 第二层：LLM 分类兜底（无规则信号的自由文本）
 
-    /// 只有一类一条时不包 mixed，退化成单类结果
-    func testSingleItemNotWrappedInMixed() async throws {
-        let inner = #"{"todos":[{"title":"买牛奶","due":null}],"packages":[],"trips":[]}"#
-        let parser = ScreenParser(config: .claude(apiKey: "sk-test"),
-                                  transport: MockTransport { _ in (envelope(inner), 200) })
+    /// 纯待办文本无规则信号 → 走 LLM 分类（todo）→ 待办专用抽取；单条不包 mixed
+    func testNoSignalClassifiesThenExtractsTodo() async throws {
+        let transport = MockTransport { request in
+            let body = String(decoding: request.httpBody ?? Data(), as: UTF8.self)
+            if body.contains("属于哪一类") {
+                return (envelope(#"{"category":"todo","reason":"购物备忘"}"#), 200)
+            }
+            return (envelope(#"{"todos":[{"title":"买牛奶","due":null}]}"#), 200)
+        }
+        let parser = ScreenParser(config: .claude(apiKey: "sk-test"), transport: transport)
         let result = try await parser.parse("买牛奶")
+
         guard case .todos(let todos) = try XCTUnwrap(result).payload else {
             return XCTFail("单条待办应为 .todos，不包 mixed")
         }
         XCTAssertEqual(todos.count, 1)
+        XCTAssertEqual(todos.first?.title, "买牛奶")
+
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.map(promptKind(of:)), ["classify", "todo"], "先分类后抽取")
     }
 
-    /// 全是噪声/空 → nil
-    func testAllEmptyReturnsNil() async throws {
-        let inner = #"{"todos":[],"packages":[],"trips":[]}"#
-        let parser = ScreenParser(config: .claude(apiKey: "sk-test"),
-                                  transport: MockTransport { _ in (envelope(inner), 200) })
+    /// 分类判 none（纯噪声）→ 不再发抽取请求，规则也兜不出 → nil
+    func testClassifyNoneReturnsNil() async throws {
+        let transport = MockTransport { _ in
+            (envelope(#"{"category":"none","reason":"纯界面噪声"}"#), 200)
+        }
+        let parser = ScreenParser(config: .claude(apiKey: "sk-test"), transport: transport)
         let result = try await parser.parse("22:40 无更多文本 搜索")
         XCTAssertNil(result)
+
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.map(promptKind(of:)), ["classify"], "none 后不应再发抽取请求")
     }
 
-    /// 字段全空的快递条目被丢弃（不产出空快递卡）
-    func testEmptyPackageItemDropped() async throws {
-        let inner = #"""
-        {"todos":[],
-         "packages":[{"carrier":null,"trackingNumber":null,"trackingTail":null,"pickupCode":null,"station":null}],
-         "trips":[]}
-        """#
-        let parser = ScreenParser(config: .claude(apiKey: "sk-test"),
-                                  transport: MockTransport { _ in (envelope(inner), 200) })
-        let result = try await parser.parse("some noise")
-        XCTAssertNil(result, "空快递条目应被丢弃，无有效条目则 nil")
-    }
-
-    // MARK: - 降级路径：无 LLM 时按行走规则
+    // MARK: - 降级路径：无 LLM / LLM 失败时按行走规则
 
     func testFallbackWithoutLLMExtractsPackageByLine() async throws {
         // config 为 nil → 纯规则降级
@@ -207,6 +231,19 @@ final class ScreenParserTests: XCTestCase {
         // 纯待办文本，规则识别不了 → 降级返回 nil（上层把原文兜进需处理）
         let result = try await parser.parse("明天记得去天府广场拿你买的水果")
         XCTAssertNil(result)
+    }
+
+    /// 规则降级一屏多行多类 → mixed，能被 Ingestor 展开逐条落库
+    func testFallbackMixedFlattens() async throws {
+        let parser = ScreenParser(config: nil)
+        let twoLines = """
+        【韵达快递】凭6-28-9336到金正米业取运单尾号9336包裹
+        您购买的5月1日G101次列车成都东站08:00开二等座车票
+        """
+        let result = try await parser.parse(twoLines)
+        let flat = try XCTUnwrap(result).payload.flattened
+        XCTAssertEqual(flat.count, 2)
+        XCTAssertEqual(Set(flat.map(\.itemType)), [.package, .trip])
     }
 
     /// 关键回归：配了 LLM 但 LLM 请求失败（网络/端点/超时）时，回退到规则降级，

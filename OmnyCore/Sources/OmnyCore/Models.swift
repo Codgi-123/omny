@@ -51,10 +51,13 @@ public struct TripInfo: Equatable, Sendable, Codable {
     public enum Kind: String, Codable, Sendable {
         case train
         case flight
+        /// 酒店/民宿预订：number 为空串，departure/arrival 映射入住/离店时间，
+        /// departurePlace 是酒店或民宿名称（截图识屏入口引入）
+        case hotel
     }
 
     public var kind: Kind
-    /// 车次/航班号，如 "G101"、"CA1831"
+    /// 车次/航班号，如 "G101"、"CA1831"；酒店无班次号，为空串
     public var number: String
     /// 出发日期时间（可能只有月日，或只有时分）
     public var departure: DateComponents?
