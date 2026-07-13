@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  # OmnyCore 测试：所有分支都跑（Linux 便宜，和 Windows 协作者的 WSL 环境一致）
+  # OmnyCore 测试：tag/PR/手动时跑（Linux 便宜，和 Windows 协作者的 WSL 环境一致）
   core-linux:
     runs-on: ubuntu-latest
     container: swift:6.0

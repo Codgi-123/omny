@@ -58,7 +58,7 @@ xcrun devicectl device install app --device <设备ID> \
 ## 分支与 CI
 
 - 维护者在 `main`，合并走 PR；Windows 协作者固定用 `dev-zhanghaha` 分支。
-- CI（`.github/workflows/ci.yml`）：所有 push 都在 Linux 跑 OmnyCore 测试；只有 `dev-zhanghaha` push 才在 macOS 编译 App 并出未签名 ipa（省 macOS 分钟数），其他分支要出包需手动 Run workflow。
+- CI（`.github/workflows/ci.yml`）：打 tag、提 PR、手动触发时在 Linux 跑 OmnyCore 测试，日常分支 push 不跑；macOS 编译出未签名 ipa 仅手动 Run workflow。TestFlight 发布（`testflight.yml`）：推 `tf-*` tag 触发云端打包上传。
 
 ## 设计原则（改代码时遵守）
 
