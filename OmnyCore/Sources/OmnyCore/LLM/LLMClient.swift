@@ -73,6 +73,9 @@ struct LLMClient {
             body = [
                 "model": config.model,
                 "max_tokens": maxTokens,
+                // 关闭思考模式（Qwen 等混合推理模型的扩展字段，标准端点忽略）：
+                // 解析/分类任务简单，思考只增加延迟；快捷指令场景等太久会被系统掐掉
+                "enable_thinking": false,
                 "messages": [
                     ["role": "system", "content": system],
                     ["role": "user", "content": user],

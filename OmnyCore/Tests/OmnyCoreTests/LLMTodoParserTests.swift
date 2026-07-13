@@ -69,6 +69,7 @@ final class LLMTodoParserTests: XCTestCase {
         XCTAssertEqual(body?["model"] as? String, "gpt-4o-mini")
         let responseFormat = body?["response_format"] as? [String: Any]
         XCTAssertEqual(responseFormat?["type"] as? String, "json_object")
+        XCTAssertEqual(body?["enable_thinking"] as? Bool, false, "混合推理模型应关闭思考")
         let messages = body?["messages"] as? [[String: Any]]
         XCTAssertEqual(messages?.first?["role"] as? String, "system")
     }
