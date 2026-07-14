@@ -4,31 +4,36 @@
 
 | 信息来源 | 进入方式 | 落成什么 |
 |---|---|---|
-| 短信（驿站/12306/航司） | 快捷指令自动化，收到即解析 | 快递（取件码/状态）、行程（车次/时刻/座位） |
-| 截图 | 快捷指令截屏 → App 内 OCR + LLM 提取 | 待办（可勾选确认入库） |
+| 短信（驿站/12306/航司/银行） | 快捷指令自动化，收到即解析 | 快递（取件码/状态）、行程（车次/时刻/座位）、记账（金额/商户/收支） |
+| 截图 | 快捷指令截屏 → App 内 OCR + LLM 提取 | 一屏多类（待办/快递/行程/记账），可勾选确认入库 |
 | 系统分享 | 任意 App 分享面板 → 选 Omny（分享扩展） | 收藏（链接/文本，LLM 自动打标） |
-| 手动 | App 内添加 | 待办、收藏 |
+| 手动 | App 内添加 | 待办、收藏、记账 |
 
-页面：**今天**（聚合时间线）· **快递** · **行程** · **待办**（与滴答清单双向同步）· **收藏**（tag 筛选/编辑，标签池在设置里管理），外加设置页（LLM 协议/URL/Key/模型、滴答绑定、日历开关、收藏标签）。
+页面：**今天**（聚合时间线）· **快递** · **行程** · **待办**（与滴答清单双向同步）· **收藏**（tag 筛选/编辑，标签池在设置里管理），外加设置页（LLM 协议/URL/Key/模型、滴答绑定、日历开关、收藏标签、记账分类）。**记账**（明细/日历/分析）暂经设置页「记账」入口进入（`ExpenseHomeView`），尚未占正式 tab。
 
 ## 架构
 
 ```
 OmnyCore/   纯 Swift 逻辑包，跨平台（macOS / Linux / WSL 均可开发测试）
-  ├─ RuleParser           正则引擎：类型分类 + 无 LLM 时的降级结构化（零成本离线）
-  ├─ ParserPipeline       primary / fallback 两级解析管线
-  ├─ LLMClient            LLM 调用公共底座（Claude / OpenAI 兼容协议可切换，结构化输出降级重试）
-  ├─ LLMStructuredParser  分类靠正则、结构化靠 LLM（快递/行程字段抽取，管线 primary）
-  ├─ LLMTodoParser        LLM 待办提取（管线 fallback）
-  ├─ LLMTagClassifier     LLM 收藏打标（从用户 tag 池挑选，enum schema 防越界）
-  └─ Dida*                滴答清单 OAuth + 任务 CRUD + 双向同步引擎
+  ├─ RuleParser            正则引擎：类型分类 + 无 LLM 时的降级结构化（零成本离线）
+  ├─ ParserPipeline        primary / fallback 两级解析管线
+  ├─ LLMClient             LLM 调用公共底座（Claude / OpenAI 兼容协议可切换，结构化输出降级重试）
+  ├─ LLMStructuredParser   分类靠正则、结构化靠 LLM（短信整段抽快递/行程/记账字段，管线 primary）
+  ├─ ScreenParser          截图 OCR 专用：一屏多条多类一次抽出四类数组（.mixed）
+  ├─ LLMTodoParser         LLM 待办提取（管线 fallback）
+  ├─ LLMTagClassifier      LLM 收藏打标（从用户 tag 池挑选，enum schema 防越界）
+  ├─ LLMExpenseCategorizer LLM 记账两级分类（大类/细分拍平进 enum，只能从池里挑）
+  ├─ ExpenseCalculator     记账自制计算器键盘的表达式求值（±×÷/优先级/Decimal 精度）
+  ├─ ChineseCalendar       农历/节气/节假日（今天页与行程展示用）
+  ├─ LinkTitleFetcher      收藏入库后异步抓网页标题
+  └─ Dida*                 滴答清单 OAuth + 任务 CRUD + 双向同步引擎
 
 OmnyApp/    SwiftUI 壳（仅 macOS 可编译），XcodeGen 管理工程
   ├─ Omny/             主 App target
   │   ├─ InboxItem     统一条目模型（SwiftData），页面都是按类型过滤的视图
-  │   ├─ Ingestor      入库服务：入口 → 解析管线 → 落库（快递按单号合并、收藏自动打标）
-  │   ├─ OmnyIntents   App Intents：「解析文本」「屏幕识别」（快捷指令入口）
-  │   └─ Views/        五个 tab + 设置 + 需处理 + 收藏标签管理
+  │   ├─ Ingestor      入库服务：入口 → 解析管线 → 落库（快递按单号合并、记账模糊去重、收藏自动打标）
+  │   ├─ Intents/      App Intents：「解析文本」「屏幕识别」「确认记账」+ 跨指令传值 InboxItemEntity
+  │   └─ Views/        五个 tab + 设置 + 需处理 + 收藏标签 + Expense/（记账明细/日历/分析/编辑）
   ├─ OmnyShare/        分享扩展 target：分享面板抓链接/文本 → App Group 队列
   └─ Shared/           两个 target 共用：SharedInbox（App Group 中转队列）
 ```
@@ -79,12 +84,16 @@ swift test          # 全绿说明环境就绪
 ### 3. 分支与 CI 约定
 
 - 维护者在 `main`；Windows 协作者在 **`dev-zhanghaha`** 分支开发（首次：`git checkout -b dev-zhanghaha && git push -u origin dev-zhanghaha`）。
-- 每次 push：所有分支都自动跑 OmnyCore 测试（Linux）；**只有 `dev-zhanghaha` 分支**额外在 macOS 上编译 App 并产出未签名 ipa（避免浪费 macOS 计费分钟）。其他分支需要出包时，在 Actions 页面手动 Run workflow。
+- 每次 push / PR：所有分支自动跑 OmnyCore 测试（Linux）。App 编译 + 未签名 ipa 现改为**仅手动触发**（Actions 页 Run workflow），push 不再自动出包——真机验证已由 TestFlight 工作流接管。完整规则见 `CLAUDE.md`「分支与 CI」（权威源）。
 - 合并回 `main` 走 Pull Request。
 
-### 4. 把最新版装进自己的 iPhone（无需 Mac）
+### 4. 把最新版装进自己的 iPhone
 
-1. GitHub 仓库 → **Actions** → 选最新一次 `dev-zhanghaha` 分支的运行 → 下载 **Omny-unsigned-ipa**。
+**首选 TestFlight**（2026-07 起已上线）：付费开发者账号下打 `tf-*` tag 或在 Actions 页手动触发 `testflight.yml`，约 4 分钟云端打包上传，手机装 TestFlight 直接更新，无需 Mac、无需侧载、无 7 天过期。用法见 `docs/testflight-release.md`。
+
+**备用：侧载未签名 ipa（无 Mac / 无付费账号时）**——注意 `app-macos` job 现改为仅手动触发，需先在 Actions 页 Run workflow 出包：
+
+1. GitHub 仓库 → **Actions** → 手动运行 `ci.yml`（或选一次已跑的运行）→ 下载 **Omny-unsigned-ipa**。
 2. Windows 上安装 [Sideloadly](https://sideloadly.io/)，iPhone 数据线连电脑。
 3. 把 ipa 拖进 Sideloadly，填**自己的 Apple ID**（免费账号即可），Start——它会用你的证书重签并安装。
 4. 手机上：设置 → 通用 → VPN与设备管理 → 信任自己的开发者证书。
@@ -97,13 +106,17 @@ swift test          # 全绿说明环境就绪
 
 ## CI 一览
 
-| Job | 触发 | 干什么 |
+规则权威源在 `CLAUDE.md`「分支与 CI」，此处为速查：
+
+| Workflow / Job | 触发 | 干什么 |
 |---|---|---|
-| `core-linux` | 所有 push / PR | Ubuntu 容器跑 OmnyCore 全量测试 |
-| `app-macos` | `dev-zhanghaha` 分支 push / 手动触发 | macOS 上编译 App + 产出未签名 ipa（artifact 保留 14 天） |
+| `ci.yml` · `core-linux` | 所有 push / PR | Ubuntu 容器跑 OmnyCore 全量测试 |
+| `ci.yml` · `app-macos` | **仅手动触发**（Run workflow） | macOS 上编译 App + 产出未签名 ipa（artifact 保留 14 天） |
+| `testflight.yml` | 打 `tf-*` tag / 手动触发 | 云端归档 + 上传 TestFlight（构建号自动生成，ASC Key 云签名） |
 
 ## 已知约定与取舍
 
 - 快递状态由短信措辞推断（在途→派送中→待取→已签收），同单号多条短信按状态只前进合并；不接物流查询 API。
+- 记账：银行短信/支付截图落 `expense`，金额用 `Decimal`（禁 Double），按「金额+时间窗+尾号/商户」模糊去重防同笔重复；不做账户体系/预算，定位「捕获层+轻账本」。详见 `docs/expense-module-design.md`。
 - 滴答同步：本地脏标记优先推送，其余以远端为准；Open API 无增量接口，拉取为全量轮询绑定清单。
-- 免费签名装机 7 天有效，是 Apple 对免费账号的限制。
+- 免费签名装机 7 天有效，是 Apple 对免费账号的限制（付费账号走 TestFlight 无此限制）。

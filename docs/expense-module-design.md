@@ -1,6 +1,6 @@
-# 记账模块：功能能力方案 + 概要设计
+# 记账模块：架构说明 + 设计取舍
 
-> 状态：设计定论（2026-07-11 拍板），未开始编码。动手前先读本文件与 `parsing-architecture.md`。
+> 状态：**已实现并上线**（2026-07-11 拍板设计 → 2026-07-12 全链路完成，TestFlight build 19 已含正式记账页）。本文是记账模块的长期架构文档：数据契约、两级打标、去重策略等设计取舍仍然有效，改记账相关代码前先读本文与 `parsing-architecture.md`。文末「实现现状」记录已落地范围与仍待真机验证项。
 > 定位：**捕获层 + 轻账本**。不做账户体系、预算、复式记账、报表。目标是把已有信息流（短信/识屏）里的消费自动沉淀成结构化条目，统一管理，后续做轻量统计。
 
 ## 一、总体思路：记账是第 6 类 `kind`，不是新系统
@@ -134,24 +134,28 @@ var txnID: String?
 - 入库后异步调 `LLMExpenseCategorizer` 补两级分类。
 - 低置信度 / 方向不确定 → 标 `needsReview` 进「需处理」。
 
-## 七、临时入口（本期，用完即调整）
+## 七、入口现状（设置页，正式记账页已就位，未占 tab）
 
-按决策：**先在设置页放临时调试入口**，方便端到端测试，不动现有 5 tab 结构。
+按决策：**不动现有 5 tab 结构**，记账经设置页入口进入。已从最初的调试页升级为正式记账页：
 
-- 设置页新增一个「记账（调试）」入口：一个可粘贴文本手动触发解析入库的页面 + 一个简单的 `expense` 条目列表展示。
-- **手动记账**（2026-07-11 追加）：同页顶部加「手动记账」入口 → `ManualExpenseView` 表单，用户直接填结构化字段入库（现金/AA/无短信消费用它补）。走独立入库路径 `Ingestor.addManualExpense`：**尊重用户输入**——不走文本解析、不做模糊去重、不异步 LLM 覆盖分类（用户填了就是最终值，没填分类则留空）。列表行点击复用同表单编辑已有条目。
-- 目标：跑通「文本 → 分类 → 结构化 → 打标 → 去重入库 → 展示」全链路做人工验证。
-- 正式的 tab 结构调整（TODO 里倾向「快递 + 行程合并腾位」给记账）等链路验证通过、需求稳定后再做。
+- 设置页「记账」→ `ExpenseHomeView`（正式）：明细 / 日历 / 分析 三视图，共享月份切换 + FAB。另留「解析测试（调试）」→ `ExpenseDebugView`（粘贴短信解析入库 + expense 列表，调试用）。
+- **手动记账**（`ExpenseEditView`，取代已删的 `ManualExpenseView`）：方向切换 + 分类宫格 + 自制计算器键盘（`ExpenseCalculator`）。走独立入库路径 `Ingestor.addManualExpense`：**尊重用户输入**——不走文本解析、不做模糊去重、不异步 LLM 覆盖分类（用户填了就是最终值，没填分类则留空）。列表行点击复用同表单编辑已有条目。
+- 已跑通「文本 → 分类 → 结构化 → 打标 → 去重入库 → 展示」全链路。
+- 正式的 tab 结构调整（TODO 里倾向「快递 + 行程合并腾位」给记账）仍待需求稳定后再做——**当前仍在设置页入口，未占正式 tab**。
 
-## 八、实施分期（建议顺序）
+## 八、实现现状（2026-07-12 全链路完成，build 19）
 
-1. **OmnyCore 数据契约**：`ItemType.expense`、`ExpenseDirection`、`ExpenseInfo`、`ParsedPayload.expense`，补全所有 `switch`。→ `swift test` 编过是第一个里程碑。
-2. **解析能力**：`RuleParser.classify` 加记账双命中判定 + `extractExpense` 正则降级；`LLMStructuredParser.parseExpense`（prompt + schema）。配 `RealSMSTests`（脱敏真实银行短信）。
-3. **消费分类**：`LLMExpenseCategorizer`（扁平化两级 enum-schema）+ 设置页两级分类池配置。
-4. **入库**：`InboxItem` 加记账字段；`Ingestor.ingestExpense`（txnID 精确 / 金额+时间窗+尾号模糊去重）；`.expense` 加进「解析文本」白名单；异步补分类。
-5. **临时入口 + 列表**：设置页调试输入页 + expense 列表，跑通端到端。
+以下均已落地并测过（OmnyCore 部分单测全绿，App 部分 CI macOS job 编译通过）：
 
-**验证边界**（同 `parsing-architecture.md`）：1–3 及 4 的 OmnyCore 部分本机 `swift test` 可验证；App 部分（InboxItem / 入口 / 列表）靠 CI macOS job 编译；**LLM 真实抽取与打标效果本机无法测（无 Key），需在 App 里配 Key 实跑验证**。
+1. **OmnyCore 数据契约**：`ItemType.expense`、`ExpenseDirection`、`ExpenseInfo`、`ParsedPayload.expense`，各处 `switch` 已补全。
+2. **解析能力**：`RuleParser.classify` 记账双命中判定 + `extractExpense` 正则降级；`LLMStructuredParser.parseExpense`（prompt + schema）；`ScreenParser` 第四类 expenses（识屏记账）；口语措辞（买/花/充值/收到/卖…）进 `expenseVerbs/incomeKeywords`。基线：`ExpenseParserTests` + `RealSMSTests`（脱敏银行短信）。
+3. **消费分类**：`LLMExpenseCategorizer`（扁平化两级 enum-schema）+ `AppSettings` 两级分类池（JSON 存 UserDefaults）+ 设置页 `ExpenseCategoryManageView`。图标/颜色与分类池解耦（`Theme.ExpenseColor` + `ExpenseCategoryAppearance` 映射器，LLM 只用名字打标）。
+4. **入库**：`InboxItem` 记账字段 + `expenseDirection`；`Ingestor.ingestExpense`（txnID 精确 / 金额+时间窗±10min+尾号或商户 模糊去重）+ 异步补分类；`addManualExpense`（尊重用户输入路径）；`.expense` 进「解析文本」白名单。
+5. **正式记账页**：`Views/Expense/` 全套（`ExpenseHomeView`/明细/日历/分析 `DonutChart`/`ExpenseDetailView`/`ExpenseEditView` + 自制计算器键盘 `ExpenseCalculator`）；`ExpenseSupport`（格式化 + 聚合 + ExpenseRow）。
+
+**仍待真机实测**（本机无法覆盖，装 TestFlight build 19 验）：① 环状图引线在分类多时是否拥挤；② 配 LLM Key 后真实抽取 + 打标准确率；③ 多渠道去重效果。另「确认记账」快捷指令可编辑弹窗真机起不来，见 `docs/confirm-expense-intent-handoff.md`（待 Mac 调试）。
+
+**验证边界**（同 `parsing-architecture.md`）：OmnyCore 部分本机 `swift test` 可验证；App 部分靠 CI macOS job 编译；**LLM 真实抽取与打标效果本机无法测（无 Key），需在 App 里配 Key 实跑验证**。
 
 ## 九、后续扩展（本期不做，先留好扩展点）
 
