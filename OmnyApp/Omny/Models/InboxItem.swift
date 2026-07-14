@@ -27,6 +27,9 @@ final class InboxItem {
     var needsReview: Bool = false
     /// 软删除时间：非 nil 表示已进回收站；各列表默认过滤掉；满 7 天由启动时清理彻底删除。
     var deletedAt: Date?
+    /// 手动排序序号：列表页长按拖动时对整个分组重写 0..n。
+    /// nil = 从未拖过（新条目），排在已排序条目之前（新信息优先露出），同为 nil 按各列表默认规则。
+    var sortOrder: Int?
     /// 截图来源的原图（外部存储）
     @Attribute(.externalStorage) var sourceImage: Data?
 
@@ -114,5 +117,25 @@ final class InboxItem {
     var expenseDirection: ExpenseDirection {
         get { ExpenseDirection(rawValue: expenseDirectionRaw ?? "") ?? .expense }
         set { expenseDirectionRaw = newValue.rawValue }
+    }
+}
+
+extension Sequence where Element == InboxItem {
+    /// 手动顺序优先的排序：拖过的按 sortOrder 升序，没拖过的（nil 视作 -1）排最前，
+    /// 序号相同（比如都没拖过）时按 fallback 的默认规则。列表页与首页轮播共用，保证顺序一致。
+    func manuallySorted(fallback: (InboxItem, InboxItem) -> Bool) -> [InboxItem] {
+        sorted { a, b in
+            let ao = a.sortOrder ?? -1, bo = b.sortOrder ?? -1
+            if ao != bo { return ao < bo }
+            return fallback(a, b)
+        }
+    }
+
+    /// 长按拖动落位：把可见分组按新顺序重写 sortOrder（0..n）。
+    /// 对整组重写而非只改被拖条目——保证组内全部有序，之后新来的 nil 条目才能稳定排最前。
+    func applyManualMove(from source: IndexSet, to destination: Int) {
+        var arr = Array(self)
+        arr.move(fromOffsets: source, toOffset: destination)
+        for (i, item) in arr.enumerated() { item.sortOrder = i }
     }
 }

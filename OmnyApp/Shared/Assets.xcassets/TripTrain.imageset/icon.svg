@@ -1,6 +1,30 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-<path d="M8 3.5H16A4 4 0 0 1 20 7.5V13.5A3 3 0 0 1 17 16.5H7A3 3 0 0 1 4 13.5V7.5A4 4 0 0 1 8 3.5Z" fill="none" stroke="#000" stroke-width="1.8" stroke-linejoin="round"/>
-<path d="M9 6.8H15A1 1 0 0 1 16 7.8V9.8A1 1 0 0 1 15 10.8H9A1 1 0 0 1 8 9.8V7.8A1 1 0 0 1 9 6.8Z" fill="none" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/>
-<path d="M8.2 13.4H15.8" fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round"/>
-<path d="M9 16.5 7.2 19.8M15 16.5 16.8 19.8" fill="none" stroke="#000" stroke-width="1.8" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="83.4" height="40.9" viewBox="9.7 39.2 83.4 40.9">
+  <!-- 轨道 + 软阴影 -->
+  <ellipse cx="52" cy="76" rx="34" ry="4" fill="#3A4356" opacity="0.08"/>
+  <ellipse cx="52" cy="76" rx="23" ry="2.8" fill="#3A4356" opacity="0.10"/>
+  <rect x="10" y="74" width="80" height="2.6" rx="1.3" fill="#3A4356" opacity="0.18"/>
+
+  <!-- 车体（流线头朝右） -->
+  <path d="M12 44 Q12 40 16 40 L62 40 C73 40 82 45 88 52 C91 55.5 92.5 59.5 92.5 62.5 Q92.5 69 86 69 L16 69 Q12 69 12 65 Z" fill="#F2F4F8"/>
+  <!-- 车顶灰带 -->
+  <path d="M12 44.5 Q12 40 16 40 L62 40 C69 40 75 42 80 45.5 L12 45.5 Z" fill="#DFE4EC"/>
+
+  <!-- 风挡（沿鼻锥斜面的深色曲面） -->
+  <path d="M67.5 44 C74 46.2 80 51 84.5 57.5 Q83 58 81 57.5 L76 56.2 C72.5 51.2 68.8 47.6 64 45.4 Q64.5 43.9 67.5 44 Z" fill="#2E3442"/>
+
+  <!-- 侧窗带 + 窗格分隔 -->
+  <rect x="16" y="47.5" width="45" height="7.5" rx="3.6" fill="#2E3442"/>
+  <rect x="26.5" y="47.5" width="1.4" height="7.5" fill="#F2F4F8" opacity="0.9"/>
+  <rect x="37" y="47.5" width="1.4" height="7.5" fill="#F2F4F8" opacity="0.9"/>
+  <rect x="47.5" y="47.5" width="1.4" height="7.5" fill="#F2F4F8" opacity="0.9"/>
+
+  <!-- 靛蓝腰线（斜切呼应鼻锥角度） -->
+  <path d="M12 57.5 L80.5 57.5 L86.5 62.5 L12 62.5 Z" fill="#5B59D6"/>
+  <path d="M12 57.5 L80.5 57.5 L82.5 59.2 L12 59.2 Z" fill="#FFFFFF" opacity="0.14"/>
+
+  <!-- 底部裙板 -->
+  <path d="M12.3 65.5 L92.4 65.5 Q91.8 69 86 69 L16 69 Q12.7 69 12.3 65.5 Z" fill="#454C5C"/>
+
+  <!-- 描边收边 -->
+  <path d="M12 44 Q12 40 16 40 L62 40 C73 40 82 45 88 52 C91 55.5 92.5 59.5 92.5 62.5 Q92.5 69 86 69 L16 69 Q12 69 12 65 Z" fill="none" stroke="#3A4356" stroke-width="1" opacity="0.25" stroke-linejoin="round"/>
 </svg>

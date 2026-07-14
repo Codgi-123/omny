@@ -2,12 +2,14 @@ name: CI
 
 on:
   push:
+    # 只在打 tag 时跑（发布前守门）；日常分支 push 不跑，PR 仍然全量测
+    tags: ['**']
   pull_request:
   # 需要临时出包时可在 Actions 页面对任意分支手动触发
   workflow_dispatch:
 
 jobs:
-  # OmnyCore 测试：所有分支都跑（Linux 便宜，和 Windows 协作者的 WSL 环境一致）
+  # OmnyCore 测试：tag/PR/手动时跑（Linux 便宜，和 Windows 协作者的 WSL 环境一致）
   core-linux:
     runs-on: ubuntu-latest
     container: swift:6.0

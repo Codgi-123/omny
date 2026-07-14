@@ -3,6 +3,71 @@ import SwiftData
 import PhotosUI
 import OmnyCore
 
+// MARK: - 拖动排序触感
+
+/// 长按抬卡触感：List 原生拖动排序抬起时没有震动反馈，补一个中震。
+/// 不能用 SwiftUI 手势——它与 List 底层 UIKit 拖拽互斥（长按设 0.5s 被系统取消收不到震动，
+/// 设 0.25s 先完成又会抢掉系统拖拽导致拖不动）。改为行背景埋探针视图，向上找到 List 的
+/// UICollectionView，直接监听系统抬卡（长按类）手势的 .began 时刻补震：
+/// 不参与手势竞争，拖动不受影响，且与抬卡时机严格同步。
+extension View {
+    @ViewBuilder
+    func dragLiftHaptic(_ enabled: Bool = true) -> some View {
+        if enabled {
+            background(ReorderLiftHaptic())
+        } else {
+            self
+        }
+    }
+}
+
+private struct ReorderLiftHaptic: UIViewRepresentable {
+    func makeUIView(context: Context) -> Probe {
+        let v = Probe()
+        v.isUserInteractionEnabled = false
+        return v
+    }
+    func updateUIView(_ uiView: Probe, context: Context) {}
+
+    final class Probe: UIView {
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            guard window != nil else { return }
+            var v = superview
+            while let cur = v, !(cur is UICollectionView) { v = cur.superview }
+            guard let cv = v as? UICollectionView else { return }
+            // 抬卡由长按类手势驱动（_UIDragLift… 是 UILongPressGestureRecognizer 子类）；
+            // 这两个列表的行没有长按菜单，不会误触发
+            for g in cv.gestureRecognizers ?? [] where g is UILongPressGestureRecognizer {
+                HapticRelay.hook(g)
+            }
+        }
+    }
+
+    /// addTarget 的接收者 + 按手势去重（行复用时探针会反复挂载，防止同一手势重复加 target 叠加震动）
+    final class HapticRelay: NSObject {
+        static let shared = HapticRelay()
+        private static var hookedKey: UInt8 = 0
+
+        static func hook(_ g: UIGestureRecognizer) {
+            guard objc_getAssociatedObject(g, &hookedKey) == nil else { return }
+            objc_setAssociatedObject(g, &hookedKey, true, .OBJC_ASSOCIATION_RETAIN)
+            g.addTarget(shared, action: #selector(stateChanged(_:)))
+        }
+
+        @objc private func stateChanged(_ g: UIGestureRecognizer) {
+            if g.state == .began {
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            }
+        }
+    }
+}
+
+/// 落位轻震：与抬卡的中震形成「拿起-放下」一对反馈
+func dragDropHaptic() {
+    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+}
+
 // MARK: - 快递页：待取 / 在途 / 已签收
 
 struct ExpressView: View {
@@ -10,7 +75,15 @@ struct ExpressView: View {
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var items: [InboxItem]
 
     private var packages: [InboxItem] { items.filter { $0.kind == .package && $0.deletedAt == nil } }
-    private var awaiting: [InboxItem] { packages.filter { $0.packageStatus == .awaitingPickup } }
+    // 待取/在途支持长按拖动排序（首页轮播同序）；默认（未拖过）按创建时间倒序
+    private var awaiting: [InboxItem] {
+        packages.filter { $0.packageStatus == .awaitingPickup }
+            .manuallySorted { $0.createdAt > $1.createdAt }
+    }
+    private var inTransit: [InboxItem] {
+        packages.filter { $0.packageStatus < .awaitingPickup }
+            .manuallySorted { $0.createdAt > $1.createdAt }
+    }
 
     @State private var pendingDelete: InboxItem?   // 待确认删除的快递（非 nil 时弹确认框）
     @State private var copiedAll = false           // 一键复制所有取件码的成功反馈态
@@ -20,8 +93,8 @@ struct ExpressView: View {
         VStack(spacing: 0) {
             ScreenHeader("快递") { NavActions() }
             List {
-                group("待取", awaiting, showsCopyAll: true)
-                group("在途", packages.filter { $0.packageStatus < .awaitingPickup })
+                group("待取", awaiting, showsCopyAll: true, movable: true)
+                group("在途", inTransit, movable: true)
                 group("已签收", packages.filter { $0.packageStatus == .pickedUp }, dimmed: true)
             }
             .listStyle(.plain)
@@ -55,7 +128,7 @@ struct ExpressView: View {
 
     @ViewBuilder
     private func group(_ title: String, _ list: [InboxItem], dimmed: Bool = false,
-                       showsCopyAll: Bool = false) -> some View {
+                       showsCopyAll: Bool = false, movable: Bool = false) -> some View {
         if !list.isEmpty {
             Section {
                 ForEach(list) { pkg in
@@ -70,7 +143,16 @@ struct ExpressView: View {
                             } label: { Label("删除", systemImage: "trash") }
                                 .tint(Theme.red)
                         }
+                        .dragLiftHaptic(movable)
                 }
+                // 长按拖动排序（List 原生手势，无需编辑模式），落位后重写组内 sortOrder
+                .onMove { from, to in
+                    guard movable else { return }
+                    list.applyManualMove(from: from, to: to)
+                    try? context.save()
+                    dragDropHaptic()
+                }
+                .moveDisabled(!movable)
             } header: {
                 sectionHeader(title, count: list.count, copyAll: showsCopyAll ? list : nil)
             }
@@ -128,12 +210,25 @@ struct TripView: View {
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var items: [InboxItem]
 
     private var trips: [InboxItem] { items.filter { $0.kind == .trip && $0.deletedAt == nil } }
+
+    /// 航班动态查询键（航班号|日期）集合，变化时触发 .task 补刷
+    private var flightTaskID: [String] {
+        trips.compactMap { FlightDynamicsStore.query(for: $0)?.key }.sorted()
+    }
+
+    /// 分组边界：车/机按出发时间；酒店按离店时间——入住期间（卡片显示「入住中」）仍留在上组
+    private func tripEnd(_ item: InboxItem) -> Date {
+        if item.tripKindRaw == "hotel" { return item.arriveAt ?? item.departAt ?? .distantPast }
+        return item.departAt ?? .distantPast
+    }
+
+    /// 即将出行支持长按拖动排序（首页轮播同序）；默认（未拖过）按出发时间升序
     private var upcoming: [InboxItem] {
-        trips.filter { ($0.departAt ?? .distantPast) > .now }
-            .sorted { ($0.departAt ?? .distantFuture) < ($1.departAt ?? .distantFuture) }
+        trips.filter { tripEnd($0) > .now }
+            .manuallySorted { ($0.departAt ?? .distantFuture) < ($1.departAt ?? .distantFuture) }
     }
     private var past: [InboxItem] {
-        trips.filter { ($0.departAt ?? .distantPast) <= .now }
+        trips.filter { tripEnd($0) <= .now }
             .sorted { ($0.departAt ?? .distantPast) > ($1.departAt ?? .distantPast) }
     }
 
@@ -150,6 +245,13 @@ struct TripView: View {
                                     withAnimation(.snappy) { Trash.softDelete(item, context: context) }
                                 } label: { Label("删除", systemImage: "trash") }
                             }
+                            .dragLiftHaptic()
+                    }
+                    // 长按拖动排序（List 原生手势，无需编辑模式），落位后重写组内 sortOrder
+                    .onMove { from, to in
+                        upcoming.applyManualMove(from: from, to: to)
+                        try? context.save()
+                        dragDropHaptic()
                     }
                 } header: {
                     tripHeader("即将出行")
@@ -173,6 +275,14 @@ struct TripView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(Theme.screen)
+        // 航班动态：下拉强刷无视缓存；页面出现/航班集合变化时只补过期的（10 分钟 TTL）。
+        // 包一层非结构化 Task 防 .refreshable 的任务随视图刷新被取消（同滴答同步的处理）。
+        .refreshable {
+            await Task { await FlightDynamicsStore.shared.refresh(trips, force: true) }.value
+        }
+        .task(id: flightTaskID) {
+            await FlightDynamicsStore.shared.refresh(trips, force: false)
+        }
         .overlay {
             if upcoming.isEmpty && past.isEmpty {
                 ContentUnavailableView {
@@ -207,6 +317,8 @@ struct TodoView: View {
     @State private var showCompleted = false
     /// 已放弃区同样默认收起
     @State private var showAbandoned = false
+    /// 收起的优先级组（存 rawValue）：默认全部展开，各组独立记忆
+    @State private var collapsedPriorities: Set<Int> = []
 
     private var todos: [InboxItem] {
         items.filter { $0.kind == .todo && !$0.deletedLocally && !$0.needsReview && $0.deletedAt == nil }
@@ -227,6 +339,31 @@ struct TodoView: View {
         }
     }
 
+    /// 优先级组内的一行：行样式对齐首页「今日待办」（TodoRow + 纵向 11pt、条目间无分隔线），
+    /// 首/末行圆角、中间行直角，视觉上拼成一张整卡；行间 inset 归零使其无缝相接。
+    private func priorityGroupRow(_ todo: InboxItem, isFirst: Bool, isLast: Bool) -> some View {
+        let radius: CGFloat = 12
+        return TodoRow(item: todo)
+            .padding(.vertical, 11)
+            .padding(.horizontal, 14)
+            // 卡片底画在 listRowBackground 上：内容背景盖不满整个 cell（部分行会在边缘漏出
+            // 一条屏幕底色的细缝），row 背景铺满 cell 才能无缝拼卡。水平缩进对齐卡片边缘，
+            // 首/末行再缩回各自的 5pt 行间距。阴影没法整卡挂（行级阴影会在接缝渗灰线），不加。
+            .listRowBackground(
+                UnevenRoundedRectangle(topLeadingRadius: isFirst ? radius : 0,
+                                       bottomLeadingRadius: isLast ? radius : 0,
+                                       bottomTrailingRadius: isLast ? radius : 0,
+                                       topTrailingRadius: isFirst ? radius : 0)
+                    .fill(Theme.card)
+                    .padding(.horizontal, Theme.Space.page)
+                    .padding(.top, isFirst ? 5 : 0)
+                    .padding(.bottom, isLast ? 5 : 0)
+            )
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: isFirst ? 5 : 0, leading: Theme.Space.page,
+                                      bottom: isLast ? 5 : 0, trailing: Theme.Space.page))
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             todoHeader
@@ -236,18 +373,43 @@ struct TodoView: View {
             ForEach([TodoPriority.high, .medium, .low, .none]) { p in
                 let group = sortedByDue(open.filter { $0.todoPriority == p.rawValue })
                 if !group.isEmpty {
+                    let expanded = !collapsedPriorities.contains(p.rawValue)
                     Section {
-                        ForEach(group) { TodoRow(item: $0).cardCell(pad: 8) }
-                    } header: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "flag.fill")
-                                .font(.caption2)
-                                .foregroundStyle(p.color)
-                            Text(p.label)
-                            Text("\(group.count)").foregroundStyle(Theme.sub)
+                        // 组内行样式与首页「今日待办」一致：条目列在一张整卡内、以分隔线区隔；
+                        // 每条仍是独立 List row（首/末行圆角拼卡），横滑删除/放弃按条生效
+                        if expanded {
+                            ForEach(Array(group.enumerated()), id: \.element.id) { idx, todo in
+                                priorityGroupRow(todo, isFirst: idx == 0, isLast: idx == group.count - 1)
+                            }
                         }
-                        .font(.subheadline.weight(.medium))
-                        .textCase(nil)
+                    } header: {
+                        // 折叠交互与「已完成」分组同款：点头部整行切换，chevron 旋转指示
+                        Button {
+                            withAnimation(.snappy) {
+                                if expanded {
+                                    collapsedPriorities.insert(p.rawValue)
+                                } else {
+                                    collapsedPriorities.remove(p.rawValue)
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "flag.fill")
+                                    .font(.caption2)
+                                    .foregroundStyle(p.color)
+                                Text(p.label)
+                                Text("\(group.count)").foregroundStyle(Theme.sub)
+                                Spacer()
+                                Image(systemName: "chevron.down")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(Theme.sub)
+                                    .rotationEffect(.degrees(expanded ? 0 : -90))
+                            }
+                            .font(.subheadline.weight(.medium))
+                            .textCase(nil)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                         .sectionHeaderInset()
                     }
                 }
@@ -311,6 +473,8 @@ struct TodoView: View {
             }
         }
             .listStyle(.plain)
+            // 优先级组的行要无缝拼成整卡，清掉 List 的默认行距
+            .listRowSpacing(0)
             .scrollContentBackground(.hidden)
             // 包一层非结构化 Task：.refreshable 的任务绑定在刷新手势上，视图刷新时会被
             // SwiftUI 取消并把取消传给 URLSession（表现为"同步失败：cancelled"）。
@@ -1080,7 +1244,8 @@ struct TrashView: View {
     private func titleFor(_ i: InboxItem) -> String {
         switch i.kind {
         case .package: i.carrier ?? "快递"
-        case .trip: i.tripNumber ?? "\(i.departPlace ?? "") → \(i.arrivePlace ?? "")"
+        case .trip: i.tripKindRaw == "hotel" ? (i.departPlace ?? "住宿")
+                    : i.tripNumber ?? "\(i.departPlace ?? "") → \(i.arrivePlace ?? "")"
         case .bookmark: i.bookmarkTitle ?? i.urlString ?? i.rawText
         case .todo: i.todoTitle ?? i.rawText
         case .expense: i.merchant ?? i.rawText
@@ -1403,6 +1568,14 @@ struct TodoQuickAdd: View {
     }
 }
 
+/// 时间行卡片的位置锚点：供 DueDateSheet 把时分浮层定位到「请选择」按钮上方。
+private struct TimeRowAnchorKey: PreferenceKey {
+    static var defaultValue: Anchor<CGRect>? = nil
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+        value = nextValue() ?? value
+    }
+}
+
 /// 截止时间：从底部弹出的独立页面（仿滴答）。X 取消 / ✓ 确认，
 /// 顶部矢量快捷瓦片 + 自绘月历（农历/节气/节日）+ 时间行。用工作副本，取消不改动原值。
 struct DueDateSheet: View {
@@ -1410,6 +1583,8 @@ struct DueDateSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var working: Date?
     @State private var hasTime: Bool
+    /// 时分浮层是否可见：点「请选择」后在其上方浮出小时间选择器，点外部收起
+    @State private var showTimePicker = false
 
     init(due: Binding<Date?>) {
         _due = due
@@ -1436,6 +1611,27 @@ struct DueDateSheet: View {
                 .padding(.horizontal, 18)
                 .padding(.top, 6)
                 .padding(.bottom, 20)
+            }
+        }
+        // 时分浮层：通过时间行的锚点定位到「请选择」按钮上方（无箭头的小浮窗），
+        // 挂在 body 层而非行内，避免被 ScrollView 裁剪、且能全屏接住"点外部收起"
+        .overlayPreferenceValue(TimeRowAnchorKey.self) { anchor in
+            if showTimePicker, let anchor {
+                GeometryReader { proxy in
+                    let rect = proxy[anchor]
+                    let popW: CGFloat = 220, popH: CGFloat = 190
+                    ZStack {
+                        // 点浮层外任意处收起（近乎透明但可命中，同时挡住底下滚动）
+                        Color.black.opacity(0.001)
+                            .onTapGesture { withAnimation(.snappy) { showTimePicker = false } }
+                        timePopover
+                            .frame(width: popW, height: popH)
+                            // 右缘对齐时间行卡片右缘（即「请选择」一侧），底缘悬在卡片上方 8pt
+                            .position(x: min(rect.maxX - popW / 2, proxy.size.width - popW / 2 - 12),
+                                      y: max(rect.minY - popH / 2 - 8, popH / 2 + 8))
+                            .transition(.scale(scale: 0.9, anchor: .bottomTrailing).combined(with: .opacity))
+                    }
+                }
             }
         }
         .presentationDetents([.height(600)])
@@ -1515,45 +1711,52 @@ struct DueDateSheet: View {
     // MARK: 时间行
 
     private var timeRow: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Image(systemName: "clock").foregroundStyle(Theme.accent)
-                Text("时间").foregroundStyle(Theme.text)
-                Spacer()
-                if hasTime {
-                    // 已设时间：右侧显示当前时分，点 ✕ 清除
+        HStack(spacing: 10) {
+            Image(systemName: "clock").foregroundStyle(Theme.accent)
+            Text("时间").foregroundStyle(Theme.text)
+            Spacer()
+            if hasTime {
+                // 已设时间：右侧显示当前时分（点击可重开浮层微调），点 ✕ 清除
+                Button { withAnimation(.snappy) { showTimePicker.toggle() } } label: {
                     Text(timeBinding.wrappedValue.formatted(date: .omitted, time: .shortened))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Theme.accent)
-                    Button { withAnimation(.snappy) { hasTime = false } } label: {
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.sub)
-                    }
-                    .buttonStyle(.plain)
-                } else {
-                    // 未设时间：点「请选择」直接展开时分控件（不再有 9:00 静态中间态）
-                    Button { withAnimation(.snappy) { enableTime() } } label: {
-                        HStack(spacing: 3) {
-                            Text("请选择")
-                            Image(systemName: "chevron.down").font(.caption2.weight(.semibold))
-                        }
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(Theme.accent)
-                    }
-                    .buttonStyle(.plain)
                 }
-            }
-            // 展开的时分滚轮：点「请选择」后即时出现，直接滚动选择
-            if hasTime {
-                DatePicker("", selection: timeBinding, displayedComponents: .hourAndMinute)
-                    .datePickerStyle(.wheel)
-                    .labelsHidden()
-                    .frame(maxHeight: 160)
+                .buttonStyle(.plain)
+                Button { withAnimation(.snappy) { hasTime = false; showTimePicker = false } } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.sub)
+                }
+                .buttonStyle(.plain)
+            } else {
+                // 未设时间：点「请选择」在按钮上方浮出小时间选择器（不再向下展开占位）
+                Button { withAnimation(.snappy) { enableTime(); showTimePicker = true } } label: {
+                    HStack(spacing: 3) {
+                        Text("请选择")
+                        Image(systemName: "chevron.up").font(.caption2.weight(.semibold))
+                    }
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(Theme.accent)
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.vertical, 18)
         .background(Theme.card,
                     in: .rect(cornerRadius: 12))
+        // 记录时间行卡片位置，供浮层定位到「请选择」上方
+        .anchorPreference(key: TimeRowAnchorKey.self, value: .bounds) { $0 }
+    }
+
+    /// 浮层时间选择器：无箭头的小浮窗（圆角卡片 + 阴影），滚轮直接选，点外部收起。
+    private var timePopover: some View {
+        DatePicker("", selection: timeBinding, displayedComponents: .hourAndMinute)
+            .datePickerStyle(.wheel)
+            .labelsHidden()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
+            .background(Theme.card, in: .rect(cornerRadius: 14))
+            .shadow(color: .black.opacity(0.22), radius: 18, y: 8)
     }
 
     /// 开启具体时间：在当前所选日期上落到 9:00（可再点 compact 控件调整）。

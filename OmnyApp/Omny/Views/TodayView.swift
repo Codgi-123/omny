@@ -7,16 +7,25 @@ struct TodayView: View {
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var items: [InboxItem]
     /// 与 RootView 的 TabView selection 共享同一 UserDefaults 键：各区块「查看详情」写入即切 tab。
     @AppStorage("omnySelectedTab") private var selectedTab = 0
+    /// 首页待办卡片是否展开全部（默认只露前 5 条）
+    @State private var todosExpanded = false
 
     private let margin: CGFloat = Theme.Space.page
 
+    // 行程/快递轮播的顺序与列表页一致：手动拖过的按 sortOrder，没拖过按各自默认规则
+
     private var upcomingTrips: [InboxItem] {
         items.filter { $0.kind == .trip && $0.deletedAt == nil && ($0.departAt ?? .distantPast) > .now }
-            .sorted { ($0.departAt ?? .distantFuture) < ($1.departAt ?? .distantFuture) }
+            .manuallySorted { ($0.departAt ?? .distantFuture) < ($1.departAt ?? .distantFuture) }
     }
 
     private var awaitingPackages: [InboxItem] {
-        items.filter { $0.kind == .package && $0.deletedAt == nil && $0.packageStatus != .pickedUp }
+        let open = items.filter { $0.kind == .package && $0.deletedAt == nil && $0.packageStatus != .pickedUp }
+        // 待取排在在途前（对齐快递页的分组次序），组内各按手动顺序
+        return open.filter { $0.packageStatus == .awaitingPickup }
+            .manuallySorted { $0.createdAt > $1.createdAt }
+            + open.filter { $0.packageStatus != .awaitingPickup }
+            .manuallySorted { $0.createdAt > $1.createdAt }
     }
 
     private var openTodos: [InboxItem] {
@@ -38,6 +47,11 @@ struct TodayView: View {
     private var everythingEmpty: Bool {
         upcomingTrips.isEmpty && awaitingPackages.isEmpty && openTodos.isEmpty
             && todayBookmarks.isEmpty && reviewItems.isEmpty
+    }
+
+    /// 航班动态查询键（航班号|日期）集合，变化时触发 .task 补刷
+    private var flightTaskID: [String] {
+        items.compactMap { FlightDynamicsStore.query(for: $0)?.key }.sorted()
     }
 
     var body: some View {
@@ -78,15 +92,31 @@ struct TodayView: View {
                         SectionHeader(icon: "checkmark.circle.fill", tint: Theme.todo, title: "待办",
                                       count: "\(openTodos.count) 项未完成",
                                       onDetail: { selectedTab = 3 })
-                        // 待办整体合并为一张卡片，条目列在卡内、以分隔线区隔（一.8）
-                        let homeTodos = Array(openTodos.prefix(5))
+                        // 待办整体合并为一张卡片，条目列在卡内、不加分隔线（issue #9）
+                        // 默认只露前 5 条，多出的靠卡片底部按钮展开/收起
+                        let homeTodos = todosExpanded ? openTodos : Array(openTodos.prefix(5))
                         VStack(spacing: 0) {
-                            ForEach(Array(homeTodos.enumerated()), id: \.element.id) { idx, todo in
+                            ForEach(homeTodos) { todo in
                                 TodoRow(item: todo, showsContextMenu: false)
                                     .padding(.vertical, 11)
-                                if idx < homeTodos.count - 1 {
-                                    Divider().padding(.leading, 44)
+                            }
+                            if openTodos.count > 5 {
+                                Button {
+                                    withAnimation(.snappy(duration: 0.3)) { todosExpanded.toggle() }
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Text(todosExpanded ? "收起" : "展开还有 \(openTodos.count - 5) 项")
+                                        Image(systemName: "chevron.down")
+                                            .font(.caption2)
+                                            .rotationEffect(.degrees(todosExpanded ? 180 : 0))
+                                    }
+                                    .font(.footnote)
+                                    .foregroundStyle(Theme.sub)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                    .contentShape(.rect)
                                 }
+                                .buttonStyle(.plain)
                             }
                         }
                         .padding(.horizontal, 14)
@@ -137,6 +167,13 @@ struct TodayView: View {
             }
             .padding(.top, 8)
             .padding(.bottom, 20)
+            }
+            // 航班动态：下拉强刷无视缓存；页面出现/航班集合变化时只补过期的（10 分钟 TTL）
+            .refreshable {
+                await Task { await FlightDynamicsStore.shared.refresh(items, force: true) }.value
+            }
+            .task(id: flightTaskID) {
+                await FlightDynamicsStore.shared.refresh(items, force: false)
             }
         }
         .background(Theme.screen)

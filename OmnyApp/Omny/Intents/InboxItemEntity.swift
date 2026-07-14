@@ -1,6 +1,7 @@
 import AppIntents
 import Foundation
 import OmnyCore
+import os
 
 /// 快捷指令 Intent 之间传递的结构化条目实体。
 ///
@@ -28,11 +29,18 @@ struct InboxItemEntity: AppEntity, Identifiable {
     init(payload: Payload) {
         self.data = (try? JSONEncoder().encode(payload))
             .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+        Registry.register(id: id, data: data)
     }
 
     /// 无参构造：系统实例化 AppEntity 时用（data 空，payload 解出空载荷）
     init() {
         self.data = "{}"
+    }
+
+    /// 从注册表还原：保持原 id，系统按 id 重新 resolve 时返回同内容实体
+    init(id: UUID, data: String) {
+        self.id = id
+        self.data = data
     }
 
     /// 从 `data`（JSON）解出数据结构。传递后只有 data 有值，靠它还原。
@@ -104,7 +112,9 @@ extension InboxItemEntity {
             case .package:
                 let code = pickupCode.map { "，取件码 \($0)" } ?? ""
                 return "\(carrier ?? "快递")\(code)"
-            case .trip: return "行程 \(tripNumber ?? "")"
+            case .trip:
+                if tripKindRaw == TripInfo.Kind.hotel.rawValue { return "住宿 \(departPlace ?? "")" }
+                return "行程 \(tripNumber ?? "")"
             case .todo: return "待办 \(todoTitle ?? "")"
             case .bookmark: return "收藏 \(bookmarkTitle ?? urlString ?? "")"
             case .expense:
@@ -134,10 +144,11 @@ extension InboxItemEntity {
                     pickupCode: pickupCode, station: station,
                     status: PackageStatus(rawValue: packageStatusRaw ?? 0) ?? .inTransit))
             case .trip:
-                guard let number = tripNumber,
-                      let kind = tripKindRaw.flatMap(TripInfo.Kind.init) else { return nil }
+                // 酒店无班次号（number 约定为空串）；车/机缺班次号视为无效载荷
+                guard let kind = tripKindRaw.flatMap(TripInfo.Kind.init),
+                      tripNumber != nil || kind == .hotel else { return nil }
                 return .trip(TripInfo(
-                    kind: kind, number: number,
+                    kind: kind, number: tripNumber ?? "",
                     departure: Payload.components(departAt), departurePlace: departPlace,
                     arrival: Payload.components(arriveAt), arrivalPlace: arrivePlace, seat: seat))
             case .todo:
@@ -216,7 +227,7 @@ extension InboxItemEntity.Payload {
         case .trip(let info):
             self.init(typeRaw: ItemType.trip.rawValue)
             tripKindRaw = info.kind.rawValue
-            tripNumber = info.number
+            tripNumber = info.number.isEmpty ? nil : info.number
             departAt = Self.date(info.departure)
             departPlace = info.departurePlace
             arriveAt = Self.date(info.arrival)
@@ -248,9 +259,49 @@ extension InboxItemEntity.Payload {
     }
 }
 
-// MARK: - EntityQuery（瞬态实体，无持久查询）
+// MARK: - 实体注册表（跨动作 resolve 的关键）
+//
+// 系统在快捷指令两动作间传递 AppEntity 时，可能只携带 identifier、在下游用 defaultQuery
+// 按 id 重新 resolve 实体。此前 `entities(for:)` 恒返回 []，导致「确认记账」的 items 被
+// resolve 成空 → 系统弹窗反问「条目」→「没有记账」（交接文档假设 A）。
+// 解法：实体创建时按 id 把 payload JSON 登记进 App Group UserDefaults（上下游动作可能跑在
+// 不同进程实例里，内存 static 不够），resolve 时按 id 还原同内容实体。
+// 实体只需在快捷指令一次运行内存活，登记超过 1 天即清理，避免堆积。
+
+extension InboxItemEntity {
+    enum Registry {
+        private static let key = "intentEntityRegistry"
+        private static var defaults: UserDefaults? { UserDefaults(suiteName: SharedInbox.appGroupID) }
+        static let log = Logger(subsystem: "xin.codgi.omny", category: "EntityRegistry")
+
+        /// 存储结构：[uuidString: ["data": payload JSON, "at": 登记时间]]
+        static func register(id: UUID, data: String) {
+            guard let defaults else { return }
+            var dict = (defaults.dictionary(forKey: key) as? [String: [String: Any]]) ?? [:]
+            let cutoff = Date.now.addingTimeInterval(-24 * 3600)
+            dict = dict.filter { ($0.value["at"] as? Date).map { $0 > cutoff } ?? false }
+            dict[id.uuidString] = ["data": data, "at": Date.now]
+            defaults.set(dict, forKey: key)
+            log.info("登记实体 \(id.uuidString, privacy: .public)（共 \(dict.count, privacy: .public) 条）")
+        }
+
+        static func lookup(id: UUID) -> InboxItemEntity? {
+            guard let dict = defaults?.dictionary(forKey: key) as? [String: [String: Any]],
+                  let data = dict[id.uuidString]?["data"] as? String else {
+                log.error("resolve 未命中：\(id.uuidString, privacy: .public)")
+                return nil
+            }
+            log.info("resolve 命中：\(id.uuidString, privacy: .public)")
+            return InboxItemEntity(id: id, data: data)
+        }
+    }
+}
+
+// MARK: - EntityQuery（瞬态实体，靠注册表按 id 还原）
 
 struct InboxItemEntityQuery: EntityQuery {
-    func entities(for identifiers: [InboxItemEntity.ID]) async throws -> [InboxItemEntity] { [] }
+    func entities(for identifiers: [InboxItemEntity.ID]) async throws -> [InboxItemEntity] {
+        identifiers.compactMap { InboxItemEntity.Registry.lookup(id: $0) }
+    }
     func suggestedEntities() async throws -> [InboxItemEntity] { [] }
 }

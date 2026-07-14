@@ -23,6 +23,7 @@
 		4761DD6B748B13E62CB29C23 /* ExpenseEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99C0C8F96080EABD245FC39C /* ExpenseEditView.swift */; };
 		4A24E65FDFE00791F20A3614 /* InboxItemEntity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58C239CE1E3562161DFEB077 /* InboxItemEntity.swift */; };
 		4A8E8F6479DE99F5E30D7A05 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE835B50414B0383DD7772DA /* RootView.swift */; };
+		5304541564108CB1F073CC83 /* FlightDynamicsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE39A13A4D5B399B4876D73A /* FlightDynamicsStore.swift */; };
 		5CE81D859C93B072D4C216BA /* ExpenseDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEC6703B53A710423098B446 /* ExpenseDetailView.swift */; };
 		735260513B9A48A77E03B5EC /* ExpenseSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = F035203A42962D76D81AFAA0 /* ExpenseSupport.swift */; };
 		755B2262C6761AC0CBE4DB22 /* OmnyShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2F8DAA5F39FB955E53DF0154 /* OmnyShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -87,6 +88,7 @@
 		A42FEA9C1D69A760D542AE4D /* Ingestor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ingestor.swift; sourceTree = "<group>"; };
 		A9D19D7FE0FC7B0F439834DC /* ListViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListViews.swift; sourceTree = "<group>"; };
 		ADD6297A5443435803E13821 /* ExpenseCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseCalendarView.swift; sourceTree = "<group>"; };
+		AE39A13A4D5B399B4876D73A /* FlightDynamicsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlightDynamicsStore.swift; sourceTree = "<group>"; };
 		AEC6703B53A710423098B446 /* ExpenseDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseDetailView.swift; sourceTree = "<group>"; };
 		B8AA264B58ADFB671485DEE6 /* OmnyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OmnyApp.swift; sourceTree = "<group>"; };
 		BE835B50414B0383DD7772DA /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -221,6 +223,7 @@
 				7CC21DA2A336C3F18CBD4472 /* AppSettings.swift */,
 				6CF741249636C17F15890CB8 /* DidaService.swift */,
 				E11C02EDDB66A6F143E77CEA /* ExpenseCategoryAppearance.swift */,
+				AE39A13A4D5B399B4876D73A /* FlightDynamicsStore.swift */,
 				A42FEA9C1D69A760D542AE4D /* Ingestor.swift */,
 				F5BE3B107B134EB9418AC588 /* OCRService.swift */,
 				EDA3EC43CC114A3BA3AAE2CD /* Secrets.swift */,
@@ -359,6 +362,7 @@
 				4761DD6B748B13E62CB29C23 /* ExpenseEditView.swift in Sources */,
 				1E6CD8C4449BB0217023DDB0 /* ExpenseHomeView.swift in Sources */,
 				735260513B9A48A77E03B5EC /* ExpenseSupport.swift in Sources */,
+				5304541564108CB1F073CC83 /* FlightDynamicsStore.swift in Sources */,
 				CCAAFBF6F56DECE1F2E419E2 /* InboxItem.swift in Sources */,
 				4A24E65FDFE00791F20A3614 /* InboxItemEntity.swift in Sources */,
 				D1436F1C8D387FB2E7E76106 /* Ingestor.swift in Sources */,

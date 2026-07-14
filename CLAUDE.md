@@ -29,7 +29,7 @@ xcrun devicectl device install app --device <设备ID> \
 # 打包上传 TestFlight（命令行全流程，含 ASC API Key 配置与踩坑）见 docs/testflight-release.md
 ```
 
-首次搭建需要密钥：`cp OmnyApp/Secrets.swift.example OmnyApp/Omny/Services/Secrets.swift`（滴答清单 client_id/secret，向维护者索要）。`Secrets.swift` 和根目录 `Secrets.local.json` 已被 .gitignore 排除，禁止提交。LLM API Key 不进代码，运行时在 App 设置页填。
+首次搭建需要密钥：`cp OmnyApp/Secrets.swift.example OmnyApp/Omny/Services/Secrets.swift`（滴答清单 client_id/secret、航班动态 MCP key，向维护者索要）。`Secrets.swift` 和根目录 `Secrets.local.json` 已被 .gitignore 排除，禁止提交。LLM API Key 不进代码，运行时在 App 设置页填。
 
 ## 已知陷阱
 
@@ -58,8 +58,8 @@ xcrun devicectl device install app --device <设备ID> \
 ## 分支与 CI（本节为 CI 规则的权威源，其他文档引用此处）
 
 - 维护者在 `main`，合并走 PR；Windows 协作者固定用 `dev-zhanghaha` 分支。
-- **`.github/workflows/ci.yml`**：所有 push / PR 都在 Linux 跑 OmnyCore 测试（`core-linux`）；App 编译 + 未签名 ipa（`app-macos`）**改为仅手动触发**（Actions 页 Run workflow），push 不再自动出包——真机验证已由 TestFlight 工作流接管（2026-07-12 起），此 job 仅留作临时验证编译，省 10 倍计费的 macOS 分钟。
-- **`.github/workflows/testflight.yml`**：打 `tf-*` tag 或手动触发即云端归档上传 TestFlight，约 4 分钟；构建号 CI 自动生成（`run_number`+偏移，不撞号），签名走 ASC API Key 云签名，协作者无需 Apple 凭据。用法与踩坑见 `docs/testflight-release.md`。
+- **`.github/workflows/ci.yml`**：打 tag、提 PR、手动触发时在 Linux 跑 OmnyCore 测试（`core-linux`），日常分支 push 不跑；App 编译 + 未签名 ipa（`app-macos`）**仅手动触发**（Actions 页 Run workflow）——真机验证已由 TestFlight 工作流接管（2026-07-12 起），此 job 仅留作临时验证编译，省 10 倍计费的 macOS 分钟。
+- **`.github/workflows/testflight.yml`**：打 `tf-*` tag 或手动触发即云端归档上传 TestFlight，约 4 分钟；构建号 CI 自动生成（`run_number`+偏移，不撞号），签名走 ASC API Key 云签名，协作者无需 Apple 凭据。用法与踩坑见 `docs/testflight-release.md`。Secrets.swift 改动（如新增字段）后需同步更新仓库 secret `OMNY_SECRETS_SWIFT_B64`，否则云端编译缺字段失败。
 
 ## 设计原则（改代码时遵守）
 

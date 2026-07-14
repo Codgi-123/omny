@@ -1,6 +1,7 @@
 import AppIntents
 import Foundation
 import OmnyCore
+import os
 
 // MARK: - 确认记账指令
 //
@@ -27,13 +28,27 @@ struct ConfirmExpenseIntent: AppIntent {
     @Parameter(title: "金额") var amountInput: Double?
     @Parameter(title: "商户") var merchantInput: String?
 
+    /// 只把 items 暴露为输入：工作参数不进快捷指令编辑器，也避免系统运行前尝试逐个 resolve
+    /// 它们（交接文档假设 C）。
+    static var parameterSummary: some ParameterSummary {
+        Summary("核对并确认 \(\.$items)")
+    }
+
+    /// 真机调试日志：Console.app 按 subsystem xin.codgi.omny / category ConfirmExpense 过滤
+    static let log = Logger(subsystem: "xin.codgi.omny", category: "ConfirmExpense")
+
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
+        Self.log.info("perform 进入：items.count=\(items.count, privacy: .public)")
+        for (i, e) in items.enumerated() {
+            Self.log.info("items[\(i)]: \(e.intentSummary, privacy: .public)")
+        }
         let context = OmnyApp.sharedModelContainer.mainContext
 
         // 1. 分流：记账逐笔确认；非记账静默入库（复用去重/合并）
         let expenseEntities = items.filter { $0.isExpense }
         let others = items.filter { !$0.isExpense }
+        Self.log.info("分流：expense=\(expenseEntities.count, privacy: .public) others=\(others.count, privacy: .public)")
 
         var otherCount = 0
         if !others.isEmpty {
@@ -92,9 +107,17 @@ struct ConfirmExpenseIntent: AppIntent {
             let merchantLabel = "商户：" + (draft.merchant ?? "无")
 
             let options = [dirLabel, amtLabel, catLabel, timeLabel, merchantLabel, doneLabel, cancelLabel]
-            let picked = try await $choice.requestDisambiguation(
-                among: options,
-                dialog: IntentDialog(stringLiteral: "确认记账（点项目可修改）"))
+            Self.log.info("confirmOne：requestDisambiguation 前，options=\(options.count, privacy: .public)")
+            let picked: String
+            do {
+                picked = try await $choice.requestDisambiguation(
+                    among: options,
+                    dialog: IntentDialog(stringLiteral: "确认记账（点项目可修改）"))
+            } catch {
+                Self.log.error("requestDisambiguation 抛错：\(String(describing: error), privacy: .public)")
+                throw error
+            }
+            Self.log.info("confirmOne：用户选了「\(picked, privacy: .public)」")
 
             switch picked {
             case doneLabel:
