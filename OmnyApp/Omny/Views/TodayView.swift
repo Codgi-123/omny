@@ -7,6 +7,8 @@ struct TodayView: View {
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var items: [InboxItem]
     /// 与 RootView 的 TabView selection 共享同一 UserDefaults 键：各区块「查看详情」写入即切 tab。
     @AppStorage("omnySelectedTab") private var selectedTab = 0
+    /// 首页待办卡片是否展开全部（默认只露前 5 条）
+    @State private var todosExpanded = false
 
     private let margin: CGFloat = Theme.Space.page
 
@@ -86,11 +88,30 @@ struct TodayView: View {
                                       count: "\(openTodos.count) 项未完成",
                                       onDetail: { selectedTab = 3 })
                         // 待办整体合并为一张卡片，条目列在卡内、不加分隔线（issue #9）
-                        let homeTodos = Array(openTodos.prefix(5))
+                        // 默认只露前 5 条，多出的靠卡片底部按钮展开/收起
+                        let homeTodos = todosExpanded ? openTodos : Array(openTodos.prefix(5))
                         VStack(spacing: 0) {
                             ForEach(homeTodos) { todo in
                                 TodoRow(item: todo, showsContextMenu: false)
                                     .padding(.vertical, 11)
+                            }
+                            if openTodos.count > 5 {
+                                Button {
+                                    withAnimation(.snappy(duration: 0.3)) { todosExpanded.toggle() }
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Text(todosExpanded ? "收起" : "展开还有 \(openTodos.count - 5) 项")
+                                        Image(systemName: "chevron.down")
+                                            .font(.caption2)
+                                            .rotationEffect(.degrees(todosExpanded ? 180 : 0))
+                                    }
+                                    .font(.footnote)
+                                    .foregroundStyle(Theme.sub)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                    .contentShape(.rect)
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                         .padding(.horizontal, 14)
