@@ -49,6 +49,11 @@ struct TodayView: View {
             && todayBookmarks.isEmpty && reviewItems.isEmpty
     }
 
+    /// 航班动态查询键（航班号|日期）集合，变化时触发 .task 补刷
+    private var flightTaskID: [String] {
+        items.compactMap { FlightDynamicsStore.query(for: $0)?.key }.sorted()
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ScreenHeader("今天") { NavActions() }
@@ -162,6 +167,13 @@ struct TodayView: View {
             }
             .padding(.top, 8)
             .padding(.bottom, 20)
+            }
+            // 航班动态：下拉强刷无视缓存；页面出现/航班集合变化时只补过期的（10 分钟 TTL）
+            .refreshable {
+                await Task { await FlightDynamicsStore.shared.refresh(items, force: true) }.value
+            }
+            .task(id: flightTaskID) {
+                await FlightDynamicsStore.shared.refresh(items, force: false)
             }
         }
         .background(Theme.screen)

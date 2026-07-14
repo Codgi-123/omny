@@ -1,6 +1,35 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-<path d="M3.2 5.8V18.2" fill="none" stroke="#000" stroke-width="1.8" stroke-linecap="round"/>
-<path d="M3.2 12.4H17.8A3.2 3.2 0 0 1 21 15.6V18.2" fill="none" stroke="#000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M3.2 15.6H21" fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round"/>
-<circle cx="6.5" cy="9.7" r="1.5" fill="none" stroke="#000" stroke-width="1.5"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="75.9" height="53.2" viewBox="13.2 33.2 75.9 53.2">
+  <!-- 软阴影 -->
+  <ellipse cx="50" cy="82" rx="34" ry="4.2" fill="#3A4356" opacity="0.08"/>
+  <ellipse cx="50" cy="82" rx="23" ry="2.9" fill="#3A4356" opacity="0.10"/>
+
+  <!-- 床腿（木色，呼应纸箱牛皮色系） -->
+  <rect x="18" y="70" width="6" height="10" rx="1.6" fill="#8A6238"/>
+  <rect x="76" y="70" width="6" height="10" rx="1.6" fill="#8A6238"/>
+
+  <!-- 床架横梁 -->
+  <path d="M14 66 L86 66 Q89 66 89 69 L89 70 Q89 73 86 73 L18 73 Q14 73 14 69.5 Z" fill="#B98F5F"/>
+  <path d="M14 66 L86 66 Q89 66 89 67.6 L14 67.6 Z" fill="#E3C193" opacity="0.8"/>
+
+  <!-- 床头板（木质圆顶 + 内嵌浅色板芯） -->
+  <path d="M14 40 Q14 34 20 34 L22 34 Q26 34 26 40 L26 66 L14 66 Z" fill="#C49A6A"/>
+  <rect x="16.2" y="36.8" width="7.6" height="26.5" rx="2.4" fill="#DDB588" opacity="0.75"/>
+  <path d="M14 40 Q14 34 20 34 L22 34 Q26 34 26 40 L26 66 L14 66 Z" fill="none" stroke="#785026" stroke-width="1" opacity="0.3" stroke-linejoin="round"/>
+
+  <!-- 床垫（露出的白边） -->
+  <rect x="26" y="58" width="60" height="8" fill="#F2F4F8"/>
+  <rect x="26" y="58" width="60" height="8" fill="none" stroke="#3A4356" stroke-width="0.8" opacity="0.15"/>
+
+  <!-- 靛蓝被子（右缘下垂、顶面微起伏） -->
+  <path d="M26 49 C36 45.6 50 45 61 46.6 C72 48.2 80 49.8 84.5 52.6 Q87.5 54.6 87.5 58 L87.5 61 Q87.5 64 84.5 64 L26 64 Z" fill="#6462D8"/>
+  <!-- 顶面受光 -->
+  <path d="M26 49 C36 45.6 50 45 61 46.6 C70 47.9 77 49.3 82 51.4 C74 50 62 49.3 50 49.6 C41 49.8 32 50.6 26 52 Z" fill="#FFFFFF" opacity="0.16"/>
+  <!-- 翻折的白床单 -->
+  <path d="M26 50 C33 47.4 40.5 46.2 47.5 46.4 L47.5 51.6 C40.5 51.3 33 52.4 26 55 Z" fill="#F2F4F8"/>
+  <path d="M26 53.8 C33 51.4 40.5 50.4 47.5 50.6 L47.5 51.6 C40.5 51.3 33 52.4 26 55 Z" fill="#C9CFDA" opacity="0.7"/>
+
+  <!-- 枕头（蓬软，靠床头、压住被沿） -->
+  <path d="M27.5 44.6 Q27 40.1 31.5 39.8 Q37.5 39.4 43.5 40.2 Q47.5 40.8 47 44.8 Q46.6 48.8 43 49.2 Q37 49.9 31.8 49.2 Q28 48.7 27.5 44.6 Z" fill="#FAFBFD"/>
+  <path d="M28.5 47.4 Q34 48.9 41 48.5 Q44.5 48.2 46.4 46.8 Q46 49 43 49.2 Q37 49.9 31.8 49.2 Q29.4 48.9 28.5 47.4 Z" fill="#C9CFDA" opacity="0.65"/>
+  <path d="M27.5 44.6 Q27 40.1 31.5 39.8 Q37.5 39.4 43.5 40.2 Q47.5 40.8 47 44.8 Q46.6 48.8 43 49.2 Q37 49.9 31.8 49.2 Q28 48.7 27.5 44.6 Z" fill="none" stroke="#3A4356" stroke-width="0.9" opacity="0.18"/>
 </svg>

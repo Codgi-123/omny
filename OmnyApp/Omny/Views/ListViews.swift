@@ -211,6 +211,11 @@ struct TripView: View {
 
     private var trips: [InboxItem] { items.filter { $0.kind == .trip && $0.deletedAt == nil } }
 
+    /// 航班动态查询键（航班号|日期）集合，变化时触发 .task 补刷
+    private var flightTaskID: [String] {
+        trips.compactMap { FlightDynamicsStore.query(for: $0)?.key }.sorted()
+    }
+
     /// 分组边界：车/机按出发时间；酒店按离店时间——入住期间（卡片显示「入住中」）仍留在上组
     private func tripEnd(_ item: InboxItem) -> Date {
         if item.tripKindRaw == "hotel" { return item.arriveAt ?? item.departAt ?? .distantPast }
@@ -270,6 +275,14 @@ struct TripView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(Theme.screen)
+        // 航班动态：下拉强刷无视缓存；页面出现/航班集合变化时只补过期的（10 分钟 TTL）。
+        // 包一层非结构化 Task 防 .refreshable 的任务随视图刷新被取消（同滴答同步的处理）。
+        .refreshable {
+            await Task { await FlightDynamicsStore.shared.refresh(trips, force: true) }.value
+        }
+        .task(id: flightTaskID) {
+            await FlightDynamicsStore.shared.refresh(trips, force: false)
+        }
         .overlay {
             if upcoming.isEmpty && past.isEmpty {
                 ContentUnavailableView {

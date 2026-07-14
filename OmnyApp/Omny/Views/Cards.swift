@@ -296,8 +296,9 @@ struct CopyGlyph: View {
 
 // MARK: - 行程图标块（机票 / 火车 / 酒店）
 
-/// 行程图标块：与 IconChip 同款渐变分类色底 + 白色图标，内嵌自绘细线条机票/火车/床铺图标
-/// （细线圆头笔画，风格对齐底部 tab 栏 icon.svg；资源见 Assets 的 TripFlight / TripTrain / TripHotel）。
+/// 行程图标块：全彩拟物 SVG（侧视客机 / 高铁头车 / 木床），风格对齐快递的 CarrierIcon 纸箱
+/// （柔和投影 + 低透明度描边 + 靛蓝分类色点缀）。不再用「分类色底 + 白色形状」的 chip 样式。
+/// 资源见 Assets 的 TripFlight / TripTrain / TripHotel（original 渲染、保留矢量）。
 struct TripIconChip: View {
     let kindRaw: String?
     var size: CGFloat = 34
@@ -310,15 +311,20 @@ struct TripIconChip: View {
         }
     }
 
+    private var label: String {
+        switch kindRaw {
+        case "flight": "航班"
+        case "hotel": "住宿"
+        default: "火车"
+        }
+    }
+
     var body: some View {
         Image(assetName)
             .resizable()
-            .renderingMode(.template)
             .aspectRatio(contentMode: .fit)
-            .frame(width: size * 0.58, height: size * 0.58)
-            .foregroundStyle(.white)
             .frame(width: size, height: size)
-            .background(Theme.trip.gradient, in: .rect(cornerRadius: size * 0.28))
+            .accessibilityLabel(label)
     }
 }
 
@@ -327,13 +333,22 @@ struct TripIconChip: View {
 struct TripCard: View {
     let item: InboxItem
     @Environment(\.modelContext) private var context
+    /// 航班动态缓存（10 分钟 TTL，页面负责触发刷新）；命中时机票卡显示三字码/航站楼/登机口等
+    @ObservedObject private var flightStore = FlightDynamicsStore.shared
 
     private var isHotel: Bool { item.tripKindRaw == "hotel" }
+    private var isFlight: Bool { item.tripKindRaw == "flight" }
 
-    /// 标题：车/机用班次号；酒店无班次号，用酒店/民宿名（departPlace，见 TripInfo.Kind.hotel 的字段映射）
+    /// 标题：机票是「航司名 + 航班号」（航司由航班号前缀离线映射）；火车用车次号；
+    /// 酒店无班次号，用酒店/民宿名（departPlace，见 TripInfo.Kind.hotel 的字段映射）
     private var title: String {
         if isHotel { return item.departPlace ?? "住宿" }
-        if let number = item.tripNumber, !number.isEmpty { return number }
+        if let number = item.tripNumber, !number.isEmpty {
+            if isFlight, let airline = AirlineNames.name(forFlightNo: number) {
+                return "\(airline) \(number)"
+            }
+            return number
+        }
         return "行程"
     }
 
@@ -346,20 +361,40 @@ struct TripCard: View {
     var body: some View {
         VStack(spacing: 14) {
             HStack(spacing: 10) {
-                TripIconChip(kindRaw: item.tripKindRaw, size: 34)
+                TripIconChip(kindRaw: item.tripKindRaw, size: 44)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title)
                         .font(.headline)
-                    if let seat = item.seat {  // 酒店时 seat 存的是房型
+                    // 酒店时 seat 存的是房型；机票座位挪去了地面信息行
+                    if let seat = item.seat, !isFlight {
                         Text(seat)
                             .font(.caption)
                             .foregroundStyle(Theme.sub)
                     }
                 }
                 Spacer()
-                statusTag
+                if isFlight {
+                    // 机票路线正中让位给时长/状态，日期星期上移到卡片右上
+                    VStack(alignment: .trailing, spacing: 3) {
+                        statusTag
+                        if let dateWeekday {
+                            Text(dateWeekday)
+                                .font(.caption2)
+                                .foregroundStyle(Theme.sub)
+                        }
+                    }
+                } else {
+                    statusTag
+                }
             }
-            if isHotel { hotelRoute } else { transitRoute }
+            if isHotel {
+                hotelRoute
+            } else if isFlight {
+                flightRoute
+                flightGroundRow
+            } else {
+                transitRoute
+            }
         }
     }
 
@@ -494,11 +529,155 @@ struct TripCard: View {
         }
     }
 
+    // MARK: 机票路线行（登机牌样式）
+
+    private var flightDynamics: FlightDynamics? { flightStore.dynamics(for: item) }
+
+    /// 时刻优先级：动态预计时间（延误时与计划不同）→ 动态计划时间 → 短信解析时间
+    private var flightRoute: some View {
+        let dyn = flightDynamics
+        let dep = dyn?.depEstimateTime ?? dyn?.depPlanTime ?? item.departAt
+        let arr = dyn?.arrEstimateTime ?? dyn?.arrPlanTime ?? item.arriveAt
+        return HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(dep?.formatted(date: .omitted, time: .shortened) ?? "--:--")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                    .monospacedDigit()
+                if let code = dyn?.depCode {
+                    Text(code)
+                        .font(.subheadline.weight(.semibold))
+                }
+                if let place = Self.placeLine(item.departPlace, terminal: dyn?.depTerminal) {
+                    Text(place)
+                        .font(.caption)
+                        .foregroundStyle(Theme.sub)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            VStack(spacing: 4) {
+                if let duration = Self.durationText(dep, arr) {
+                    Text(duration)
+                        .font(.caption2)
+                        .foregroundStyle(Theme.sub)
+                }
+                HStack(spacing: 4) {
+                    FlightDashLine()
+                    Image(systemName: "airplane")
+                        .font(.caption2)
+                        .foregroundStyle(Theme.trip)
+                    FlightDashLine()
+                }
+                if let state = dyn?.state {
+                    Text(state)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(Self.stateColor(state))
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 8)
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(arr?.formatted(date: .omitted, time: .shortened) ?? "--:--")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                    .monospacedDigit()
+                if let code = dyn?.arrCode {
+                    Text(code)
+                        .font(.subheadline.weight(.semibold))
+                }
+                if let place = Self.placeLine(item.arrivePlace, terminal: dyn?.arrTerminal) {
+                    Text(place)
+                        .font(.caption)
+                        .foregroundStyle(Theme.sub)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+    }
+
+    /// 登机口 / 座位 / 行李转盘：有任一数据才显示整行，无值格子占位「—」
+    @ViewBuilder private var flightGroundRow: some View {
+        let dyn = flightDynamics
+        if dyn != nil || item.seat != nil {
+            HStack(spacing: 8) {
+                flightGroundCell("登机口", dyn?.gate)
+                flightGroundCell("座位", item.seat)
+                flightGroundCell("行李转盘", dyn?.luggage)
+            }
+        }
+    }
+
+    private func flightGroundCell(_ label: String, _ value: String?) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(Theme.sub)
+            Text((value?.isEmpty == false ? value : nil) ?? "—")
+                .font(.subheadline.weight(.semibold))
+                .monospacedDigit()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// 机场名与航站楼拼接（短信地名 + 动态航站楼）；地名里已含航站楼时不重复
+    static func placeLine(_ place: String?, terminal: String?) -> String? {
+        switch (place, terminal) {
+        case let (place?, terminal?):
+            return place.localizedCaseInsensitiveContains(terminal) ? place : "\(place) \(terminal)"
+        case let (place?, nil): return place
+        case let (nil, terminal?): return terminal
+        default: return nil
+        }
+    }
+
+    /// 飞行时长「2小时45分」；到达早于出发（数据异常/缺失）不显示
+    static func durationText(_ dep: Date?, _ arr: Date?) -> String? {
+        guard let dep, let arr, arr > dep else { return nil }
+        let minutes = Int(arr.timeIntervalSince(dep) / 60)
+        if minutes < 60 { return "\(minutes)分钟" }
+        let remainder = minutes % 60
+        return remainder == 0 ? "\(minutes / 60)小时" : "\(minutes / 60)小时\(remainder)分"
+    }
+
+    /// 航班状态着色：延误/取消警示红，起飞/到达/降落完成绿，其余（计划等）用行程色
+    static func stateColor(_ state: String) -> Color {
+        if state.contains("延误") || state.contains("取消") { return .red }
+        if state.contains("起飞") || state.contains("到达") || state.contains("降落") {
+            return Theme.green
+        }
+        return Theme.trip
+    }
+
     private func countdown(to date: Date) -> String {
         let seconds = date.timeIntervalSinceNow
         if seconds < 3600 { return "\(max(1, Int(seconds / 60))) 分钟" }
         if seconds < 48 * 3600 { return "\(Int(seconds / 3600)) 小时" }
         return "\(Int(seconds / 86400)) 天"
+    }
+}
+
+/// 机票路线中间的虚线（两段夹一架小飞机）
+private struct FlightDashLine: View {
+    var body: some View {
+        LineShape()
+            .stroke(style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+            .foregroundStyle(Theme.line)
+            .frame(height: 1)
+    }
+
+    private struct LineShape: Shape {
+        func path(in rect: CGRect) -> Path {
+            var path = Path()
+            path.move(to: CGPoint(x: 0, y: rect.midY))
+            path.addLine(to: CGPoint(x: rect.width, y: rect.midY))
+            return path
+        }
     }
 }
 
