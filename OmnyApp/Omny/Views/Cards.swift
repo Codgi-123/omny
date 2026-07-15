@@ -811,6 +811,7 @@ private extension VerticalAlignment {
 struct TodoRow: View {
     @Bindable var item: InboxItem
     var showsContextMenu = true          // 首页传 false 关闭长按菜单
+    var showsSwipeActions = true         // 首页传 false：多条合并在一个 List 行里，左滑会整卡一起滑
     @Environment(\.modelContext) private var context
     @EnvironmentObject private var dida: DidaService
     @State private var editing = false
@@ -871,7 +872,7 @@ struct TodoRow: View {
         .contentShape(Rectangle())
         .onTapGesture { if isLocal { editing = true } }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            if isLocal {
+            if showsSwipeActions, isLocal {
                 // 删除：红色底（role .destructive）；「编辑」改为「放弃」（灰系，与删除的红区分）
                 Button(role: .destructive) { delete() } label: { Label("删除", systemImage: "trash") }
                 if item.todoAbandoned {
