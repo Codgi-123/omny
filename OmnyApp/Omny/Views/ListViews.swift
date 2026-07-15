@@ -497,6 +497,10 @@ struct BookmarkView: View {
     @State private var showAddSheet = false
     @State private var editingItem: InboxItem?
     @State private var detailItem: InboxItem?
+    /// 左滑「加代办」的预填内容，非 nil 时呈现快捷输入条
+    @State private var todoPrefill: (title: String, note: String)?
+    /// zoom 转场命名空间：列表行（源）与详情页（目的地）共用
+    @Namespace private var zoomNS
 
     private var bookmarks: [InboxItem] { items.active(.bookmark) }
 
@@ -531,12 +535,17 @@ struct BookmarkView: View {
             }
             ForEach(filtered) { item in
                 BookmarkCard(item: item,
-                             onOpen: { detailItem = item },
+                             onOpenDetail: { detailItem = item },
                              onEditTags: { editingItem = item },
+                             onAddTodo: { todoPrefill = item.bookmarkTodoPrefill },
                              onDelete: {
                                  withAnimation(.snappy) { Trash.softDelete(item, context: context) }
                              })
                     .cardCell()
+                    // zoom 转场源标记：id 用 item.id 保证行级唯一；圆角对齐卡片，避免起飞瞬间直角
+                    .matchedTransitionSource(id: item.id, in: zoomNS) {
+                        $0.clipShape(.rect(cornerRadius: 12))
+                    }
             }
         }
         .listStyle(.plain)
@@ -559,13 +568,26 @@ struct BookmarkView: View {
             BookmarkTagSheet(item: item)
                 .presentationDetents([.medium])
         }
-        .sheet(item: $detailItem) { item in
-            BookmarkDetailSheet(item: item)
-        }
         }
         .background(Theme.screen)
+        // 全屏详情 + zoom 转场：用 fullScreenCover 而非 push——
+        // push + zoom 在 List 上交互式滑返有框架级残影 bug（Apple 论坛 thread 810944），
+        // cover 同样有非线性放大、左缘滑动返回、缩回源行，且天然盖住/恢复 tab 栏
+        .fullScreenCover(item: $detailItem) { item in
+            NavigationStack {
+                BookmarkDetailView(item: item)
+            }
+            .navigationTransition(.zoom(sourceID: item.id, in: zoomNS))
+        }
         .overlay(alignment: .bottomTrailing) {
             FloatingAddButton { showAddSheet = true }
+        }
+        .overlay {
+            if let prefill = todoPrefill {
+                TodoQuickAdd(isPresented: Binding(get: { todoPrefill != nil },
+                                                  set: { if !$0 { todoPrefill = nil } }),
+                             initialTitle: prefill.title, initialNote: prefill.note)
+            }
         }
         .toolbar(.hidden, for: .navigationBar)
     }
@@ -619,13 +641,14 @@ struct BookmarkView: View {
     }
 }
 
-/// 收藏卡片：链接收藏可点开，纯文本收藏展示原文；下方一排 tag
+/// 收藏卡片：链接收藏点击直接跳转，图文收藏点击进全屏详情；下方一排 tag 药丸
 struct BookmarkCard: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.modelContext) private var context
     let item: InboxItem
-    var onOpen: () -> Void
+    var onOpenDetail: () -> Void
     var onEditTags: () -> Void
+    var onAddTodo: () -> Void
     var onDelete: () -> Void
 
     private var url: URL? { item.urlString.flatMap(URL.init(string:)) }
@@ -640,7 +663,7 @@ struct BookmarkCard: View {
                     .frame(width: 38, height: 38)
                     .clipShape(.rect(cornerRadius: 10))
             } else {
-                IconChip(symbol: url != nil ? "link" : "text.alignleft", color: Theme.bookmark, size: 38)
+                BookmarkKindIcon(isLink: url != nil, size: 38)
             }
             VStack(alignment: .leading, spacing: 6) {
             Text(title)
@@ -665,7 +688,7 @@ struct BookmarkCard: View {
                         .font(.caption)
                         .foregroundStyle(Theme.sub.opacity(0.7))
                 } else {
-                    ForEach(item.tags, id: \.self) { Badge(text: "#\($0)", color: Theme.green) }
+                    ForEach(item.tags, id: \.self) { TagPill(text: $0) }
                 }
                 Spacer()
                 Text(item.createdAt.formatted(.relative(presentation: .named).locale(Locale(identifier: "zh_CN"))))
@@ -675,11 +698,24 @@ struct BookmarkCard: View {
             }
         }
         .contentShape(Rectangle())
-        .onTapGesture { onOpen() }
+        .onTapGesture {
+            if let url {
+                // 链接型：点击直接跳转；打不开（畸形 URL）兜底进详情
+                openURL(url) { accepted in
+                    if !accepted { onOpenDetail() }
+                }
+            } else {
+                onOpenDetail()
+            }
+        }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            // destructive 的原生红会被同组邻位按钮的 tint 串染成蓝（iOS 26 bug），显式指红
             Button(role: .destructive, action: onDelete) { Label("删除", systemImage: "trash") }
+                .tint(.red)
             Button(action: onEditTags) { Label("标签", systemImage: "tag") }
-                .tint(Theme.green)
+                .tint(.blue)
+            Button(action: onAddTodo) { Label("加代办", systemImage: "checklist") }
+                .tint(.green)
         }
         .contextMenu {
             if let url {
@@ -690,6 +726,8 @@ struct BookmarkCard: View {
                     Label("重新抓取标题", systemImage: "arrow.clockwise")
                 }
             }
+            // 链接型 tap 被跳转占用，详情/编辑入口从长按菜单补齐
+            Button(action: onOpenDetail) { Label("查看详情", systemImage: "doc.text.magnifyingglass") }
             Button(action: onEditTags) { Label("编辑标签", systemImage: "tag") }
             Button(role: .destructive, action: onDelete) { Label("删除", systemImage: "trash") }
         }
@@ -1151,123 +1189,6 @@ struct TrashView: View {
     }
 }
 
-/// 收藏详情：查看内容 / 图片 / 链接 / 标签，点「编辑」后可改内容、换图、改标签。
-struct BookmarkDetailSheet: View {
-    @Bindable var item: InboxItem
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var context
-    @EnvironmentObject private var settings: AppSettings
-    @Environment(\.openURL) private var openURL
-
-    @State private var editing = false
-    @State private var draftText = ""
-    @State private var selectedTags: [String] = []
-    @State private var pickedItem: PhotosPickerItem?
-
-    private var url: URL? { item.urlString.flatMap(URL.init(string:)) }
-    private var candidateTags: [String] {
-        settings.mergedTagCandidates(including: item.tags)
-    }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("内容") {
-                    if editing {
-                        TextField("内容", text: $draftText, axis: .vertical).lineLimit(3...12)
-                    } else if item.rawText.isEmpty {
-                        Text("（无文字）").foregroundStyle(Theme.sub)
-                    } else {
-                        Text(item.rawText).textSelection(.enabled)
-                    }
-                }
-
-                if let url {
-                    Section("链接") {
-                        Button { openURL(url) } label: {
-                            Label(url.absoluteString, systemImage: "safari").lineLimit(1)
-                        }
-                    }
-                }
-
-                if let data = item.sourceImage, let ui = UIImage(data: data) {
-                    Section("图片") {
-                        Image(uiImage: ui).resizable().scaledToFit()
-                            .frame(maxHeight: 280)
-                            .clipShape(.rect(cornerRadius: 12))
-                        if editing {
-                            PhotosPicker(selection: $pickedItem, matching: .images) {
-                                Label("更换图片", systemImage: "photo")
-                            }
-                            Button(role: .destructive) {
-                                item.sourceImage = nil; try? context.save()
-                            } label: { Label("移除图片", systemImage: "trash") }
-                        }
-                    }
-                } else if editing {
-                    Section("图片") {
-                        PhotosPicker(selection: $pickedItem, matching: .images) {
-                            Label("添加图片", systemImage: "photo.on.rectangle")
-                        }
-                    }
-                }
-
-                Section("标签") {
-                    if editing {
-                        TagPicker(candidates: candidateTags, selection: $selectedTags)
-                            .padding(.vertical, 2)
-                    } else if item.tags.isEmpty {
-                        Text("未打标").foregroundStyle(Theme.sub)
-                    } else {
-                        FlowLayout(spacing: 8) {
-                            ForEach(item.tags, id: \.self) { Badge(text: "#\($0)", color: Theme.green) }
-                        }.padding(.vertical, 2)
-                    }
-                }
-            }
-            .navigationTitle("收藏详情")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(editing ? "取消" : "关闭") {
-                        if editing { editing = false } else { dismiss() }
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    if editing {
-                        Button("完成") { saveEdits() }
-                    } else {
-                        Button("编辑") { startEditing() }
-                    }
-                }
-            }
-            .onChange(of: pickedItem) { _, newItem in
-                Task {
-                    if let data = try? await newItem?.loadTransferable(type: Data.self) {
-                        item.sourceImage = data; try? context.save()
-                    }
-                }
-            }
-        }
-    }
-
-    private func startEditing() {
-        draftText = item.rawText
-        selectedTags = item.tags
-        editing = true
-    }
-    private func saveEdits() {
-        item.rawText = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let info = RuleParser.extractBookmark(item.rawText) {
-            item.urlString = info.url.absoluteString
-            if (item.bookmarkTitle ?? "").isEmpty { item.bookmarkTitle = info.title }
-        }
-        item.tags = selectedTags
-        try? context.save()
-        editing = false
-    }
-}
-
 /// 新增待办：仿滴答的底部快捷输入条，贴着键盘上方。
 /// 标题输入 + 一排小图标（日期 / 优先级），点图标弹出对应选择器；右侧圆形发送键保存。
 /// 用 overlay 呈现而非 sheet，以便自己掌控「遮罩淡入 + 输入条弹簧滑入」的进出动效。
@@ -1276,6 +1197,13 @@ struct TodoQuickAdd: View {
     @Environment(\.modelContext) private var context
     @State private var title = ""
     @State private var note = ""
+
+    /// 支持外部预填（如首页收藏「加代办」）；默认空串，原有调用不变
+    init(isPresented: Binding<Bool>, initialTitle: String = "", initialNote: String = "") {
+        _isPresented = isPresented
+        _title = State(initialValue: initialTitle)
+        _note = State(initialValue: initialNote)
+    }
     @State private var due: Date?
     @State private var priority = 0
     /// 条目级提醒规则：nil 跟随全局默认（issue #16）
