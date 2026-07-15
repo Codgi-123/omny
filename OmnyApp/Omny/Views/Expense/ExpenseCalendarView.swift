@@ -55,7 +55,7 @@ struct ExpenseCalendarView: View {
                         }
                     }
                 } header: {
-                    Text(daySectionLabel(selectedDay))
+                    Text(OmnyDateFormat.dayWithWeekday(selectedDay))
                         .font(.subheadline).fontWeight(.semibold)
                         .foregroundStyle(Theme.sub).textCase(nil)
                 }
@@ -116,13 +116,13 @@ struct ExpenseCalendarView: View {
                         .foregroundStyle(isSelected ? .white : (isToday ? Theme.accent : Theme.text))
                     if let totals {
                         if totals.expense > 0 {
-                            Text("-\(compact(totals.expense))")
+                            Text("-\(ExpenseFormat.compactBare(totals.expense))")
                                 .font(.system(size: 9)).monospacedDigit()
                                 .foregroundStyle(isSelected ? .white : Theme.red)
                                 .lineLimit(1)
                         }
                         if totals.income > 0 {
-                            Text("+\(compact(totals.income))")
+                            Text("+\(ExpenseFormat.compactBare(totals.income))")
                                 .font(.system(size: 9)).monospacedDigit()
                                 .foregroundStyle(isSelected ? .white : Theme.green)
                                 .lineLimit(1)
@@ -155,19 +155,4 @@ struct ExpenseCalendarView: View {
         return cells
     }
 
-    // MARK: 辅助
-
-    /// 日历格金额紧凑显示：大数取整、上万加"万"，避免撑破小格
-    private func compact(_ value: Decimal) -> String {
-        let d = NSDecimalNumber(decimal: value).doubleValue
-        if d >= 10000 { return String(format: "%.0f万", d / 10000) }
-        return String(format: "%.0f", d)
-    }
-
-    private func daySectionLabel(_ day: Date) -> String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "zh_CN")
-        f.dateFormat = "M月d日 EEEE"
-        return f.string(from: day)
-    }
 }

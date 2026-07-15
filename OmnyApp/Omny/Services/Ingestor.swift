@@ -53,7 +53,7 @@ enum Ingestor {
 
         return await ingestParsed(payloads, text: text, source: source,
                                   sourceImage: sourceImage,
-                                  lowConfidence: result.confidence < 0.8,
+                                  lowConfidence: result.confidence < AppSettings.shared.lowConfidenceThreshold,
                                   awaitEnrichment: awaitEnrichment, context: context)
     }
 
@@ -125,7 +125,9 @@ enum Ingestor {
                 item.todoTitle = todo.title
                 item.todoDue = resolveDate(todo.due)
                 item.needsPush = true
-                item.needsReview = source == .screenshot // 截图识别的待办先让用户确认
+                // 截图识别的待办先让用户确认（高级设置里可改成直接入库）
+                item.needsReview = source == .screenshot
+                    && !AppSettings.shared.screenshotTodoDirectIngest
                 item.sourceImage = sourceImage
                 context.insert(item)
                 return item
@@ -347,7 +349,8 @@ enum Ingestor {
     }
 
     /// 记账去重：优先 txnID 精确匹配（CSV 权威源）；无 txnID 时用
-    /// 「金额相等 + 交易时间 ±10 分钟 + 卡尾号或商户其一匹配」判为同一笔（短信/截图重复）。
+    /// 「金额相等 + 交易时间 ±时间窗（默认 10 分钟，高级设置可调）+ 卡尾号或商户其一匹配」
+    /// 判为同一笔（短信/截图重复）。
     private static func findExistingExpense(_ info: ExpenseInfo, occurredAt: Date?,
                                             context: ModelContext) -> InboxItem? {
         let kindRaw = ItemKind.expense.rawValue
@@ -363,7 +366,8 @@ enum Ingestor {
             guard e.amount == amount else { return false }
             // 时间窗：两边都有时间才比，任一缺失则不靠时间判定
             if let a = occurredAt, let b = e.occurredAt,
-               abs(a.timeIntervalSince(b)) > 10 * 60 { return false }
+               abs(a.timeIntervalSince(b))
+                   > Double(AppSettings.shared.expenseDedupWindowMinutes) * 60 { return false }
             let tailMatch = info.cardTail != nil && e.cardTail == info.cardTail
             let merchantMatch = info.merchant != nil && e.merchant == info.merchant
             return tailMatch || merchantMatch
@@ -406,6 +410,9 @@ enum Ingestor {
         item.arriveAt = resolveDate(info.arrival)
         item.arrivePlace = info.arrivalPlace
         item.seat = info.seat
+        item.ticketGate = info.ticketGate
+        item.seatClass = info.seatClass
+        item.tripAddress = info.address
         context.insert(item)
         return item
     }

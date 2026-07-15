@@ -81,10 +81,7 @@ struct ExpenseDetailView: View {
     }
 
     private var timeText: String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "zh_CN")
-        f.dateFormat = "yyyy年M月d日 HH:mm"
-        return f.string(from: item.occurredAt ?? item.createdAt)
+        OmnyDateFormat.fullDateTime(item.occurredAt ?? item.createdAt)
     }
 
     private func field(_ key: String, _ value: String, mono: Bool = false) -> some View {

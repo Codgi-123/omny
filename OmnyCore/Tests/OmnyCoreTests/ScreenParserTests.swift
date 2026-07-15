@@ -123,10 +123,13 @@ final class ScreenParserTests: XCTestCase {
         14:00后入住
         12:00前离店
         金桂苑整套民宿
+        整套洋房大床房·含双早
+        德清县莫干山镇劳岭村108号
         """
         let inner = #"""
         {"trips":[{"kind":"hotel","number":null,"departure":"10-04T14:00","departurePlace":"金桂苑整套民宿",
-                   "arrival":"10-06T12:00","arrivalPlace":null,"seat":null}]}
+                   "arrival":"10-06T12:00","arrivalPlace":null,"seat":"整套洋房大床房·含双早",
+                   "ticketGate":null,"seatClass":null,"address":"德清县莫干山镇劳岭村108号"}]}
         """#
         let transport = MockTransport { _ in (envelope(inner), 200) }
         let parser = ScreenParser(config: .claude(apiKey: "sk-test"), transport: transport)
@@ -138,6 +141,8 @@ final class ScreenParserTests: XCTestCase {
         XCTAssertEqual(info.kind, .hotel)
         XCTAssertEqual(info.number, "", "酒店无班次号")
         XCTAssertEqual(info.departurePlace, "金桂苑整套民宿")
+        XCTAssertEqual(info.seat, "整套洋房大床房·含双早")
+        XCTAssertEqual(info.address, "德清县莫干山镇劳岭村108号")
         XCTAssertEqual(info.departure?.month, 10)
         XCTAssertEqual(info.departure?.day, 4)
         XCTAssertEqual(info.departure?.hour, 14)

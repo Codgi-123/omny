@@ -173,6 +173,13 @@ public struct RuleParser: Parser {
         if let m = text.firstMatch(of: /(\d{1,2}车\d{1,3}[A-Fa-f]?号?)/) {
             info.seat = String(m.output.1)
         }
+        // 检票口与席别：12306 通知短信常见（"检票口A6""二等座"），措辞可穷举，正则够用
+        if let m = text.firstMatch(of: /检票口[:：]?\s*([A-Za-z]?\d{1,3}[A-Za-z]?)/) {
+            info.ticketGate = String(m.output.1)
+        }
+        if let m = text.firstMatch(of: /(商务座|特等座|一等座|二等座|无座|硬座|软座|硬卧|软卧|动卧)/) {
+            info.seatClass = String(m.output.1)
+        }
         return info
     }
 

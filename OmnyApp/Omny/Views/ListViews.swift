@@ -68,13 +68,13 @@ func dragDropHaptic() {
     UIImpactFeedbackGenerator(style: .light).impactOccurred()
 }
 
-// MARK: - 快递页：待取 / 在途 / 已签收
+// MARK: - 快递列表：待取 / 在途 / 已签收（PackageTripView「快递」分段的内容，标题栏在容器层）
 
 struct ExpressView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var items: [InboxItem]
 
-    private var packages: [InboxItem] { items.filter { $0.kind == .package && $0.deletedAt == nil } }
+    private var packages: [InboxItem] { items.active(.package) }
     // 待取/在途支持长按拖动排序（首页轮播同序）；默认（未拖过）按创建时间倒序
     private var awaiting: [InboxItem] {
         packages.filter { $0.packageStatus == .awaitingPickup }
@@ -86,29 +86,24 @@ struct ExpressView: View {
     }
 
     @State private var pendingDelete: InboxItem?   // 待确认删除的快递（非 nil 时弹确认框）
-    @State private var copiedAll = false           // 一键复制所有取件码的成功反馈态
-    @State private var copyResetTask: Task<Void, Never>?
+    // 一键复制所有取件码的成功反馈：共享状态机，见 Views/Components/Feedback.swift
+    @State private var copyFeedback = CopyFeedback()
 
     var body: some View {
-        VStack(spacing: 0) {
-            ScreenHeader("快递") { NavActions() }
-            List {
-                group("待取", awaiting, showsCopyAll: true, movable: true)
-                group("在途", inTransit, movable: true)
-                group("已签收", packages.filter { $0.packageStatus == .pickedUp }, dimmed: true)
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .background(Theme.screen)
-            .overlay {
-                if packages.isEmpty {
-                    ContentUnavailableView("暂无快递", systemImage: "shippingbox",
-                                           description: Text("驿站短信到达后会自动出现在这里"))
-                }
+        List {
+            group("待取", awaiting, showsCopyAll: true, movable: true)
+            group("在途", inTransit, movable: true)
+            group("已签收", packages.filter { $0.packageStatus == .pickedUp }, dimmed: true)
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Theme.screen)
+        .overlay {
+            if packages.isEmpty {
+                ContentUnavailableView("暂无快递", systemImage: "shippingbox",
+                                       description: Text("驿站短信到达后会自动出现在这里"))
             }
         }
-        .background(Theme.screen)
-        .toolbar(.hidden, for: .navigationBar)
         // 删除确认 + 恢复指引：软删除可恢复，仍给一道确认，避免误删。居中 alert，比底部 sheet 更紧凑。
         .alert(
             "删除这件快递？",
@@ -171,15 +166,15 @@ struct ExpressView: View {
             if let copyAll, copyAll.contains(where: { !($0.pickupCode ?? "").isEmpty }) {
                 Button { copyAllCodes(copyAll) } label: {
                     HStack(spacing: 4) {
-                        CopyGlyph(copied: copiedAll, size: 13)
-                        Text(copiedAll ? "已复制" : "复制取件码")
+                        CopyGlyph(copied: copyFeedback.copied, size: 13)
+                        Text(copyFeedback.copied ? "已复制" : "复制取件码")
                             .font(.caption.weight(.medium))
                     }
-                    .foregroundStyle(copiedAll ? Theme.green : Theme.accent)
+                    .foregroundStyle(copyFeedback.copied ? Theme.green : Theme.accent)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(PressableStyle())
-                .sensoryFeedback(.success, trigger: copiedAll) { _, now in now }
+                .sensoryFeedback(.success, trigger: copyFeedback.copied) { _, now in now }
             }
         }
         .textCase(nil)
@@ -193,23 +188,17 @@ struct ExpressView: View {
             return place.isEmpty ? code : "\(place) \(code)"
         }
         guard !lines.isEmpty else { return }
-        UIPasteboard.general.string = lines.joined(separator: "\n")
-        withAnimation(.snappy) { copiedAll = true }
-        copyResetTask?.cancel()
-        copyResetTask = Task {
-            try? await Task.sleep(for: .seconds(1.5))
-            if !Task.isCancelled { withAnimation(.snappy) { copiedAll = false } }
-        }
+        copyFeedback.copy(lines.joined(separator: "\n"))
     }
 }
 
-// MARK: - 行程页：即将出行 / 历史
+// MARK: - 行程列表：即将出行 / 历史（PackageTripView「行程」分段的内容，标题栏在容器层）
 
 struct TripView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var items: [InboxItem]
 
-    private var trips: [InboxItem] { items.filter { $0.kind == .trip && $0.deletedAt == nil } }
+    private var trips: [InboxItem] { items.active(.trip) }
 
     /// 航班动态查询键（航班号|日期）集合，变化时触发 .task 补刷
     private var flightTaskID: [String] {
@@ -233,9 +222,7 @@ struct TripView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            ScreenHeader("行程") { NavActions() }
-            List {
+        List {
             if !upcoming.isEmpty {
                 Section {
                     ForEach(upcoming) { item in
@@ -276,9 +263,9 @@ struct TripView: View {
         .scrollContentBackground(.hidden)
         .background(Theme.screen)
         // 航班动态：下拉强刷无视缓存；页面出现/航班集合变化时只补过期的（10 分钟 TTL）。
-        // 包一层非结构化 Task 防 .refreshable 的任务随视图刷新被取消（同滴答同步的处理）。
-        .refreshable {
-            await Task { await FlightDynamicsStore.shared.refresh(trips, force: true) }.value
+        // 防取消原因见 Views/Components/RefreshableDetached.swift（同滴答同步的处理）。
+        .refreshableDetached {
+            await FlightDynamicsStore.shared.refresh(trips, force: true)
         }
         .task(id: flightTaskID) {
             await FlightDynamicsStore.shared.refresh(trips, force: false)
@@ -292,9 +279,6 @@ struct TripView: View {
                 }
             }
         }
-        }
-        .background(Theme.screen)
-        .toolbar(.hidden, for: .navigationBar)
     }
 
     private func tripHeader(_ title: String) -> some View {
@@ -321,7 +305,7 @@ struct TodoView: View {
     @State private var collapsedPriorities: Set<Int> = []
 
     private var todos: [InboxItem] {
-        items.filter { $0.kind == .todo && !$0.deletedLocally && !$0.needsReview && $0.deletedAt == nil }
+        items.activeTodos()
     }
 
     /// 未完成 = 未完成且未放弃
@@ -383,33 +367,19 @@ struct TodoView: View {
                             }
                         }
                     } header: {
-                        // 折叠交互与「已完成」分组同款：点头部整行切换，chevron 旋转指示
-                        Button {
-                            withAnimation(.snappy) {
-                                if expanded {
-                                    collapsedPriorities.insert(p.rawValue)
-                                } else {
-                                    collapsedPriorities.remove(p.rawValue)
-                                }
+                        // 折叠头部收编为共享组件（Views/Components/CollapsibleSectionHeader.swift）；
+                        // 展开态存的是「收起集合」，用自定义 Binding 转换
+                        CollapsibleSectionHeader(title: p.label, count: group.count, expanded: Binding(
+                            get: { !collapsedPriorities.contains(p.rawValue) },
+                            set: { open in
+                                if open { collapsedPriorities.remove(p.rawValue) }
+                                else { collapsedPriorities.insert(p.rawValue) }
                             }
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "flag.fill")
-                                    .font(.caption2)
-                                    .foregroundStyle(p.color)
-                                Text(p.label)
-                                Text("\(group.count)").foregroundStyle(Theme.sub)
-                                Spacer()
-                                Image(systemName: "chevron.down")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(Theme.sub)
-                                    .rotationEffect(.degrees(expanded ? 0 : -90))
-                            }
-                            .font(.subheadline.weight(.medium))
-                            .textCase(nil)
-                            .contentShape(Rectangle())
+                        )) {
+                            Image(systemName: "flag.fill")
+                                .font(.caption2)
+                                .foregroundStyle(p.color)
                         }
-                        .buttonStyle(.plain)
                         .sectionHeaderInset()
                     }
                 }
@@ -422,24 +392,9 @@ struct TodoView: View {
                         ForEach(done) { TodoRow(item: $0).opacity(0.6).cardCell(pad: 8) }
                     }
                 } header: {
-                    Button {
-                        withAnimation(.snappy) { showCompleted.toggle() }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text("已完成")
-                            Text("\(done.count)").foregroundStyle(Theme.sub)
-                            Spacer()
-                            Image(systemName: "chevron.down")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(Theme.sub)
-                                .rotationEffect(.degrees(showCompleted ? 0 : -90))
-                        }
-                        .font(.subheadline.weight(.medium))
-                        .textCase(nil)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .sectionHeaderInset()
+                    CollapsibleSectionHeader(title: "已完成", count: done.count,
+                                             expanded: $showCompleted)
+                        .sectionHeaderInset()
                 }
             }
 
@@ -451,24 +406,9 @@ struct TodoView: View {
                         ForEach(abandoned) { TodoRow(item: $0).opacity(0.6).cardCell(pad: 8) }
                     }
                 } header: {
-                    Button {
-                        withAnimation(.snappy) { showAbandoned.toggle() }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text("已放弃")
-                            Text("\(abandoned.count)").foregroundStyle(Theme.sub)
-                            Spacer()
-                            Image(systemName: "chevron.down")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(Theme.sub)
-                                .rotationEffect(.degrees(showAbandoned ? 0 : -90))
-                        }
-                        .font(.subheadline.weight(.medium))
-                        .textCase(nil)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .sectionHeaderInset()
+                    CollapsibleSectionHeader(title: "已放弃", count: abandoned.count,
+                                             expanded: $showAbandoned)
+                        .sectionHeaderInset()
                 }
             }
         }
@@ -476,10 +416,8 @@ struct TodoView: View {
             // 优先级组的行要无缝拼成整卡，清掉 List 的默认行距
             .listRowSpacing(0)
             .scrollContentBackground(.hidden)
-            // 包一层非结构化 Task：.refreshable 的任务绑定在刷新手势上，视图刷新时会被
-            // SwiftUI 取消并把取消传给 URLSession（表现为"同步失败：cancelled"）。
-            // Task {} 不继承外层取消，await .value 让菊花转到同步真正结束。
-            .refreshable { await Task { await dida.syncNow(context: context) }.value }
+            // 防取消原因见 Views/Components/RefreshableDetached.swift
+            .refreshableDetached { await dida.syncNow(context: context) }
         }
         .background(Theme.screen)
         .overlay(alignment: .bottomTrailing) {
@@ -555,7 +493,7 @@ struct BookmarkView: View {
     @State private var editingItem: InboxItem?
     @State private var detailItem: InboxItem?
 
-    private var bookmarks: [InboxItem] { items.filter { $0.kind == .bookmark && $0.deletedAt == nil } }
+    private var bookmarks: [InboxItem] { items.active(.bookmark) }
 
     private var filtered: [InboxItem] {
         let base: [InboxItem]
@@ -575,11 +513,7 @@ struct BookmarkView: View {
 
     /// 筛选栏展示的 tag：设置页的列表 + 存量条目上已有但被删掉的 tag
     private var visibleTags: [String] {
-        var tags = settings.bookmarkTags
-        for item in bookmarks {
-            for tag in item.tags where !tags.contains(tag) { tags.append(tag) }
-        }
-        return tags
+        settings.mergedTagCandidates(including: bookmarks.flatMap(\.tags))
     }
 
     var body: some View {
@@ -673,19 +607,10 @@ struct BookmarkView: View {
     }
 
     private func filterChip(_ label: String, _ value: TagFilter) -> some View {
-        let selected = filter == value
-        return Button {
+        // filterStyle：筛选栏的刻意差异（内边距更大、选中加粗），见 SelectableChip 注释
+        SelectableChip(label: label, selected: filter == value, filterStyle: true) {
             filter = value
-        } label: {
-            Text(label)
-                .font(.subheadline)
-                .fontWeight(selected ? .semibold : .regular)
-                .foregroundStyle(selected ? .white : Theme.text)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
-                .background(selected ? Theme.accent : Theme.card, in: Capsule())
         }
-        .buttonStyle(.plain)
     }
 }
 
@@ -821,23 +746,8 @@ struct BookmarkAddSheet: View {
 
                 if !candidateTags.isEmpty {
                     Section {
-                        FlowLayout(spacing: 8) {
-                            ForEach(candidateTags, id: \.self) { tag in
-                                let on = selectedTags.contains(tag)
-                                Button {
-                                    if on { selectedTags.removeAll { $0 == tag } }
-                                    else { selectedTags.append(tag) }
-                                } label: {
-                                    Text(tag)
-                                        .font(.subheadline)
-                                        .foregroundStyle(on ? .white : Theme.text)
-                                        .padding(.horizontal, 12).padding(.vertical, 6)
-                                        .background(on ? Theme.accent : Theme.card, in: Capsule())
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(.vertical, 2)
+                        TagPicker(candidates: candidateTags, selection: $selectedTags)
+                            .padding(.vertical, 2)
                     } header: {
                         Text("标签")
                     } footer: {
@@ -873,37 +783,7 @@ struct BookmarkAddSheet: View {
     }
 }
 
-/// 简易流式布局：标签胶囊按宽度自动换行（iOS 16+ Layout 协议）。
-struct FlowLayout: Layout {
-    var spacing: CGFloat = 8
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let maxWidth = proposal.width ?? .infinity
-        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0
-        for view in subviews {
-            let size = view.sizeThatFits(.unspecified)
-            if x + size.width > maxWidth, x > 0 {
-                x = 0; y += rowHeight + spacing; rowHeight = 0
-            }
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-        }
-        return CGSize(width: proposal.width ?? x, height: y + rowHeight)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var x = bounds.minX, y = bounds.minY, rowHeight: CGFloat = 0
-        for view in subviews {
-            let size = view.sizeThatFits(.unspecified)
-            if x + size.width > bounds.maxX, x > bounds.minX {
-                x = bounds.minX; y += rowHeight + spacing; rowHeight = 0
-            }
-            view.place(at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: ProposedViewSize(size))
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-        }
-    }
-}
+// FlowLayout 已随 chip 组件收进 Views/Components/TagPicker.swift
 
 /// 编辑单条收藏的标签：从设置页的 tag 列表里勾选，支持 AI 重新打标
 struct BookmarkTagSheet: View {
@@ -917,9 +797,7 @@ struct BookmarkTagSheet: View {
 
     /// 可勾选的 tag：设置页列表 + 该条目已有但列表里没有的（不吞掉存量）
     private var candidates: [String] {
-        var tags = settings.bookmarkTags
-        for tag in item.tags where !tags.contains(tag) { tags.append(tag) }
-        return tags
+        settings.mergedTagCandidates(including: item.tags)
     }
 
     var body: some View {
@@ -1005,7 +883,7 @@ struct BookmarkTagSheet: View {
 // MARK: - 需修正页（截图待办确认 + 未分类）
 
 struct ReviewView: View {
-    @Query(filter: #Predicate<InboxItem> { $0.needsReview && !$0.deletedLocally },
+    @Query(filter: InboxItem.needsReviewPredicate,
            sort: \InboxItem.createdAt, order: .reverse)
     private var reviewItems: [InboxItem]
 
@@ -1173,7 +1051,7 @@ struct TrashView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \InboxItem.deletedAt, order: .reverse) private var all: [InboxItem]
 
-    private var trashed: [InboxItem] { all.filter { $0.deletedAt != nil } }
+    private var trashed: [InboxItem] { all.trashed() }
 
     var body: some View {
         List {
@@ -1269,9 +1147,7 @@ struct BookmarkDetailSheet: View {
 
     private var url: URL? { item.urlString.flatMap(URL.init(string:)) }
     private var candidateTags: [String] {
-        var tags = settings.bookmarkTags
-        for t in item.tags where !tags.contains(t) { tags.append(t) }
-        return tags
+        settings.mergedTagCandidates(including: item.tags)
     }
 
     var body: some View {
@@ -1319,20 +1195,8 @@ struct BookmarkDetailSheet: View {
 
                 Section("标签") {
                     if editing {
-                        FlowLayout(spacing: 8) {
-                            ForEach(candidateTags, id: \.self) { tag in
-                                let on = selectedTags.contains(tag)
-                                Button {
-                                    if on { selectedTags.removeAll { $0 == tag } }
-                                    else { selectedTags.append(tag) }
-                                } label: {
-                                    Text(tag).font(.subheadline)
-                                        .foregroundStyle(on ? .white : Theme.text)
-                                        .padding(.horizontal, 12).padding(.vertical, 6)
-                                        .background(on ? Theme.accent : Theme.card, in: Capsule())
-                                }.buttonStyle(.plain)
-                            }
-                        }.padding(.vertical, 2)
+                        TagPicker(candidates: candidateTags, selection: $selectedTags)
+                            .padding(.vertical, 2)
                     } else if item.tags.isEmpty {
                         Text("未打标").foregroundStyle(Theme.sub)
                     } else {
@@ -1894,12 +1758,7 @@ struct MonthCalendarView: View {
         return arr
     }
 
-    private var monthTitle: String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "zh_CN")
-        f.dateFormat = "yyyy年M月"
-        return f.string(from: month)
-    }
+    private var monthTitle: String { OmnyDateFormat.monthTitle(month) }
 
     private func shift(_ delta: Int) {
         if let m = cal.date(byAdding: .month, value: delta, to: month) {

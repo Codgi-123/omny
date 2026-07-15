@@ -83,6 +83,9 @@ extension InboxItemEntity {
         var arriveAt: Date?
         var arrivePlace: String?
         var seat: String?
+        var ticketGate: String?
+        var seatClass: String?
+        var tripAddress: String?
 
         // 待办
         var todoTitle: String?
@@ -150,7 +153,8 @@ extension InboxItemEntity {
                 return .trip(TripInfo(
                     kind: kind, number: tripNumber ?? "",
                     departure: Payload.components(departAt), departurePlace: departPlace,
-                    arrival: Payload.components(arriveAt), arrivalPlace: arrivePlace, seat: seat))
+                    arrival: Payload.components(arriveAt), arrivalPlace: arrivePlace, seat: seat,
+                    ticketGate: ticketGate, seatClass: seatClass, address: tripAddress))
             case .todo:
                 guard let title = todoTitle else { return nil }
                 return .todos([TodoInfo(title: title, due: Payload.components(todoDue))])
@@ -233,6 +237,9 @@ extension InboxItemEntity.Payload {
             arriveAt = Self.date(info.arrival)
             arrivePlace = info.arrivalPlace
             seat = info.seat
+            ticketGate = info.ticketGate
+            seatClass = info.seatClass
+            tripAddress = info.address
         case .todos(let todos):
             guard let first = todos.first else { return nil }
             self.init(typeRaw: ItemType.todo.rawValue)

@@ -107,6 +107,16 @@ final class RuleParserTests: XCTestCase {
         XCTAssertEqual(info.seat, "7车12A号")
     }
 
+    func testTrainTicketGateAndSeatClass() throws {
+        let text = "【铁路12306】您已购07月18日G8511次列车05车12F号，二等座，成都东站09:12开，检票口A6。"
+        let result = try XCTUnwrap(parser.parseSync(text))
+        guard case .trip(let info) = result.payload else { return XCTFail("应识别为行程") }
+        XCTAssertEqual(info.number, "G8511")
+        XCTAssertEqual(info.seat, "05车12F号")
+        XCTAssertEqual(info.ticketGate, "A6")
+        XCTAssertEqual(info.seatClass, "二等座")
+    }
+
     func testFlightAirChina() throws {
         let text = "【中国国航】您预订的05月21日CA1831航班将于08:00从北京首都机场T3起飞，10:15到达上海虹桥机场T2，请提前2小时到达机场办理登机手续。"
         let result = try XCTUnwrap(parser.parseSync(text))

@@ -2,14 +2,26 @@ import SwiftUI
 import SwiftData
 import OmnyCore
 
+/// 底部 tab 的稳定标识符（issue #10：快递+行程合并为「包裹·行程」，腾出的位置给记账）。
+/// rawValue 持久化进 AppStorage（"omnySelectedTab"）。旧版语义为 0今天/1快递/2行程/3待办/4收藏：
+/// 旧 1(快递) 恰落新 1(包裹·行程)，3/4 含义不变；旧 2(行程) 首启会落到新 2(记账) 一次，可接受。
+/// 越界的历史/异常整数值由 RawRepresentable 解码失败自动回落默认「今天」。
+enum RootTab: Int, CaseIterable {
+    case today = 0        // 今天
+    case packageTrip = 1  // 包裹·行程（内部分段见 PackageTripView.Segment）
+    case expense = 2      // 记账
+    case todo = 3         // 待办
+    case bookmark = 4     // 收藏
+}
+
 struct RootView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var dida: DidaService
-    @Query(filter: #Predicate<InboxItem> { $0.needsReview && !$0.deletedLocally })
+    @Query(filter: InboxItem.needsReviewPredicate)
     private var reviewItems: [InboxItem]
     // tab 选择提升为 AppStorage：首页各区块「查看详情」写同一键即可切 tab。
-    // 默认值取调试初始 tab（模拟器截图用启动参数 -omnyTab N；正常首次启动为 0）。
+    // 默认值取调试初始 tab（模拟器截图用启动参数 -omnyTab N；正常首次启动为今天页）。
     @AppStorage("omnySelectedTab") private var selection = DebugSupport.initialTab
     // 每个 tab 各自的导航栈路径：需处理/设置走值驱动 push，切 tab 时统一弹回根部，
     // 避免这两个全局页面残留在多个 tab 的栈里（issue #9）。
@@ -19,20 +31,20 @@ struct RootView: View {
         TabView(selection: $selection) {
             RootTabStack(path: $tabPaths[0]) { TodayView() }
                 .tabItem { Label("今天", image: "TabToday") }
-                .tag(0)
-            RootTabStack(path: $tabPaths[1]) { ExpressView() }
-                .tabItem { Label("快递", image: "TabExpress") }
-                .tag(1)
-            RootTabStack(path: $tabPaths[2]) { TripView() }
-                .tabItem { Label("行程", image: "TabTrip") }
-                .tag(2)
+                .tag(RootTab.today)
+            RootTabStack(path: $tabPaths[1]) { PackageTripView() }
+                .tabItem { Label("包裹·行程", image: "TabPackageTrip") }
+                .tag(RootTab.packageTrip)
+            RootTabStack(path: $tabPaths[2]) { ExpenseHomeView() }
+                .tabItem { Label("记账", image: "TabExpense") }
+                .tag(RootTab.expense)
             RootTabStack(path: $tabPaths[3]) { TodoView() }
                 .tabItem { Label("待办", image: "TabTodo") }
                 .badge(reviewItems.filter { $0.kind == .todo }.count)
-                .tag(3)
+                .tag(RootTab.todo)
             RootTabStack(path: $tabPaths[4]) { BookmarkView() }
                 .tabItem { Label("收藏", image: "TabBookmark") }
-                .tag(4)
+                .tag(RootTab.bookmark)
         }
         .tint(Theme.accent)
         .onChange(of: selection) { _, _ in
@@ -44,7 +56,7 @@ struct RootView: View {
         }
         .task {
             DebugSupport.seedIfNeeded(context)
-            Trash.purgeExpired(context: context)   // 清理满 7 天的回收站条目
+            Trash.purgeExpired(context: context)   // 清理满保留期（默认 7 天，高级设置可调）的回收站条目
             // 启动时先收分享队列，再后台同步一次滴答
             await drainShareQueue()
             await dida.syncNow(context: context)
@@ -84,12 +96,14 @@ struct RootView: View {
 
 enum DebugSupport {
     /// 用启动参数 `-omnyTab N` 指定初始 tab，方便逐屏截图自查。
+    /// N 按 RootTab 的 rawValue：0 今天 / 1 包裹·行程 / 2 记账 / 3 待办 / 4 收藏。
     /// tab 选择改 AppStorage 持久化后，默认值只在首启生效；这里显式覆写持久键，
     /// 保证带 -omnyTab 启动时（即使模拟器里已切换过 tab）依然直达指定页。
-    static var initialTab: Int {
-        let tab = UserDefaults.standard.integer(forKey: "omnyTab")
+    /// 越界的 N 回落「今天」。
+    static var initialTab: RootTab {
+        let tab = RootTab(rawValue: UserDefaults.standard.integer(forKey: "omnyTab")) ?? .today
         if UserDefaults.standard.object(forKey: "omnyTab") != nil {
-            UserDefaults.standard.set(tab, forKey: "omnySelectedTab")
+            UserDefaults.standard.set(tab.rawValue, forKey: "omnySelectedTab")
         }
         return tab
     }
@@ -110,17 +124,21 @@ enum DebugSupport {
             return i
         }
         func trip(_ number: String, _ kind: String, _ from: String, _ to: String,
-                  _ seat: String, _ departIn: Double) -> InboxItem {
+                  _ seat: String, _ departIn: Double,
+                  gate: String? = nil, seatClass: String? = nil) -> InboxItem {
             let i = InboxItem(kind: .trip, source: .sms, rawText: "")
             i.tripNumber = number; i.tripKindRaw = kind; i.seat = seat
+            i.ticketGate = gate; i.seatClass = seatClass
             i.departPlace = from; i.arrivePlace = to
             i.departAt = Date().addingTimeInterval(departIn * 3600)
             i.arriveAt = Date().addingTimeInterval((departIn + 2) * 3600)
             return i
         }
-        func hotel(_ name: String, _ room: String, _ checkInHours: Double, _ nights: Double) -> InboxItem {
+        func hotel(_ name: String, _ room: String, _ checkInHours: Double, _ nights: Double,
+                   address: String? = nil) -> InboxItem {
             let i = InboxItem(kind: .trip, source: .screenshot, rawText: "")
             i.tripKindRaw = "hotel"; i.departPlace = name; i.seat = room
+            i.tripAddress = address
             i.departAt = Date().addingTimeInterval(checkInHours * 3600)
             i.arriveAt = Date().addingTimeInterval((checkInHours + nights * 24) * 3600)
             return i
@@ -144,9 +162,9 @@ enum DebugSupport {
             pkg("京东物流", nil, nil, "2043", .inTransit, 600),
             pkg("中通快递", "楼下超市", "5-1-08", nil, .pickedUp, 2880),
             trip("CA1831", "flight", "北京 T3", "上海 虹桥", "12A", 3.5),
-            trip("G59", "train", "杭州东", "南京南", "07车09F", 28),
-            trip("G7", "train", "上海虹桥", "北京南", "03车01A", -48),
-            hotel("莫干山语·山隐民宿", "山景大床房", 50, 2),
+            trip("G59", "train", "杭州东", "南京南", "07车09F号", 28, gate: "A6", seatClass: "二等座"),
+            trip("G7", "train", "上海虹桥", "北京南", "03车01A号", -48, gate: "B12", seatClass: "一等座"),
+            hotel("莫干山语·山隐民宿", "山景大床房 · 含双早", 50, 2, address: "德清县莫干山镇劳岭村108号"),
             todo("买牛奶和鸡蛋", .manual, 6, false),
             todo("给妈妈打电话", .manual, nil, false),
             todo("写周报", .dida, 30, false),
@@ -198,7 +216,7 @@ private struct RootTabStack<Content: View>: View {
 
 /// 导航栏右侧：需修正入口 + 设置入口
 struct NavActions: View {
-    @Query(filter: #Predicate<InboxItem> { $0.needsReview && !$0.deletedLocally })
+    @Query(filter: InboxItem.needsReviewPredicate)
     private var reviewItems: [InboxItem]
 
     var body: some View {

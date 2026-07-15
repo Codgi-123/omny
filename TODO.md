@@ -9,11 +9,13 @@ OmnyCore 全链路 + App 正式记账页均已实现并上线（实现现状见 
 - [ ] 装 TestFlight build 19，验证：① 分析页环状图引线在分类多时是否拥挤；② 配 LLM Key 后真实抽取 + 打标准确率；③ 短信/截图多渠道去重效果。
 - [ ] 待细化：需处理页 expense 低置信项文案；`needsReview` 阈值（当前 0.8）；设置页「记账分类自定义」的图标/颜色选择器 UI（映射器接口已预留）。
 
+### 组件化分期路线（issue #10 问题2）
+P0（查询谓词层/tab 重构/设置分层）与 P1（消纯复制）已完成，见「已完成」。剩余：
+- [ ] P2：ItemListScreen 页面模板 + 删除统一进回收站（**需先定删除语义定论**——现状快递/收藏/待办走 `Trash.softDelete`，需处理页/记账详情等仍是 `context.delete` 硬删）。
+- [ ] P3：Ingestor 收尾——llmEnrich 异步补全收拢、requestSync 防抖、saveOrLog 统一错误处理。
+
 ### 「确认记账」快捷指令弹窗 — 待 Mac 真机调试
 - [ ] 真机上「确认记账」可编辑弹窗起不来（数据已传到、非记账能静默入库，但记账逐笔核对弹窗渲染失败，最终「没有记账」）。全上下文、根因假设与调试步骤见 `docs/confirm-expense-intent-handoff.md`。只有 Mac + 真机能调。
-
-### 正式 tab 结构（需求稳定后再做）
-- [ ] 记账目前经设置页入口（`ExpenseHomeView`），未占正式 tab。倾向「快递 + 行程合并腾位」给记账，等记账需求稳定后再调整 5 tab 结构。
 
 ## 已搁置
 
@@ -32,8 +34,26 @@ OmnyCore 全链路 + App 正式记账页均已实现并上线（实现现状见 
 ### 记账模块（2026-07-11 拍板，详见 `docs/expense-module-design.md`）
 定位「捕获层 + 轻账本」，`expense` 作第 6 类 kind 复用现有管线，不做账户体系/预算/报表。要点：入口复用现有「解析文本」快捷指令（`.expense` 进白名单）+ 识屏 ScreenParser；方向本期只支出/收入，其余走 `needsReview`；金额用 `Decimal`（禁 Double）；消费分类两级（大类+细分），扁平化 enum-schema 打标；去重用 txnID 精确 / 金额+时间窗+尾号或商户 模糊；微信/支付宝 CSV 导入本期不做（`txnID` 已预留）。
 
+### tab 扩容三级路径（2026-07-15 拍板，issue #10 问题1 后续，HIG 评审结论）
+5 tab 已满（今天 / 包裹·行程 / 记账 / 待办 / 收藏），后续新增功能模块**不再动导航架构**，按下列顺序升级承载，先问「它像谁」：
+1. **语义归并进现有 tab（首选）**：新模块与现有某类语义相近时，做成该 tab 顶部分段控件的一个分段（「包裹·行程」已示范；先例：系统电话 App「未接/全部」）。HIG 下单 tab 分段 2~3 段内为宜，超出即升级下一级。
+2. **最低频 tab 换「我的」聚合页**：出现语义独立、不够高频的模块时，把使用频率最低的 tab（大概率收藏）降级进「我的」列表页，收纳收藏 + 新模块 + 需处理 + 回收站 + 设置（先例：微信「我」/支付宝「我的」；评审确认与合并方案不互斥，可直接叠加）。
+3. **tab 自定义配置（除非模块多到频率因人因时而异，否则不做）**：支付宝金刚区式「编辑我的 tab」。评审明确排最后：iPhone 无原生支撑、单用户 App 建通用配置系统属过度设计。
+已备好的地基：`RootTab` enum（增删换 tab = 一个 case + 一个根视图，持久值自动回落）；P2 `ItemListScreen` 模板落地后新 kind 页面近乎声明式；新模块配置项落设置页「常用」区，功能主入口**不得**再挂设置页（记账迁 tab 前的错位不重演）。
+
+### 设置页分层（2026-07-14 拍板，issue #10 问题3，HIG 评审 8.5 分方案）
+- 一级页按使用频率分层：**服务（状态行）→ 常用 → 数据 → 高级设置 → 帮助 → 关于**；二级页拆在 `Views/Settings/`（LLM / 滴答 / 高级 / 快捷指令教程 / 开发者工具）。
+- 服务行副标题只显示「模型名 · 已配置 / 未配置」「已绑定 · 上次同步 x 前 / 未绑定」——连通性测试结果是临时态，**不持久化、不冒充「已连通」**。
+- 低频参数全部可配置化但**默认值 = 原硬编码值**（阈值 0.8 / 截图待办直接入库关 / 去重窗 ±10min / 滴答防抖 30s / 航班缓存 10min / 回收站 7 天 / maxTokens 2048 / 超时 60s），键留 UserDefaults.standard，`resetToDefaults()` 同步重置。
+- LLM maxTokens/超时经 `LLMConfig`（新增字段，默认参数向后兼容）由 App 层注入 OmnyCore，**OmnyCore 不读 UserDefaults**；打标 256 / 分类 128 的小预算不受 maxTokens 设置影响。`InboxItem.trashRetentionDays` 因模型层非 MainActor 直接读同名 UserDefaults 键（"data.trashRetentionDays"），改键名要与 AppSettings 两处同步。
+- 开发者工具（解析测试）是**可见的** NavigationLink（关于 Section 内），HIG 评审否决连点解锁；版本号改读 Bundle。危险操作（清空条目/恢复出厂）收进高级设置页底部红色组。
+
 ## 已完成
 
+- [x] 高铁/酒店卡片重设计 + 三种行程卡同高（2026-07-15）：`TripCard` 改三段定高骨架（头部 44 / 路线 60 / 地面信息 48，发丝线一律 overlay 不占高度）⇒ 机票·火车·酒店卡总高严格一致。火车卡对齐票面参考稿：车次+日期头部、大字时刻+轨道线（正中高铁图标）、灰底四格「检票口/车厢/座位/席别」（车厢座位从 seat 正则拆分）；酒店卡：房型副标题（可含早餐说明）、入住/退房大字日期+「N晚」胶囊+时刻提示（14:00后可入住式）、底部地址行+导航（拉起系统地图）。解析链路同步补字段：`TripInfo` 新增 `ticketGate`/`seatClass`/`address`，短信与识屏两个 trip prompt+schema、RuleParser 火车正则（检票口/席别）、InboxItem、Ingestor、InboxItemEntity.Payload 全链路透传。
+- [x] 组件化 P1「消纯复制」（2026-07-15，issue #10 问题2）：纯复制 UI 收敛到 `Views/Components/` 5 个新文件——CollapsibleSectionHeader（待办页 3 处折叠组头收编，chevron 按 HIG 收起指右/展开指下）；SelectableChip + TagPicker（收藏添加/详情两处多选 chip 与筛选栏单选 chip 收编，`filterStyle` 参数保留筛选栏刻意差异；FlowLayout 随迁；「配置池+已用值」合并收敛为 `AppSettings.mergedTagCandidates`）；CheckToggleButton（取件圈×2 + 待办勾选收编，命中区保底 44pt 自动外扩，取件双向推进业务包装成 Cards.swift 的 PickupCheckButton）；FloatingAddButton 参数化（记账页内联 FAB 收编，`size: 56` 保留原尺寸差异）；OmnyDateFormat（6 处「每次调用 new DateFormatter」收敛为静态实例复用，日历裸紧凑金额并入 `ExpenseFormat.compactBare`）。
+- [x] 设置页按使用频率分层重构（2026-07-14，issue #10 问题3）：定论见上方「设计定论 → 设置页分层」。
+- [x] 正式 5 tab 结构落地（2026-07-14，issue #10 问题1）：**今天 / 包裹·行程 / 记账 / 待办 / 收藏**。快递+行程合并进「包裹·行程」tab（`PackageTripView` 薄容器，顶部纯文字分段控件切换，分段选择持久化 `omnyPackageTripSegment`，同键兼作首页「查看详情」的跨页传参通道）；腾出的 tab 给记账，`ExpenseHomeView` 升 tab 根视图并挂 NavActions，设置页仅保留「消费分类 / 解析测试」入口（设置页重构时再安置）。tab 标识改 `RootTab` enum：`omnySelectedTab` 旧整数越界自动回落「今天」，旧 2(行程) 首启落到记账一次可接受；`-omnyTab N` 按新序。遗留：TabPackageTrip / TabExpense 图标为对齐既有线稿风格的自绘 SVG，真机看效果后可再打磨。
 - [x] 文档梳理与整合（2026-07-13）：按最新代码更新 README/CLAUDE/docs，记账模块与识屏入口补全；CI 规则以 CLAUDE.md 为权威源、他处引用；新增 `docs/README.md` 文档索引防熵增。
 - [x] TestFlight 自动发布上线（2026-07-12，PR #5 合入 main）：打 `tf-*` tag 或手动触发即云端归档上传，约 4 分钟；构建号 CI 自动生成（run_number+偏移），多人发布不撞号、不改 project.yml；ASC API Key 云签名，协作者无需 Apple 凭据。用法见 `docs/testflight-release.md`。同批 `ci.yml` 未签名 ipa job 改为仅手动触发，push 不再自动出包。
 - [x] 记账模块 v1（2026-07-11 → 07-12，build 13–19）：OmnyCore 数据契约 + 解析（含识屏第四类、口语措辞）+ 两级 enum-schema 打标 + 去重入库 + 手动记账；App 正式记账页（明细/日历/分析 DonutChart/详情/编辑 + 自制计算器键盘）+ 分类图标映射器。实现现状与待验证见 `docs/expense-module-design.md`。

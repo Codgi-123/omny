@@ -117,7 +117,9 @@ public struct LLMStructuredParser: Parser {
             departurePlace: extracted.departurePlace?.nilIfEmpty,
             arrival: extracted.arrival.flatMap(LLMClient.dateComponents(fromISO:)),
             arrivalPlace: extracted.arrivalPlace?.nilIfEmpty,
-            seat: extracted.seat?.nilIfEmpty)
+            seat: extracted.seat?.nilIfEmpty,
+            ticketGate: extracted.ticketGate?.nilIfEmpty,
+            seatClass: extracted.seatClass?.nilIfEmpty)
         return ParseResult(payload: .trip(info), confidence: 0.9, rawText: text)
     }
 
@@ -129,15 +131,20 @@ public struct LLMStructuredParser: Parser {
         let arrival: String?
         let arrivalPlace: String?
         let seat: String?
+        let ticketGate: String?
+        let seatClass: String?
     }
 
     static let tripSystemPrompt = """
     你从中文行程短信（火车票/机票通知）里抽取结构化字段。只输出 JSON，不要任何其他文字，格式：\
     {"kind":"train 或 flight","number":"车次或航班号","departure":"出发时间 ISO8601 或 null",\
     "departurePlace":"出发地/车站/机场或 null","arrival":"到达时间 ISO8601 或 null",\
-    "arrivalPlace":"到达地或 null","seat":"座位或 null"}。\
+    "arrivalPlace":"到达地或 null","seat":"座位或 null","ticketGate":"检票口/登机口或 null",\
+    "seatClass":"席别/舱位或 null"}。\
     字段含义：kind 火车填 train、飞机填 flight；number 如"G101""CA1831"；\
-    seat 如"7车12A号"。日期时间用 ISO8601 表示；短信常缺年份，缺年份就省略年份部分\
+    seat 如"7车12A号"；ticketGate 如"A6""B12"（只填口号，不带"检票口"字样）；\
+    seatClass 如"二等座""一等座""商务座""经济舱"。\
+    日期时间用 ISO8601 表示；短信常缺年份，缺年份就省略年份部分\
     （如"07-10T08:30:00"），不要臆造年份，下游会补。识别不出的字段填 null。
     """
 
@@ -152,9 +159,11 @@ public struct LLMStructuredParser: Parser {
             "arrival": ["type": ["string", "null"]],
             "arrivalPlace": ["type": ["string", "null"]],
             "seat": ["type": ["string", "null"]],
+            "ticketGate": ["type": ["string", "null"]],
+            "seatClass": ["type": ["string", "null"]],
         ],
         "required": ["kind", "number", "departure", "departurePlace",
-                     "arrival", "arrivalPlace", "seat"],
+                     "arrival", "arrivalPlace", "seat", "ticketGate", "seatClass"],
         "additionalProperties": false,
     ] }
 

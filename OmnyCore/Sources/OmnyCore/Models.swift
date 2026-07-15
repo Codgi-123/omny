@@ -64,13 +64,20 @@ public struct TripInfo: Equatable, Sendable, Codable {
     public var departurePlace: String?
     public var arrival: DateComponents?
     public var arrivalPlace: String?
-    /// 座位，如 "7车12A号"
+    /// 座位，如 "7车12A号"；酒店存房型（可含早餐说明，如"高级大床房·含双早"）
     public var seat: String?
+    /// 检票口/登机口，如 "A6"（12306 短信与购票页截图常见）
+    public var ticketGate: String?
+    /// 席别/舱位等级，如 "二等座""商务座""经济舱"
+    public var seatClass: String?
+    /// 酒店地址（kind=hotel，订单页截图常带；卡片导航用）
+    public var address: String?
 
     public init(kind: Kind, number: String,
                 departure: DateComponents? = nil, departurePlace: String? = nil,
                 arrival: DateComponents? = nil, arrivalPlace: String? = nil,
-                seat: String? = nil) {
+                seat: String? = nil, ticketGate: String? = nil,
+                seatClass: String? = nil, address: String? = nil) {
         self.kind = kind
         self.number = number
         self.departure = departure
@@ -78,6 +85,9 @@ public struct TripInfo: Equatable, Sendable, Codable {
         self.arrival = arrival
         self.arrivalPlace = arrivalPlace
         self.seat = seat
+        self.ticketGate = ticketGate
+        self.seatClass = seatClass
+        self.address = address
     }
 }
 

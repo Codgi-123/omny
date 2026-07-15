@@ -22,7 +22,7 @@ struct ExpenseDebugView: View {
         let item: InboxItem?
     }
 
-    private var expenses: [InboxItem] { items.filter { $0.kind == .expense } }
+    private var expenses: [InboxItem] { items.active(.expense) }
 
     var body: some View {
         Form {

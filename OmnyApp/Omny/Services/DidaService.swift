@@ -56,8 +56,10 @@ final class DidaService: ObservableObject {
 
     // MARK: 同步
 
-    /// 前台回来时调用：距上次发起同步不足 minInterval 则跳过，避免频繁切换反复拉取。
-    func syncOnForeground(context: ModelContext, minInterval: TimeInterval = 30) async {
+    /// 前台回来时调用：距上次发起同步不足最小间隔则跳过，避免频繁切换反复拉取。
+    /// 间隔默认 30 秒，设置 → 高级设置可调。
+    func syncOnForeground(context: ModelContext) async {
+        let minInterval = AppSettings.shared.didaForegroundSyncMinInterval
         if let last = lastAttempt, Date().timeIntervalSince(last) < minInterval { return }
         await syncNow(context: context)
     }

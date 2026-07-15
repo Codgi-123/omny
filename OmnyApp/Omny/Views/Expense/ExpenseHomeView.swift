@@ -2,8 +2,8 @@ import SwiftUI
 import SwiftData
 import OmnyCore
 
-/// 记账正式页容器：明细 / 日历 / 分析 三视图分段切换，共享月份。右下悬浮添加。
-/// 入口暂放设置页（替换原「记账（调试）」），后续做 tab 结构调整时整体迁移。
+/// 记账 tab 根视图（issue #10 从设置页入口升格）：明细 / 日历 / 分析 三视图分段切换，
+/// 共享月份。右下悬浮添加。
 /// 骨架沿用 OmnyApp 现有页面模式（ScreenHeader + List + Theme.screen + toolbar 隐藏）。
 struct ExpenseHomeView: View {
     enum Mode: String, CaseIterable { case detail = "明细", calendar = "日历", analysis = "分析" }
@@ -14,21 +14,23 @@ struct ExpenseHomeView: View {
     @State private var showAdd = false
     @State private var showMonthPicker = false
 
-    /// 当月记账（用 occurredAt/createdAt 判月）
+    /// 当月记账（用 occurredAt/createdAt 判月）；active 已排除回收站条目
     private var monthItems: [InboxItem] {
-        allItems.filter { $0.kind == .expense && MonthTool.inMonth($0, month: month) }
+        allItems.active(.expense).filter { MonthTool.inMonth($0, month: month) }
     }
     private var summary: ExpenseSummary { ExpenseSummary(items: monthItems) }
 
     var body: some View {
         VStack(spacing: 0) {
-            ScreenHeader("记账") {
-                Picker("", selection: $mode) {
-                    ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .fixedSize()                      // 分段控件内联进标题行右侧，不独占一排
+            // 标题行右侧与其他 tab 根一致挂 NavActions（需处理/设置入口）；
+            // 三段分段控件下移独占一排——与需处理角标同行时小屏会挤不下
+            ScreenHeader("记账") { NavActions() }
+
+            Picker("视图", selection: $mode) {
+                ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
             }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, Theme.Space.page)
 
             monthSwitcher
 
@@ -37,18 +39,9 @@ struct ExpenseHomeView: View {
         .background(Theme.screen)
         .toolbar(.hidden, for: .navigationBar)
         .overlay(alignment: .bottomTrailing) {
-            // 分析视图无需记账入口时也保留 FAB，任何视图都能随手记一笔
-            Button {
-                showAdd = true
-            } label: {
-                Image(systemName: "plus")
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 56, height: 56)
-                    .background(Theme.accent, in: Circle())
-                    .shadow(color: Theme.accent.opacity(0.4), radius: 8, y: 4)
-            }
-            .padding(Theme.Space.page)
+            // 分析视图无需记账入口时也保留 FAB，任何视图都能随手记一笔。
+            // 56pt 是记账页的既有尺寸（比待办/收藏的 64pt 小一号），保留
+            FloatingAddButton(size: 56) { showAdd = true }
         }
         .sheet(isPresented: $showAdd) {
             ExpenseEditView(editing: nil, defaultDate: month)
@@ -65,7 +58,7 @@ struct ExpenseHomeView: View {
             }
             // 点月份标题唤起年+月滚轮选择弹窗
             Button { showMonthPicker = true } label: {
-                Text(MonthTool.title(month))
+                Text(OmnyDateFormat.monthTitle(month))
                     .font(.subheadline).fontWeight(.semibold)
                     .frame(minWidth: 100)
             }
@@ -160,7 +153,7 @@ struct ExpenseDetailList: View {
     private func dayHeader(_ group: (day: Date, items: [InboxItem])) -> some View {
         let s = ExpenseSummary(items: group.items)
         return HStack {
-            Text(dayLabel(group.day))
+            Text(OmnyDateFormat.dayWithWeekday(group.day))
                 .font(.subheadline).fontWeight(.semibold).foregroundStyle(Theme.sub)
             Spacer()
             HStack(spacing: 10) {
@@ -175,12 +168,5 @@ struct ExpenseDetailList: View {
             .font(.caption).foregroundStyle(Theme.sub).monospacedDigit()
         }
         .textCase(nil)
-    }
-
-    private func dayLabel(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "zh_CN")
-        f.dateFormat = "M月d日 EEEE"
-        return f.string(from: date)
     }
 }
