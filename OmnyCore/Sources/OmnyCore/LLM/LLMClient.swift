@@ -24,16 +24,18 @@ struct LLMClient {
     ///   - system: 系统提示词
     ///   - user: 用户输入文本
     ///   - schema: Claude structured outputs 的 JSON Schema；OpenAI 兼容端点忽略它、走 json_object 模式
-    ///   - maxTokens: 输出上限，按任务输出体量给（打标 256 就够，抽结构化字段给默认值）
+    ///   - maxTokens: 输出上限，按任务输出体量给（打标 256 就够）；
+    ///     不传则用 config.maxTokens（结构化抽取等大输出任务，App 设置页可调）
     func send(system: String, user: String, schema: [String: Any],
-              maxTokens: Int = 2048) async throws -> String {
+              maxTokens: Int? = nil) async throws -> String {
+        let tokens = maxTokens ?? config.maxTokens
         var (data, response) = try await transport.send(
             makeRequest(system: system, user: user, schema: schema,
-                        maxTokens: maxTokens, structured: true))
+                        maxTokens: tokens, structured: true))
         if response.statusCode == 400 {
             (data, response) = try await transport.send(
                 makeRequest(system: system, user: user, schema: schema,
-                            maxTokens: maxTokens, structured: false))
+                            maxTokens: tokens, structured: false))
         }
         guard response.statusCode == 200 else {
             throw LLMParseError.httpError(status: response.statusCode,
@@ -48,7 +50,7 @@ struct LLMClient {
     /// 只靠系统提示词约束输出格式——给不支持这些参数的端点用。
     func makeRequest(system: String, user: String, schema: [String: Any],
                      maxTokens: Int, structured: Bool = true) -> URLRequest {
-        var request = URLRequest(url: config.endpoint)
+        var request = URLRequest(url: config.endpoint, timeoutInterval: config.timeout)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 

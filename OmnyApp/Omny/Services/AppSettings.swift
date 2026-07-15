@@ -30,7 +30,8 @@ final class AppSettings: ObservableObject {
 
     var llmConfig: LLMConfig? {
         guard !llmAPIKey.isEmpty, let url = URL(string: llmBaseURL) else { return nil }
-        return LLMConfig(apiProtocol: llmProtocol, baseURL: url, apiKey: llmAPIKey, model: llmModel)
+        return LLMConfig(apiProtocol: llmProtocol, baseURL: url, apiKey: llmAPIKey, model: llmModel,
+                         maxTokens: llmMaxTokens, timeout: llmTimeoutSeconds)
     }
 
     /// 解析管线：配了 LLM 就"分类靠正则、结构化靠 LLM"（快递/行程走 LLM 抽字段），
@@ -55,6 +56,14 @@ final class AppSettings: ObservableObject {
 
     @Published var bookmarkTags: [String] {
         didSet { defaults.set(bookmarkTags, forKey: "bookmark.tags") }
+    }
+
+    /// 标签候选列表 = 配置池 + 已用值合并：存量条目上已有、但池里已被删掉/改名的旧标签
+    /// 不吞掉（追加在池后，保持出现顺序）。收藏筛选栏、标签编辑、收藏详情共用这一套合并规则。
+    func mergedTagCandidates(including used: [String]) -> [String] {
+        var tags = bookmarkTags
+        for tag in used where !tags.contains(tag) { tags.append(tag) }
+        return tags
     }
 
     // MARK: 消费分类池（两级：大类 → 细分；LLM 打标只从这里选，扁平化成"大类/细分"约束）
@@ -106,6 +115,43 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(autoAddToCalendar, forKey: "trip.autoCalendar") }
     }
 
+    // MARK: 高级设置（低频参数；默认值 = 原硬编码值，语义不变。入口：设置 → 高级设置）
+
+    /// 解析低置信度阈值：解析置信度低于该值的条目标记 needsReview 进「需处理」。默认 0.8。
+    @Published var lowConfidenceThreshold: Double {
+        didSet { defaults.set(lowConfidenceThreshold, forKey: "parsing.lowConfidenceThreshold") }
+    }
+    /// 截图识别出的待办是否直接入库。默认关（先进「需处理」等用户确认）。
+    @Published var screenshotTodoDirectIngest: Bool {
+        didSet { defaults.set(screenshotTodoDirectIngest, forKey: "parsing.screenshotTodoDirectIngest") }
+    }
+    /// 记账模糊去重的时间窗（分钟，±）。默认 10。
+    @Published var expenseDedupWindowMinutes: Int {
+        didSet { defaults.set(expenseDedupWindowMinutes, forKey: "expense.dedupWindowMinutes") }
+    }
+    /// 滴答前台同步的最小间隔（秒），防抖用。默认 30。
+    @Published var didaForegroundSyncMinInterval: Double {
+        didSet { defaults.set(didaForegroundSyncMinInterval, forKey: "dida.foregroundSyncMinInterval") }
+    }
+    /// 航班动态 MCP 缓存有效期（分钟）。默认 10。
+    @Published var flightCacheTTLMinutes: Int {
+        didSet { defaults.set(flightCacheTTLMinutes, forKey: "flight.cacheTTLMinutes") }
+    }
+    /// 回收站保留天数，满期彻底删除。默认 7。
+    /// 注意：`InboxItem.trashRetentionDays` 直接读同一个 UserDefaults 键
+    /// （SwiftData 模型层非 MainActor，拿不到本类实例），改键名要两处同步。
+    @Published var trashRetentionDays: Int {
+        didSet { defaults.set(trashRetentionDays, forKey: "data.trashRetentionDays") }
+    }
+    /// LLM 输出 token 上限（结构化抽取等大输出任务的兜底值；打标/分类小任务不受影响）。默认 2048。
+    @Published var llmMaxTokens: Int {
+        didSet { defaults.set(llmMaxTokens, forKey: "llm.maxTokens") }
+    }
+    /// LLM 单次请求超时（秒）。默认 60。
+    @Published var llmTimeoutSeconds: Double {
+        didSet { defaults.set(llmTimeoutSeconds, forKey: "llm.timeoutSeconds") }
+    }
+
     private init() {
         llmProtocol = LLMProtocol(rawValue: defaults.string(forKey: "llm.protocol") ?? "") ?? .claude
         llmBaseURL = defaults.string(forKey: "llm.baseURL") ?? "https://api.anthropic.com"
@@ -123,6 +169,14 @@ final class AppSettings: ObservableObject {
         didaProjectName = defaults.string(forKey: "dida.projectName")
         didaLastSync = defaults.object(forKey: "dida.lastSync") as? Date
         autoAddToCalendar = defaults.object(forKey: "trip.autoCalendar") as? Bool ?? true
+        lowConfidenceThreshold = defaults.object(forKey: "parsing.lowConfidenceThreshold") as? Double ?? 0.8
+        screenshotTodoDirectIngest = defaults.object(forKey: "parsing.screenshotTodoDirectIngest") as? Bool ?? false
+        expenseDedupWindowMinutes = defaults.object(forKey: "expense.dedupWindowMinutes") as? Int ?? 10
+        didaForegroundSyncMinInterval = defaults.object(forKey: "dida.foregroundSyncMinInterval") as? Double ?? 30
+        flightCacheTTLMinutes = defaults.object(forKey: "flight.cacheTTLMinutes") as? Int ?? 10
+        trashRetentionDays = defaults.object(forKey: "data.trashRetentionDays") as? Int ?? 7
+        llmMaxTokens = defaults.object(forKey: "llm.maxTokens") as? Int ?? 2048
+        llmTimeoutSeconds = defaults.object(forKey: "llm.timeoutSeconds") as? Double ?? 60
     }
 
     /// 恢复出厂：LLM 配置、滴答绑定、收藏标签全部重置为默认。
@@ -139,5 +193,13 @@ final class AppSettings: ObservableObject {
         didaProjectName = nil
         didaLastSync = nil
         autoAddToCalendar = true
+        lowConfidenceThreshold = 0.8
+        screenshotTodoDirectIngest = false
+        expenseDedupWindowMinutes = 10
+        didaForegroundSyncMinInterval = 30
+        flightCacheTTLMinutes = 10
+        trashRetentionDays = 7
+        llmMaxTokens = 2048
+        llmTimeoutSeconds = 60
     }
 }

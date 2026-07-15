@@ -324,26 +324,7 @@ struct StatusTag: View {
     }
 }
 
-/// 右下角悬浮新增按钮：待办 / 收藏统一的「+」入口。
-/// 放在页面 ZStack 的 bottomTrailing。
-struct FloatingAddButton: View {
-    var action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: "plus")
-                .font(.system(size: 27, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 64, height: 64)
-                .background(Theme.accent.gradient, in: Circle())
-                .shadow(color: Theme.accent.opacity(0.35), radius: 9, y: 4)
-        }
-        .buttonStyle(PressableStyle(scale: 0.94))
-        .padding(.trailing, Theme.Space.page)
-        .padding(.bottom, 18)
-        .accessibilityLabel("新增")
-    }
-}
+// FloatingAddButton 已参数化收进 Views/Components/FloatingAddButton.swift
 
 // MARK: - 待办优先级
 

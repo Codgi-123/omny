@@ -3,15 +3,17 @@ import SwiftUI
 import OmnyCore
 
 /// 航班动态本地缓存：key「航班号|起飞日期」。
-/// 刷新策略（与需求一致）：缓存 10 分钟内视为新鲜——自动刷新（页面出现 / .task）只拉
-/// 缺失或过期的航班；用户下拉刷新（force）无视 TTL 全部重拉。持久化到 UserDefaults，
-/// 重启后缓存仍在，过期与否由 fetchedAt 判断。
+/// 刷新策略（与需求一致）：缓存有效期内（默认 10 分钟，高级设置可调）视为新鲜——
+/// 自动刷新（页面出现 / .task）只拉缺失或过期的航班；用户下拉刷新（force）无视 TTL 全部重拉。
+/// 持久化到 UserDefaults，重启后缓存仍在，过期与否由 fetchedAt 判断。
 @MainActor
 final class FlightDynamicsStore: ObservableObject {
     static let shared = FlightDynamicsStore()
 
-    /// 缓存有效期：10 分钟
-    static let ttl: TimeInterval = 10 * 60
+    /// 缓存有效期（默认 10 分钟，设置 → 高级设置可调）
+    static var ttl: TimeInterval {
+        TimeInterval(AppSettings.shared.flightCacheTTLMinutes) * 60
+    }
 
     struct Entry: Codable {
         var data: FlightDynamics

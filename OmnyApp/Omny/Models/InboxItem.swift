@@ -25,7 +25,7 @@ final class InboxItem {
     var rawText: String = ""
     /// 解析置信度不足 / 完全没识别出来，需要人工确认
     var needsReview: Bool = false
-    /// 软删除时间：非 nil 表示已进回收站；各列表默认过滤掉；满 7 天由启动时清理彻底删除。
+    /// 软删除时间：非 nil 表示已进回收站；各列表默认过滤掉；满保留期（默认 7 天）由启动时清理彻底删除。
     var deletedAt: Date?
     /// 手动排序序号：列表页长按拖动时对整个分组重写 0..n。
     /// nil = 从未拖过（新条目），排在已排序条目之前（新信息优先露出），同为 nil 按各列表默认规则。
@@ -104,8 +104,12 @@ final class InboxItem {
 
     /// 是否在回收站
     var isDeleted: Bool { deletedAt != nil }
-    /// 回收站保留天数
-    static let trashRetentionDays = 7
+    /// 回收站保留天数（默认 7，设置 → 高级设置可调）。
+    /// 直接读 UserDefaults：SwiftData 模型层非 MainActor，拿不到 AppSettings 实例；
+    /// 键名与 AppSettings.trashRetentionDays 的存储键（"data.trashRetentionDays"）保持一致。
+    static var trashRetentionDays: Int {
+        UserDefaults.standard.object(forKey: "data.trashRetentionDays") as? Int ?? 7
+    }
     /// 距离彻底清除还剩几天（向上取整，至少 0）
     var trashDaysLeft: Int {
         guard let deletedAt else { return Self.trashRetentionDays }

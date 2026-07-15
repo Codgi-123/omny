@@ -9,36 +9,50 @@
 /* Begin PBXBuildFile section */
 		01F87993F4C31CB75D5AC8C2 /* ExpenseConfirmIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3ABFCD88567E2FDFAD1D4CE8 /* ExpenseConfirmIntent.swift */; };
 		0349D0D5504B544C66EB3208 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D45BF39A16836BC3A781E046 /* Assets.xcassets */; };
+		0C48FC882F165FEFDD6F00B7 /* PackageTripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13CCAFE7D9C6CCB49F143979 /* PackageTripView.swift */; };
+		0E3CBD74E7080ADA52939380 /* Feedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 271A98018F0AC6C3FC811DD1 /* Feedback.swift */; };
+		11B7C6A842EB1A512B279625 /* InboxItem+Queries.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C91267225B5856A0E81D324 /* InboxItem+Queries.swift */; };
 		15BECF4ED7504D4E2B70B73C /* ExpenseCategoryAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = E11C02EDDB66A6F143E77CEA /* ExpenseCategoryAppearance.swift */; };
 		1776CEA9C7DB230AB8158921 /* SharedInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6286E75E2350A9610F07F50 /* SharedInbox.swift */; };
 		1E6CD8C4449BB0217023DDB0 /* ExpenseHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 690F4B6762E41D189FCB435D /* ExpenseHomeView.swift */; };
 		211842926C591F28A58A81D5 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CC21DA2A336C3F18CBD4472 /* AppSettings.swift */; };
 		2A9072EF706DEFE65EA02398 /* DidaService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CF741249636C17F15890CB8 /* DidaService.swift */; };
 		2B6169C091832764B753F49C /* OmnyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8AA264B58ADFB671485DEE6 /* OmnyApp.swift */; };
+		2DE3C84A720B42FC215E9B03 /* LLMSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D50535A8576BD671F3594D75 /* LLMSettingsView.swift */; };
 		3436DC67A1948A62A1A43235 /* ExpenseDebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3256F2D6ADFD0C45637A6F93 /* ExpenseDebugView.swift */; };
 		3B55C4A7C51CACDF76C6ED90 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CF59AADF0299C174979693B /* SettingsView.swift */; };
 		3B6643656985F33192C0B1BC /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDA3EC43CC114A3BA3AAE2CD /* Secrets.swift */; };
 		402F23D9EC330177DF3D2AFB /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5765578C5CF868977175F47 /* TodayView.swift */; };
 		428BDC49572EB4F2911B4FD9 /* OCRService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5BE3B107B134EB9418AC588 /* OCRService.swift */; };
 		4761DD6B748B13E62CB29C23 /* ExpenseEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99C0C8F96080EABD245FC39C /* ExpenseEditView.swift */; };
+		48485D0BFECEA6D9D919AC94 /* FloatingAddButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 201DF82160199695C13D2414 /* FloatingAddButton.swift */; };
 		4A24E65FDFE00791F20A3614 /* InboxItemEntity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58C239CE1E3562161DFEB077 /* InboxItemEntity.swift */; };
 		4A8E8F6479DE99F5E30D7A05 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE835B50414B0383DD7772DA /* RootView.swift */; };
 		5304541564108CB1F073CC83 /* FlightDynamicsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE39A13A4D5B399B4876D73A /* FlightDynamicsStore.swift */; };
 		5CE81D859C93B072D4C216BA /* ExpenseDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEC6703B53A710423098B446 /* ExpenseDetailView.swift */; };
+		66E9C1F2CA0130CC4BEE89EF /* TagPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25BEDEABC2C97EA4716806E8 /* TagPicker.swift */; };
 		735260513B9A48A77E03B5EC /* ExpenseSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = F035203A42962D76D81AFAA0 /* ExpenseSupport.swift */; };
+		73934EBB00933914262833F6 /* CollapsibleSectionHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = C305230BFF418EA84919FF91 /* CollapsibleSectionHeader.swift */; };
 		755B2262C6761AC0CBE4DB22 /* OmnyShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2F8DAA5F39FB955E53DF0154 /* OmnyShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		7C981362B9DE75AB71EAAAD7 /* OmnyDateFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D082366D4929A7AF8CB6247 /* OmnyDateFormat.swift */; };
 		80443BC94F5EC375ECDD4461 /* SharedInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6286E75E2350A9610F07F50 /* SharedInbox.swift */; };
 		8F5D9108AC007DDD9B4EDAF8 /* ExpenseCategoryManageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCF3C282053FF6CE9E33B4BF /* ExpenseCategoryManageView.swift */; };
 		A5006BBC0AB5703C1C7263F4 /* ExpenseCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADD6297A5443435803E13821 /* ExpenseCalendarView.swift */; };
+		B3A6006F0AE117BE5AB597F5 /* RefreshableDetached.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D17E1E2D50D01289A161384 /* RefreshableDetached.swift */; };
+		B5783CC29008AC7ABA51BF4A /* DidaSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35C215086E8D5D653CCECB8 /* DidaSettingsView.swift */; };
 		B753F262EC77180CF0A4E5D0 /* Cards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EE20B2F349C81A0B7136CA6 /* Cards.swift */; };
 		C60436FB46947A9AC0EE3529 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7EE04CE4A538273114ED55 /* ShareViewController.swift */; };
 		CCAAFBF6F56DECE1F2E419E2 /* InboxItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37F66C226030118977E6ED59 /* InboxItem.swift */; };
 		D1436F1C8D387FB2E7E76106 /* Ingestor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A42FEA9C1D69A760D542AE4D /* Ingestor.swift */; };
 		DC3DB29ED2552FC97C9D54FA /* TagManageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49499EEAD615EA2186C49C44 /* TagManageView.swift */; };
 		DD739467D78B00097E1C3EFD /* OmnyIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F11CE0A32B974AB527A89BD /* OmnyIntents.swift */; };
+		E16C2BEA13D09495D91DD160 /* DeveloperToolsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E7262A76C5A0CB5400D6D7A /* DeveloperToolsView.swift */; };
 		E32CD62F4A5289EDEFF2D6D0 /* ListViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9D19D7FE0FC7B0F439834DC /* ListViews.swift */; };
 		E5FE10AEF8923B1C7F6A70EE /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7B355A202BA7EB4EFADE8BB /* Theme.swift */; };
+		E925FEDEC748B022B3EA739C /* AdvancedSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C3F4FFDA5AD28F6C01B7860 /* AdvancedSettingsView.swift */; };
 		EBD461EB2EBDC910F893DF4D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D45BF39A16836BC3A781E046 /* Assets.xcassets */; };
+		EDED4FFB878F89C752291554 /* CheckToggleButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDEFAF4C63D435261B696B7E /* CheckToggleButton.swift */; };
+		F50FF79CBB6B4E4D1A517C78 /* ShortcutsGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DBB7E7B98F2F9698053FD65 /* ShortcutsGuideView.swift */; };
 		F83466FB631A6F5D5AE2EA5C /* ExpenseAnalysisView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20FFFD49BAE913AAFD9B419 /* ExpenseAnalysisView.swift */; };
 		FC67BC38603BFF996C6616EE /* OmnyCore in Frameworks */ = {isa = PBXBuildFile; productRef = B38BBAD844DE7BB40C46030C /* OmnyCore */; };
 /* End PBXBuildFile section */
@@ -68,23 +82,34 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0C91267225B5856A0E81D324 /* InboxItem+Queries.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InboxItem+Queries.swift"; sourceTree = "<group>"; };
+		13CCAFE7D9C6CCB49F143979 /* PackageTripView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PackageTripView.swift; sourceTree = "<group>"; };
+		201DF82160199695C13D2414 /* FloatingAddButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingAddButton.swift; sourceTree = "<group>"; };
+		25BEDEABC2C97EA4716806E8 /* TagPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagPicker.swift; sourceTree = "<group>"; };
+		271A98018F0AC6C3FC811DD1 /* Feedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Feedback.swift; sourceTree = "<group>"; };
+		2D082366D4929A7AF8CB6247 /* OmnyDateFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OmnyDateFormat.swift; sourceTree = "<group>"; };
 		2F8DAA5F39FB955E53DF0154 /* OmnyShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = OmnyShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		3256F2D6ADFD0C45637A6F93 /* ExpenseDebugView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseDebugView.swift; sourceTree = "<group>"; };
 		37F66C226030118977E6ED59 /* InboxItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxItem.swift; sourceTree = "<group>"; };
 		3ABFCD88567E2FDFAD1D4CE8 /* ExpenseConfirmIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseConfirmIntent.swift; sourceTree = "<group>"; };
+		3DBB7E7B98F2F9698053FD65 /* ShortcutsGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutsGuideView.swift; sourceTree = "<group>"; };
 		4455F6F7EC03910790C400B0 /* OmnyCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = OmnyCore; path = ../OmnyCore; sourceTree = SOURCE_ROOT; };
 		487983E7453EA416476B5FA9 /* Omny.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Omny.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		49499EEAD615EA2186C49C44 /* TagManageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagManageView.swift; sourceTree = "<group>"; };
+		4D17E1E2D50D01289A161384 /* RefreshableDetached.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RefreshableDetached.swift; sourceTree = "<group>"; };
 		4EE20B2F349C81A0B7136CA6 /* Cards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Cards.swift; sourceTree = "<group>"; };
 		4F11CE0A32B974AB527A89BD /* OmnyIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OmnyIntents.swift; sourceTree = "<group>"; };
 		58C239CE1E3562161DFEB077 /* InboxItemEntity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxItemEntity.swift; sourceTree = "<group>"; };
 		690F4B6762E41D189FCB435D /* ExpenseHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseHomeView.swift; sourceTree = "<group>"; };
+		6C3F4FFDA5AD28F6C01B7860 /* AdvancedSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedSettingsView.swift; sourceTree = "<group>"; };
 		6CF59AADF0299C174979693B /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		6CF741249636C17F15890CB8 /* DidaService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DidaService.swift; sourceTree = "<group>"; };
 		7CC21DA2A336C3F18CBD4472 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		7E7262A76C5A0CB5400D6D7A /* DeveloperToolsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeveloperToolsView.swift; sourceTree = "<group>"; };
 		85454E4F6E16C8854FE43A6B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		99C0C8F96080EABD245FC39C /* ExpenseEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseEditView.swift; sourceTree = "<group>"; };
 		9A7EE04CE4A538273114ED55 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		A35C215086E8D5D653CCECB8 /* DidaSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DidaSettingsView.swift; sourceTree = "<group>"; };
 		A42FEA9C1D69A760D542AE4D /* Ingestor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ingestor.swift; sourceTree = "<group>"; };
 		A9D19D7FE0FC7B0F439834DC /* ListViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListViews.swift; sourceTree = "<group>"; };
 		ADD6297A5443435803E13821 /* ExpenseCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseCalendarView.swift; sourceTree = "<group>"; };
@@ -93,13 +118,16 @@
 		B8AA264B58ADFB671485DEE6 /* OmnyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OmnyApp.swift; sourceTree = "<group>"; };
 		BE835B50414B0383DD7772DA /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		C20FFFD49BAE913AAFD9B419 /* ExpenseAnalysisView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseAnalysisView.swift; sourceTree = "<group>"; };
+		C305230BFF418EA84919FF91 /* CollapsibleSectionHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollapsibleSectionHeader.swift; sourceTree = "<group>"; };
 		C5765578C5CF868977175F47 /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
 		CCF3C282053FF6CE9E33B4BF /* ExpenseCategoryManageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseCategoryManageView.swift; sourceTree = "<group>"; };
 		D0A174314D834C4ABEE5BC20 /* OmnyShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OmnyShare.entitlements; sourceTree = "<group>"; };
 		D45BF39A16836BC3A781E046 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		D50535A8576BD671F3594D75 /* LLMSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMSettingsView.swift; sourceTree = "<group>"; };
 		DC5FBDA57ACF5835BD05840A /* Omny.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Omny.entitlements; sourceTree = "<group>"; };
 		E11C02EDDB66A6F143E77CEA /* ExpenseCategoryAppearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseCategoryAppearance.swift; sourceTree = "<group>"; };
 		EDA3EC43CC114A3BA3AAE2CD /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
+		EDEFAF4C63D435261B696B7E /* CheckToggleButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckToggleButton.swift; sourceTree = "<group>"; };
 		F035203A42962D76D81AFAA0 /* ExpenseSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseSupport.swift; sourceTree = "<group>"; };
 		F5BE3B107B134EB9418AC588 /* OCRService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRService.swift; sourceTree = "<group>"; };
 		F6286E75E2350A9610F07F50 /* SharedInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedInbox.swift; sourceTree = "<group>"; };
@@ -132,6 +160,20 @@
 			path = Expense;
 			sourceTree = "<group>";
 		};
+		1FF0EDFA3D810694F2DE1D96 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				EDEFAF4C63D435261B696B7E /* CheckToggleButton.swift */,
+				C305230BFF418EA84919FF91 /* CollapsibleSectionHeader.swift */,
+				271A98018F0AC6C3FC811DD1 /* Feedback.swift */,
+				201DF82160199695C13D2414 /* FloatingAddButton.swift */,
+				2D082366D4929A7AF8CB6247 /* OmnyDateFormat.swift */,
+				4D17E1E2D50D01289A161384 /* RefreshableDetached.swift */,
+				25BEDEABC2C97EA4716806E8 /* TagPicker.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
 		27D9BEF99F17B9F95BFC8152 /* Intents */ = {
 			isa = PBXGroup;
 			children = (
@@ -142,18 +184,33 @@
 			path = Intents;
 			sourceTree = "<group>";
 		};
+		303905521BF2BF1F541860C4 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				6C3F4FFDA5AD28F6C01B7860 /* AdvancedSettingsView.swift */,
+				7E7262A76C5A0CB5400D6D7A /* DeveloperToolsView.swift */,
+				A35C215086E8D5D653CCECB8 /* DidaSettingsView.swift */,
+				D50535A8576BD671F3594D75 /* LLMSettingsView.swift */,
+				3DBB7E7B98F2F9698053FD65 /* ShortcutsGuideView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
 		5E7F1F6D28DF2A72B69B7249 /* Views */ = {
 			isa = PBXGroup;
 			children = (
 				4EE20B2F349C81A0B7136CA6 /* Cards.swift */,
 				3256F2D6ADFD0C45637A6F93 /* ExpenseDebugView.swift */,
 				A9D19D7FE0FC7B0F439834DC /* ListViews.swift */,
+				13CCAFE7D9C6CCB49F143979 /* PackageTripView.swift */,
 				BE835B50414B0383DD7772DA /* RootView.swift */,
 				6CF59AADF0299C174979693B /* SettingsView.swift */,
 				49499EEAD615EA2186C49C44 /* TagManageView.swift */,
 				F7B355A202BA7EB4EFADE8BB /* Theme.swift */,
 				C5765578C5CF868977175F47 /* TodayView.swift */,
+				1FF0EDFA3D810694F2DE1D96 /* Components */,
 				19D3884C90E914099760874F /* Expense */,
+				303905521BF2BF1F541860C4 /* Settings */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -162,6 +219,7 @@
 			isa = PBXGroup;
 			children = (
 				37F66C226030118977E6ED59 /* InboxItem.swift */,
+				0C91267225B5856A0E81D324 /* InboxItem+Queries.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -349,9 +407,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E925FEDEC748B022B3EA739C /* AdvancedSettingsView.swift in Sources */,
 				211842926C591F28A58A81D5 /* AppSettings.swift in Sources */,
 				B753F262EC77180CF0A4E5D0 /* Cards.swift in Sources */,
+				EDED4FFB878F89C752291554 /* CheckToggleButton.swift in Sources */,
+				73934EBB00933914262833F6 /* CollapsibleSectionHeader.swift in Sources */,
+				E16C2BEA13D09495D91DD160 /* DeveloperToolsView.swift in Sources */,
 				2A9072EF706DEFE65EA02398 /* DidaService.swift in Sources */,
+				B5783CC29008AC7ABA51BF4A /* DidaSettingsView.swift in Sources */,
 				F83466FB631A6F5D5AE2EA5C /* ExpenseAnalysisView.swift in Sources */,
 				A5006BBC0AB5703C1C7263F4 /* ExpenseCalendarView.swift in Sources */,
 				15BECF4ED7504D4E2B70B73C /* ExpenseCategoryAppearance.swift in Sources */,
@@ -362,19 +425,28 @@
 				4761DD6B748B13E62CB29C23 /* ExpenseEditView.swift in Sources */,
 				1E6CD8C4449BB0217023DDB0 /* ExpenseHomeView.swift in Sources */,
 				735260513B9A48A77E03B5EC /* ExpenseSupport.swift in Sources */,
+				0E3CBD74E7080ADA52939380 /* Feedback.swift in Sources */,
 				5304541564108CB1F073CC83 /* FlightDynamicsStore.swift in Sources */,
+				48485D0BFECEA6D9D919AC94 /* FloatingAddButton.swift in Sources */,
+				11B7C6A842EB1A512B279625 /* InboxItem+Queries.swift in Sources */,
 				CCAAFBF6F56DECE1F2E419E2 /* InboxItem.swift in Sources */,
 				4A24E65FDFE00791F20A3614 /* InboxItemEntity.swift in Sources */,
 				D1436F1C8D387FB2E7E76106 /* Ingestor.swift in Sources */,
+				2DE3C84A720B42FC215E9B03 /* LLMSettingsView.swift in Sources */,
 				E32CD62F4A5289EDEFF2D6D0 /* ListViews.swift in Sources */,
 				428BDC49572EB4F2911B4FD9 /* OCRService.swift in Sources */,
 				2B6169C091832764B753F49C /* OmnyApp.swift in Sources */,
+				7C981362B9DE75AB71EAAAD7 /* OmnyDateFormat.swift in Sources */,
 				DD739467D78B00097E1C3EFD /* OmnyIntents.swift in Sources */,
+				0C48FC882F165FEFDD6F00B7 /* PackageTripView.swift in Sources */,
+				B3A6006F0AE117BE5AB597F5 /* RefreshableDetached.swift in Sources */,
 				4A8E8F6479DE99F5E30D7A05 /* RootView.swift in Sources */,
 				3B6643656985F33192C0B1BC /* Secrets.swift in Sources */,
 				3B55C4A7C51CACDF76C6ED90 /* SettingsView.swift in Sources */,
 				1776CEA9C7DB230AB8158921 /* SharedInbox.swift in Sources */,
+				F50FF79CBB6B4E4D1A517C78 /* ShortcutsGuideView.swift in Sources */,
 				DC3DB29ED2552FC97C9D54FA /* TagManageView.swift in Sources */,
+				66E9C1F2CA0130CC4BEE89EF /* TagPicker.swift in Sources */,
 				E5FE10AEF8923B1C7F6A70EE /* Theme.swift in Sources */,
 				402F23D9EC330177DF3D2AFB /* TodayView.swift in Sources */,
 			);

@@ -201,9 +201,6 @@ struct ConfirmExpenseIntent: AppIntent {
     }
 
     private static func timeText(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "zh_CN")
-        f.dateFormat = "M月d日 HH:mm"
-        return f.string(from: date)
+        OmnyDateFormat.monthDayTime(date)
     }
 }

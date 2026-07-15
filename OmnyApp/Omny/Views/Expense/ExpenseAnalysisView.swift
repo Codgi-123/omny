@@ -151,9 +151,7 @@ struct ExpenseAnalysisView: View {
     }
 
     private func docDate(_ item: InboxItem) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "M-d"
-        return f.string(from: item.occurredAt ?? item.createdAt)
+        OmnyDateFormat.shortMonthDay(item.occurredAt ?? item.createdAt)
     }
 }
 
