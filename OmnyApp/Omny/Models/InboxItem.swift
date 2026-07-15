@@ -72,6 +72,9 @@ final class InboxItem {
     /// 本地「放弃」状态：纯本地展示标记（给默认值保证轻量迁移）。
     /// 放弃的待办不当成完成推送滴答、也不被远端拉取复活——仅前台过滤展示为「已放弃」分组。
     var todoAbandoned: Bool = false
+    /// 条目级提醒规则（TodoReminderRule.rawValue）：nil = 跟随设置页全局默认；
+    /// -1 不提醒 / 0 准时 / 其余为提前分钟数。可选属性，SwiftData 轻量迁移自动通过。
+    var todoReminderMinutes: Int?
 
     // 收藏
     var urlString: String?

@@ -60,6 +60,9 @@ struct RootView: View {
             // 启动时先收分享队列，再后台同步一次滴答
             await drainShareQueue()
             await dida.syncNow(context: context)
+            // 通知：启动申请权限（首次弹框，之后幂等）+ 全量重排
+            _ = await NotificationScheduler.ensureAuthorization()
+            NotificationScheduler.requestReschedule(context: context)
         }
         .onChange(of: scenePhase) { _, phase in
             // 从后台回到前台时自动同步（带防抖，避免频繁切换反复拉取）
@@ -67,6 +70,8 @@ struct RootView: View {
             Task {
                 await drainShareQueue()
                 await dida.syncOnForeground(context: context)
+                // 滴答同步完成后重排通知（覆盖远端完成/删除待办的变更）
+                NotificationScheduler.requestReschedule(context: context)
             }
         }
     }

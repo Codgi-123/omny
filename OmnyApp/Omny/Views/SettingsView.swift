@@ -31,6 +31,11 @@ struct SettingsView: View {
             Section {
                 Toggle("行程自动写入日历", isOn: $settings.autoAddToCalendar)
                 NavigationLink {
+                    NotificationSettingsView()
+                } label: {
+                    LabeledContent("通知提醒", value: notifySummary)
+                }
+                NavigationLink {
                     TagManageView()
                 } label: {
                     LabeledContent("收藏标签", value: "\(settings.bookmarkTags.count) 个")
@@ -89,6 +94,13 @@ struct SettingsView: View {
     /// LLM 状态：从 llmConfig 是否可用如实推断（连通性测试结果是临时态，不持久化不冒充）。
     private var llmStatus: String {
         settings.llmConfig != nil ? "\(settings.llmModel) · 已配置" : "未配置"
+    }
+
+    /// 通知概况：三类开关的开启数（0 个 = 已关闭）。
+    private var notifySummary: String {
+        let on = [settings.tripNotifyEnabled, settings.packageNotifyEnabled, settings.todoNotifyEnabled]
+            .filter { $0 }.count
+        return on == 0 ? "已关闭" : "\(on) 类开启"
     }
 
     /// 滴答状态：已绑定时带上次同步的相对时间。

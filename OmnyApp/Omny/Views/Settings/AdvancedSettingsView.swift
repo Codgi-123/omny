@@ -124,6 +124,8 @@ struct AdvancedSettingsView: View {
         let all = (try? context.fetch(FetchDescriptor<InboxItem>())) ?? []
         for item in all { context.delete(item) }
         try? context.save()
+        // 条目全没了，重排会顺带清掉所有已排的本地通知
+        NotificationScheduler.requestReschedule(context: context)
         return all.count
     }
 
