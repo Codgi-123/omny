@@ -29,10 +29,12 @@
 		755B2262C6761AC0CBE4DB22 /* OmnyShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2F8DAA5F39FB955E53DF0154 /* OmnyShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		80443BC94F5EC375ECDD4461 /* SharedInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6286E75E2350A9610F07F50 /* SharedInbox.swift */; };
 		8F5D9108AC007DDD9B4EDAF8 /* ExpenseCategoryManageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCF3C282053FF6CE9E33B4BF /* ExpenseCategoryManageView.swift */; };
+		A3AB250C560EC31C3416A4F8 /* ExpenseDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE6CEE6D0BA1256600616E83 /* ExpenseDraftStore.swift */; };
 		A5006BBC0AB5703C1C7263F4 /* ExpenseCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADD6297A5443435803E13821 /* ExpenseCalendarView.swift */; };
 		B753F262EC77180CF0A4E5D0 /* Cards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EE20B2F349C81A0B7136CA6 /* Cards.swift */; };
 		C60436FB46947A9AC0EE3529 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7EE04CE4A538273114ED55 /* ShareViewController.swift */; };
 		CCAAFBF6F56DECE1F2E419E2 /* InboxItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37F66C226030118977E6ED59 /* InboxItem.swift */; };
+		CF06F2B4FFF8230600DAE475 /* ExpenseConfirmSnippet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 474B8EB111585FA1D32C0682 /* ExpenseConfirmSnippet.swift */; };
 		D1436F1C8D387FB2E7E76106 /* Ingestor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A42FEA9C1D69A760D542AE4D /* Ingestor.swift */; };
 		DC3DB29ED2552FC97C9D54FA /* TagManageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49499EEAD615EA2186C49C44 /* TagManageView.swift */; };
 		DD739467D78B00097E1C3EFD /* OmnyIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F11CE0A32B974AB527A89BD /* OmnyIntents.swift */; };
@@ -73,6 +75,7 @@
 		37F66C226030118977E6ED59 /* InboxItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxItem.swift; sourceTree = "<group>"; };
 		3ABFCD88567E2FDFAD1D4CE8 /* ExpenseConfirmIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseConfirmIntent.swift; sourceTree = "<group>"; };
 		4455F6F7EC03910790C400B0 /* OmnyCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = OmnyCore; path = ../OmnyCore; sourceTree = SOURCE_ROOT; };
+		474B8EB111585FA1D32C0682 /* ExpenseConfirmSnippet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseConfirmSnippet.swift; sourceTree = "<group>"; };
 		487983E7453EA416476B5FA9 /* Omny.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Omny.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		49499EEAD615EA2186C49C44 /* TagManageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagManageView.swift; sourceTree = "<group>"; };
 		4EE20B2F349C81A0B7136CA6 /* Cards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Cards.swift; sourceTree = "<group>"; };
@@ -95,6 +98,7 @@
 		C20FFFD49BAE913AAFD9B419 /* ExpenseAnalysisView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseAnalysisView.swift; sourceTree = "<group>"; };
 		C5765578C5CF868977175F47 /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
 		CCF3C282053FF6CE9E33B4BF /* ExpenseCategoryManageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseCategoryManageView.swift; sourceTree = "<group>"; };
+		CE6CEE6D0BA1256600616E83 /* ExpenseDraftStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseDraftStore.swift; sourceTree = "<group>"; };
 		D0A174314D834C4ABEE5BC20 /* OmnyShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OmnyShare.entitlements; sourceTree = "<group>"; };
 		D45BF39A16836BC3A781E046 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		DC5FBDA57ACF5835BD05840A /* Omny.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Omny.entitlements; sourceTree = "<group>"; };
@@ -136,6 +140,8 @@
 			isa = PBXGroup;
 			children = (
 				3ABFCD88567E2FDFAD1D4CE8 /* ExpenseConfirmIntent.swift */,
+				474B8EB111585FA1D32C0682 /* ExpenseConfirmSnippet.swift */,
+				CE6CEE6D0BA1256600616E83 /* ExpenseDraftStore.swift */,
 				58C239CE1E3562161DFEB077 /* InboxItemEntity.swift */,
 				4F11CE0A32B974AB527A89BD /* OmnyIntents.swift */,
 			);
@@ -357,8 +363,10 @@
 				15BECF4ED7504D4E2B70B73C /* ExpenseCategoryAppearance.swift in Sources */,
 				8F5D9108AC007DDD9B4EDAF8 /* ExpenseCategoryManageView.swift in Sources */,
 				01F87993F4C31CB75D5AC8C2 /* ExpenseConfirmIntent.swift in Sources */,
+				CF06F2B4FFF8230600DAE475 /* ExpenseConfirmSnippet.swift in Sources */,
 				3436DC67A1948A62A1A43235 /* ExpenseDebugView.swift in Sources */,
 				5CE81D859C93B072D4C216BA /* ExpenseDetailView.swift in Sources */,
+				A3AB250C560EC31C3416A4F8 /* ExpenseDraftStore.swift in Sources */,
 				4761DD6B748B13E62CB29C23 /* ExpenseEditView.swift in Sources */,
 				1E6CD8C4449BB0217023DDB0 /* ExpenseHomeView.swift in Sources */,
 				735260513B9A48A77E03B5EC /* ExpenseSupport.swift in Sources */,
