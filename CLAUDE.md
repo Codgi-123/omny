@@ -34,6 +34,14 @@ xcrun devicectl device install app --device <设备ID> \
 ## 已知陷阱
 
 - **codesign 报 `resource fork, Finder information, or similar detritus not allowed`**：根因是项目位于 `~/Desktop`（被 iCloud 同步接管，同步服务写 `com.apple.FinderInfo` 扩展属性）。解法：编译产物用 `-derivedDataPath` 指到同步目录外（如 `~/OmnyBuild`）。
+- **`devicectl` 一运行就 exit 137（SIGKILL, Code Signature Invalid）**：CoreDevice 框架页签名损坏所致（`/Applications/Xcode.app/.../usr/bin/devicectl` 只是转发 shim，真身在 `/Library/Developer/PrivateFrameworks/CoreDevice.framework/.../bin/devicectl`）。根治：`sudo xcodebuild -runFirstLaunch` 重装 CoreDevice。临时绕过：改用 `ideviceinstaller`（`brew install ideviceinstaller`）走 usbmux 安装——先把 .app 打成 ipa 再装：
+
+  ```sh
+  mkdir Payload && cp -R ~/OmnyBuild/Build/Products/Debug-iphoneos/Omny.app Payload/ && zip -qry Omny.ipa Payload
+  idevice_id -l                                  # 确认设备已 USB 连接（输出 UDID）
+  ideviceinstaller -u <UDID> install Omny.ipa    # 注意是子命令 install，不是旧版的 -i
+  ```
+  iTunesMetadata / SC_Info 两条 WARNING 是 App Store 元数据缺失提示，本地开发签名包可忽略。
 - 免费 Apple ID 签名 7 天过期，重新 ⌘R / 重装即可。
 - `OmnyApp/` 只能在 macOS 编译（Apple 限制）；`OmnyCore/` 在 macOS / Linux / WSL 均可开发测试（WSL 环境踩坑见 `docs/dev-notes-windows.md`）。
 - Linux 上 `URLRequest`/`URLSession`/`HTTPURLResponse` 在 `FoundationNetworking` 模块：用到网络类型的文件（含测试）都要加 `#if canImport(FoundationNetworking) import FoundationNetworking #endif`，否则 macOS 编译过、CI 的 Linux job 挂。

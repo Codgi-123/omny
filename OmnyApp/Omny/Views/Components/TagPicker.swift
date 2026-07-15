@@ -47,6 +47,24 @@ struct TagPicker: View {
     }
 }
 
+// MARK: - 只读标签药丸
+
+/// 只读标签药丸：淡绿底 Capsule，替代原绿色纯文字 Badge（收藏专用展示态，不可点）。
+struct TagPill: View {
+    let text: String
+    var tint: Color = Theme.green
+
+    var body: some View {
+        Text(text)
+            .font(.caption)
+            .fontWeight(.medium)
+            .foregroundStyle(tint)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 3.5)
+            .background(tint.opacity(0.13), in: Capsule())
+    }
+}
+
 // MARK: - 流式布局
 
 /// 简易流式布局：标签胶囊按宽度自动换行（iOS 16+ Layout 协议）。
