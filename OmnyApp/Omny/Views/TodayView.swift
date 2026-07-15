@@ -6,7 +6,10 @@ import SwiftData
 struct TodayView: View {
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var items: [InboxItem]
     /// 与 RootView 的 TabView selection 共享同一 UserDefaults 键：各区块「查看详情」写入即切 tab。
-    @AppStorage("omnySelectedTab") private var selectedTab = 0
+    @AppStorage("omnySelectedTab") private var selectedTab = RootTab.today
+    /// 与 PackageTripView 共享的分段键：快递/行程区块「查看详情」先写目标分段再切合并 tab
+    @AppStorage("omnyPackageTripSegment") private var packageTripSegment
+        = PackageTripView.Segment.express.rawValue
     /// 首页待办卡片是否展开全部（默认只露前 5 条）
     @State private var todosExpanded = false
 
@@ -15,12 +18,12 @@ struct TodayView: View {
     // 行程/快递轮播的顺序与列表页一致：手动拖过的按 sortOrder，没拖过按各自默认规则
 
     private var upcomingTrips: [InboxItem] {
-        items.filter { $0.kind == .trip && $0.deletedAt == nil && ($0.departAt ?? .distantPast) > .now }
+        items.active(.trip).filter { ($0.departAt ?? .distantPast) > .now }
             .manuallySorted { ($0.departAt ?? .distantFuture) < ($1.departAt ?? .distantFuture) }
     }
 
     private var awaitingPackages: [InboxItem] {
-        let open = items.filter { $0.kind == .package && $0.deletedAt == nil && $0.packageStatus != .pickedUp }
+        let open = items.active(.package).filter { $0.packageStatus != .pickedUp }
         // 待取排在在途前（对齐快递页的分组次序），组内各按手动顺序
         return open.filter { $0.packageStatus == .awaitingPickup }
             .manuallySorted { $0.createdAt > $1.createdAt }
@@ -29,19 +32,18 @@ struct TodayView: View {
     }
 
     private var openTodos: [InboxItem] {
-        items.filter { $0.kind == .todo && !$0.todoCompleted && !$0.todoAbandoned && !$0.needsReview && !$0.deletedLocally && $0.deletedAt == nil }
+        items.openTodos()
             // 优先级降序（高→无），同级按创建时间倒序
             .sorted { ($0.todoPriority, $0.createdAt) > ($1.todoPriority, $1.createdAt) }
     }
 
     private var reviewItems: [InboxItem] {
-        items.filter { $0.needsReview && !$0.deletedLocally && $0.deletedAt == nil }
+        items.pendingReview()
     }
 
     /// 今天新增的收藏（未删除），首页「今日收藏」区块用
     private var todayBookmarks: [InboxItem] {
-        items.filter { $0.kind == .bookmark && $0.deletedAt == nil
-            && Calendar.current.isDateInToday($0.createdAt) }
+        items.active(.bookmark).filter { Calendar.current.isDateInToday($0.createdAt) }
     }
 
     private var everythingEmpty: Bool {
@@ -65,7 +67,10 @@ struct TodayView: View {
                     CarouselSection(icon: "airplane.departure", tint: Theme.trip, title: "行程",
                                     count: "\(upcomingTrips.count) 个即将出行", items: upcomingTrips, margin: margin,
                                     widthFraction: single ? 1.0 : 0.82,
-                                    onDetail: { selectedTab = 2 }) {
+                                    onDetail: {
+                                        packageTripSegment = PackageTripView.Segment.trip.rawValue
+                                        selectedTab = .packageTrip
+                                    }) {
                         TripCard(item: $0).cardStyle()
                     }
                 }
@@ -78,7 +83,10 @@ struct TodayView: View {
                                     items: awaitingPackages, margin: margin,
                                     widthFraction: n == 1 ? 1.0 : (n == 2 ? 0.5 : 0.44),
                                     barIndicator: n >= 3,
-                                    onDetail: { selectedTab = 1 }) {
+                                    onDetail: {
+                                        packageTripSegment = PackageTripView.Segment.express.rawValue
+                                        selectedTab = .packageTrip
+                                    }) {
                         if n == 1 {
                             PackageCard(item: $0, showsContextMenu: false).cardStyle()
                         } else {
@@ -91,7 +99,7 @@ struct TodayView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         SectionHeader(icon: "checkmark.circle.fill", tint: Theme.todo, title: "待办",
                                       count: "\(openTodos.count) 项未完成",
-                                      onDetail: { selectedTab = 3 })
+                                      onDetail: { selectedTab = .todo })
                         // 待办整体合并为一张卡片，条目列在卡内、不加分隔线（issue #9）
                         // 默认只露前 5 条，多出的靠卡片底部按钮展开/收起
                         let homeTodos = todosExpanded ? openTodos : Array(openTodos.prefix(5))
@@ -130,7 +138,7 @@ struct TodayView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         SectionHeader(icon: "bookmark.fill", tint: Theme.bookmark, title: "今日收藏",
                                       count: "\(todayBookmarks.count) 条",
-                                      onDetail: { selectedTab = 4 })
+                                      onDetail: { selectedTab = .bookmark })
                         VStack(spacing: 10) {
                             ForEach(todayBookmarks.prefix(5)) { TodayBookmarkRow(item: $0).cardStyle(pad: 11) }
                         }
@@ -168,9 +176,10 @@ struct TodayView: View {
             .padding(.top, 8)
             .padding(.bottom, 20)
             }
-            // 航班动态：下拉强刷无视缓存；页面出现/航班集合变化时只补过期的（10 分钟 TTL）
-            .refreshable {
-                await Task { await FlightDynamicsStore.shared.refresh(items, force: true) }.value
+            // 航班动态：下拉强刷无视缓存；页面出现/航班集合变化时只补过期的（10 分钟 TTL）。
+            // 防取消原因见 Views/Components/RefreshableDetached.swift。
+            .refreshableDetached {
+                await FlightDynamicsStore.shared.refresh(items, force: true)
             }
             .task(id: flightTaskID) {
                 await FlightDynamicsStore.shared.refresh(items, force: false)

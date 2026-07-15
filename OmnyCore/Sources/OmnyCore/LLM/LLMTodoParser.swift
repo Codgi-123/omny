@@ -19,12 +19,20 @@ public struct LLMConfig: Codable, Equatable, Sendable {
     public var baseURL: URL
     public var apiKey: String
     public var model: String
+    /// 输出 token 上限的兜底值：调用方未按任务显式指定时用它
+    /// （打标 256 / 分类 128 等小任务会各自传更小值，不受此影响）。默认 2048，与历史硬编码一致。
+    public var maxTokens: Int
+    /// 单次请求超时（秒）。默认 60，与 URLRequest 系统默认一致。
+    public var timeout: TimeInterval
 
-    public init(apiProtocol: LLMProtocol, baseURL: URL, apiKey: String, model: String) {
+    public init(apiProtocol: LLMProtocol, baseURL: URL, apiKey: String, model: String,
+                maxTokens: Int = 2048, timeout: TimeInterval = 60) {
         self.apiProtocol = apiProtocol
         self.baseURL = baseURL
         self.apiKey = apiKey
         self.model = model
+        self.maxTokens = maxTokens
+        self.timeout = timeout
     }
 
     public static func claude(apiKey: String, model: String = "claude-opus-4-8") -> LLMConfig {

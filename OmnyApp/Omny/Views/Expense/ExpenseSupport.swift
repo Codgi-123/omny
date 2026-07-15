@@ -34,6 +34,15 @@ enum ExpenseFormat {
         return "¥" + (compactInt.string(from: NSDecimalNumber(decimal: value)) ?? "\(Int(d))")
     }
 
+    /// 日历小格用的裸紧凑金额（原 ExpenseCalendarView 内联实现，收拢到这里）。
+    /// 与 compact 的差异是刻意的：小格更窄且正负号/颜色已表达方向，
+    /// 故无 ¥ 前缀、一律取整、无千分位。
+    static func compactBare(_ value: Decimal) -> String {
+        let d = NSDecimalNumber(decimal: value).doubleValue
+        if d >= 10000 { return String(format: "%.0f万", d / 10000) }
+        return String(format: "%.0f", d)
+    }
+
     private static let compactInt: NumberFormatter = {
         let f = NumberFormatter()
         f.numberStyle = .decimal
@@ -116,13 +125,7 @@ enum MonthTool {
         return cal.isDate(d, equalTo: month, toGranularity: .month)
     }
 
-    /// 月份标题 "2026年7月"
-    static func title(_ month: Date) -> String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "zh_CN")
-        f.dateFormat = "yyyy年M月"
-        return f.string(from: month)
-    }
+    // 月份标题格式化已收敛到 OmnyDateFormat.monthTitle（共享 DateFormatter 实例）
 
     static func adding(_ months: Int, to month: Date) -> Date {
         Calendar.current.date(byAdding: .month, value: months, to: month) ?? month

@@ -17,20 +17,8 @@ struct PackageCard: View {
     @Bindable var item: InboxItem
     var showsContextMenu = true          // 首页传 false 关闭长按菜单
     @Environment(\.modelContext) private var context
-    @State private var copied = false
-    @State private var resetTask: Task<Void, Never>?
-
-    // 复制取件码：柔和切到"已复制"，1.5s 后回退。重按前取消上一个回退任务，
-    // 否则连点两次会让"已复制"提前消失。
-    private func copy(_ code: String) {
-        UIPasteboard.general.string = code
-        withAnimation(.snappy) { copied = true }
-        resetTask?.cancel()
-        resetTask = Task {
-            try? await Task.sleep(for: .seconds(1.5))
-            if !Task.isCancelled { withAnimation(.snappy) { copied = false } }
-        }
-    }
+    // 复制取件码的成功反馈：共享状态机，见 Views/Components/Feedback.swift
+    @State private var copyFeedback = CopyFeedback()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -57,16 +45,16 @@ struct PackageCard: View {
             HStack(alignment: .codeCenter, spacing: 12) {
                 if let code = item.pickupCode {
                     Button {
-                        copy(code)
+                        copyFeedback.copy(code)
                     } label: {
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 4) {
-                                Text(copied ? "已复制取件码" : "取件码 · 点按复制")
+                                Text(copyFeedback.copied ? "已复制取件码" : "取件码 · 点按复制")
                                     .font(.caption)
-                                    .foregroundStyle(copied ? Theme.green : Theme.sub)
+                                    .foregroundStyle(copyFeedback.copied ? Theme.green : Theme.sub)
                                     .contentTransition(.opacity)
                                 // 细线条复制图标（tab 栏同风格），复制成功切成对勾
-                                CopyGlyph(copied: copied, size: 12)
+                                CopyGlyph(copied: copyFeedback.copied, size: 12)
                             }
                             Text(code)
                                 // SF Rounded：原生圆润数字，比默认更柔和；用文本样式随 Dynamic Type 缩放
@@ -78,7 +66,7 @@ struct PackageCard: View {
                     }
                     .buttonStyle(PressableStyle())
                     .accessibilityLabel("复制取件码")
-                    .sensoryFeedback(.impact(weight: .light), trigger: copied) { _, now in now }
+                    .sensoryFeedback(.impact(weight: .light), trigger: copyFeedback.copied) { _, now in now }
                 } else if let number = item.trackingNumber ?? item.trackingTail {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("单号")
@@ -126,30 +114,9 @@ struct PackageCard: View {
         )
     }
 
-    // 取件勾选圈（提醒事项式）：空心圈 → 绿色实心对勾，symbol 替换动画 + 成功触感。
-    // 直接操作、就地切换，横向轮播/竖向列表都适用，不与横滑冲突。
+    // 取件勾选圈：外观见 PickupCheckButton（标准卡图标 24pt）
     private var pickupButton: some View {
-        let done = item.packageStatus == .pickedUp
-        return Button(action: togglePickup) {
-            Image(systemName: done ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 24))
-                .foregroundStyle(done ? Theme.green : Theme.express.opacity(0.85))
-                .contentTransition(.symbolEffect(.replace))
-                .frame(width: 44, height: 44)          // ≥44pt 触控目标
-                .contentShape(Circle())
-        }
-        .buttonStyle(PressableStyle(scale: 0.9))
-        .accessibilityLabel(done ? "撤销取件" : "确认取件")
-        .sensoryFeedback(trigger: item.packageStatus) { _, new in
-            new == .pickedUp ? .success : nil
-        }
-    }
-
-    private func togglePickup() {
-        withAnimation(.snappy) {
-            item.packageStatus = item.packageStatus == .pickedUp ? .awaitingPickup : .pickedUp
-        }
-        try? context.save()
+        PickupCheckButton(item: item)
     }
 
     private var statusTag: some View {
@@ -168,18 +135,8 @@ struct PackageCard: View {
 struct PackageCardCompact: View {
     @Bindable var item: InboxItem
     @Environment(\.modelContext) private var context
-    @State private var copied = false
-    @State private var resetTask: Task<Void, Never>?
-
-    private func copy(_ code: String) {
-        UIPasteboard.general.string = code
-        withAnimation(.snappy) { copied = true }
-        resetTask?.cancel()
-        resetTask = Task {
-            try? await Task.sleep(for: .seconds(1.5))
-            if !Task.isCancelled { withAnimation(.snappy) { copied = false } }
-        }
-    }
+    // 复制取件码的成功反馈：共享状态机，见 Views/Components/Feedback.swift
+    @State private var copyFeedback = CopyFeedback()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -213,7 +170,7 @@ struct PackageCardCompact: View {
     @ViewBuilder private var codeLine: some View {
         if let code = item.pickupCode {
             Button {
-                copy(code)
+                copyFeedback.copy(code)
             } label: {
                 HStack(spacing: 5) {
                     Text(code)
@@ -222,12 +179,12 @@ struct PackageCardCompact: View {
                         .foregroundStyle(Theme.express)
                         .lineLimit(1)
                     // 细线条复制图标（tab 栏同风格），复制成功切成对勾
-                    CopyGlyph(copied: copied, size: 13)
+                    CopyGlyph(copied: copyFeedback.copied, size: 13)
                 }
             }
             .buttonStyle(PressableStyle())
             .accessibilityLabel("复制取件码")
-            .sensoryFeedback(.impact(weight: .light), trigger: copied) { _, now in now }
+            .sensoryFeedback(.impact(weight: .light), trigger: copyFeedback.copied) { _, now in now }
         } else if let number = item.trackingNumber ?? item.trackingTail {
             Text("单号 \(number)")
                 .font(.footnote)
@@ -246,23 +203,33 @@ struct PackageCardCompact: View {
         )
     }
 
+    // 紧凑卡的取件圈：图标 22pt（比标准卡 24pt 略小，密度对齐紧凑排版，刻意差异）
     private var pickupButton: some View {
+        PickupCheckButton(item: item, symbolSize: 22)
+    }
+}
+
+// MARK: - 取件勾选圈（提醒事项式，标准卡/紧凑卡共用）
+
+/// 取件勾选圈：空心圈 → 绿色实心对勾 + 成功触感。直接操作、就地切换，
+/// 横向轮播/竖向列表都适用，不与横滑冲突。双向状态推进（待取 ⇄ 已签收）的
+/// 业务语义在这里承载，外观与 44pt 命中区交给 CheckToggleButton。
+struct PickupCheckButton: View {
+    @Bindable var item: InboxItem
+    var symbolSize: CGFloat = 24
+    @Environment(\.modelContext) private var context
+
+    var body: some View {
         let done = item.packageStatus == .pickedUp
-        return Button {
+        CheckToggleButton(symbol: done ? "checkmark.circle.fill" : "circle",
+                          tint: done ? Theme.green : Theme.express.opacity(0.85),
+                          symbolSize: symbolSize,
+                          accessibilityLabel: done ? "撤销取件" : "确认取件") {
             withAnimation(.snappy) {
                 item.packageStatus = done ? .awaitingPickup : .pickedUp
             }
             try? context.save()
-        } label: {
-            Image(systemName: done ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 22))
-                .foregroundStyle(done ? Theme.green : Theme.express.opacity(0.85))
-                .contentTransition(.symbolEffect(.replace))
-                .frame(width: 44, height: 44)
-                .contentShape(Circle())
         }
-        .buttonStyle(PressableStyle(scale: 0.9))
-        .accessibilityLabel(done ? "撤销取件" : "确认取件")
         .sensoryFeedback(trigger: item.packageStatus) { _, new in
             new == .pickedUp ? .success : nil
         }
@@ -707,23 +674,15 @@ struct TodoRow: View {
 
     var body: some View {
         HStack(alignment: .checkTitle, spacing: 8) {
-            Button {
-                toggleCheck()
-            } label: {
-                Image(systemName: checkSymbol)
-                    .font(.system(size: 18))
-                    .foregroundStyle(checkTint)
-                    .contentTransition(.symbolEffect(.replace))
-                    .frame(width: 36, height: 26)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(PressableStyle(scale: 0.9))
-            .accessibilityLabel(checkLabel)
-            .sensoryFeedback(trigger: item.todoCompleted) { _, done in
-                done ? .success : nil
-            }
-            // 方框中心作为对齐基准
-            .alignmentGuide(.checkTitle) { $0[VerticalAlignment.center] }
+            // 视觉 36×26（滴答式小方框），命中区由 CheckToggleButton 保底外扩到 44pt
+            CheckToggleButton(symbol: checkSymbol, tint: checkTint, symbolSize: 18,
+                              visualSize: CGSize(width: 36, height: 26),
+                              accessibilityLabel: checkLabel, action: toggleCheck)
+                .sensoryFeedback(trigger: item.todoCompleted) { _, done in
+                    done ? .success : nil
+                }
+                // 方框中心作为对齐基准
+                .alignmentGuide(.checkTitle) { $0[VerticalAlignment.center] }
 
             VStack(alignment: .leading, spacing: 3) {
                 // 标题 + 紧跟其后的来源 tag（本地/滴答）；tag 是小字号胶囊，按基线对齐会视觉偏低，改用居中
