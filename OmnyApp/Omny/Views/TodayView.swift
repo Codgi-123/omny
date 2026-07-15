@@ -12,6 +12,10 @@ struct TodayView: View {
         = PackageTripView.Segment.express.rawValue
     /// 首页待办卡片是否展开全部（默认只露前 5 条）
     @State private var todosExpanded = false
+    @Environment(\.openURL) private var openURL
+    /// 「今日收藏」图文条目的全屏详情（交互与收藏页一致：fullScreenCover + zoom 缩回源卡）
+    @State private var bookmarkDetail: InboxItem?
+    @Namespace private var bookmarkZoomNS
 
     private let margin: CGFloat = Theme.Space.page
 
@@ -140,7 +144,24 @@ struct TodayView: View {
                                       count: "\(todayBookmarks.count) 条",
                                       onDetail: { selectedTab = .bookmark })
                         VStack(spacing: 10) {
-                            ForEach(todayBookmarks.prefix(5)) { TodayBookmarkRow(item: $0).cardStyle(pad: 11) }
+                            // 点击行为与收藏页一致：链接直接跳转（打不开兜底进详情），图文进全屏详情
+                            ForEach(todayBookmarks.prefix(5)) { bm in
+                                TodayBookmarkRow(item: bm)
+                                    .cardStyle(pad: 11)
+                                    .matchedTransitionSource(id: bm.id, in: bookmarkZoomNS) {
+                                        $0.clipShape(.rect(cornerRadius: 12))
+                                    }
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        if let url = bm.urlString.flatMap(URL.init(string:)) {
+                                            openURL(url) { accepted in
+                                                if !accepted { bookmarkDetail = bm }
+                                            }
+                                        } else {
+                                            bookmarkDetail = bm
+                                        }
+                                    }
+                            }
                         }
                     }
                     .padding(.horizontal, margin)
@@ -190,6 +211,12 @@ struct TodayView: View {
             if everythingEmpty { emptyState }
         }
         .toolbar(.hidden, for: .navigationBar)
+        .fullScreenCover(item: $bookmarkDetail) { item in
+            NavigationStack {
+                BookmarkDetailView(item: item)
+            }
+            .navigationTransition(.zoom(sourceID: item.id, in: bookmarkZoomNS))
+        }
     }
 
     private var emptyState: some View {
@@ -202,7 +229,7 @@ struct TodayView: View {
 }
 
 /// 首页「今日收藏」精简卡：缩略图/类型图标 + 标题 + 域名或标签。
-/// 完整交互（打开/编辑/删标签）留在收藏页的 BookmarkCard，这里只做一眼概览。
+/// 点击交互由 TodayView 挂载（链接直跳 / 图文进全屏详情，与收藏页一致）；编辑/删标签仍留在收藏页。
 private struct TodayBookmarkRow: View {
     let item: InboxItem
 
@@ -223,7 +250,7 @@ private struct TodayBookmarkRow: View {
                     .frame(width: 36, height: 36)
                     .clipShape(.rect(cornerRadius: 9))
             } else {
-                IconChip(symbol: url != nil ? "link" : "text.alignleft", color: Theme.bookmark, size: 36)
+                BookmarkKindIcon(isLink: url != nil, size: 36)
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
@@ -241,7 +268,7 @@ private struct TodayBookmarkRow: View {
                         .foregroundStyle(Theme.sub.opacity(0.7))
                 } else {
                     HStack(spacing: 6) {
-                        ForEach(item.tags.prefix(3), id: \.self) { Badge(text: "#\($0)", color: Theme.green) }
+                        ForEach(item.tags.prefix(3), id: \.self) { TagPill(text: $0) }
                     }
                 }
             }
