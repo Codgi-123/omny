@@ -66,7 +66,7 @@ struct TodayView: View {
                     let single = upcomingTrips.count == 1
                     CarouselSection(icon: "airplane.departure", tint: Theme.trip, title: "行程",
                                     count: "\(upcomingTrips.count) 个即将出行", items: upcomingTrips, margin: margin,
-                                    widthFraction: single ? 1.0 : 0.82,
+                                    widthFraction: single ? 1.0 : 0.92,
                                     onDetail: {
                                         packageTripSegment = PackageTripView.Segment.trip.rawValue
                                         selectedTab = .packageTrip

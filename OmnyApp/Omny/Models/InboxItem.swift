@@ -48,7 +48,14 @@ final class InboxItem {
     var departPlace: String?
     var arriveAt: Date?
     var arrivePlace: String?
+    /// 座位（火车/航班）；酒店存房型（可含早餐说明）
     var seat: String?
+    /// 检票口/登机口，如 "A6"
+    var ticketGate: String?
+    /// 席别/舱位等级，如 "二等座"
+    var seatClass: String?
+    /// 酒店地址（tripKind=hotel，卡片导航用）
+    var tripAddress: String?
     var calendarEventID: String?
 
     // 待办（滴答同步字段与 OmnyCore.SyncableTodo 对应）

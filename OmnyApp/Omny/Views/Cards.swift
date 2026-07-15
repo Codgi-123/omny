@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 import OmnyCore
 
 // 让取件勾选圈只跟「大号取件码数字」的垂直中心对齐（而非含上方小标签的整块居中）
@@ -306,6 +307,15 @@ struct TripCard: View {
     private var isHotel: Bool { item.tripKindRaw == "hotel" }
     private var isFlight: Bool { item.tripKindRaw == "flight" }
 
+    /// 三种行程卡共用的三段定高骨架：头部 / 路线 / 地面信息各一段，
+    /// 每段定高 + 统一段间距 ⇒ 机票·火车·酒店卡总高严格一致（发丝线一律用 overlay 画，不占高度）。
+    private enum Metrics {
+        static let header: CGFloat = 44
+        static let route: CGFloat = 60
+        static let footer: CGFloat = 48
+        static let spacing: CGFloat = 12
+    }
+
     /// 标题：机票是「航司名 + 航班号」（航司由航班号前缀离线映射）；火车用车次号；
     /// 酒店无班次号，用酒店/民宿名（departPlace，见 TripInfo.Kind.hotel 的字段映射）
     private var title: String {
@@ -319,49 +329,86 @@ struct TripCard: View {
         return "行程"
     }
 
-    /// 日期 + 星期（融进时间路线中间，作为出发到达之间的强化标签）
+    /// 日期 + 星期（头部右侧，与倒计时标签同列）
     private var dateWeekday: String? {
         item.departAt?.formatted(
             .dateTime.locale(Locale(identifier: "zh_CN")).month().day().weekday(.abbreviated))
     }
 
     var body: some View {
-        VStack(spacing: 14) {
-            HStack(spacing: 10) {
-                TripIconChip(kindRaw: item.tripKindRaw, size: 44)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
-                        .font(.headline)
-                    // 酒店时 seat 存的是房型；机票座位挪去了地面信息行
-                    if let seat = item.seat, !isFlight {
-                        Text(seat)
-                            .font(.caption)
-                            .foregroundStyle(Theme.sub)
-                    }
-                }
-                Spacer()
-                if isFlight {
-                    // 机票路线正中让位给时长/状态，日期星期上移到卡片右上
-                    VStack(alignment: .trailing, spacing: 3) {
-                        statusTag
-                        if let dateWeekday {
-                            Text(dateWeekday)
-                                .font(.caption2)
-                                .foregroundStyle(Theme.sub)
-                        }
-                    }
-                } else {
-                    statusTag
+        VStack(spacing: Metrics.spacing) {
+            Group {
+                if isHotel { hotelHeader } else if isFlight { flightHeader } else { trainHeader }
+            }
+            .frame(height: Metrics.header)
+            Group {
+                if isHotel { hotelRoute } else if isFlight { flightRoute } else { trainRoute }
+            }
+            .frame(height: Metrics.route)
+            Group {
+                if isHotel { hotelFooter } else if isFlight { flightGroundRow } else { trainInfoRow }
+            }
+            .frame(height: Metrics.footer)
+        }
+    }
+
+    // MARK: 头部（三种卡各自一行，同高 44）
+
+    /// 火车头部：高铁图标+车次号在左、状态+日期在右，下缘发丝线分隔（对齐参考稿的票面样式）
+    private var trainHeader: some View {
+        HStack(alignment: .center, spacing: 10) {
+            TripIconChip(kindRaw: item.tripKindRaw, size: 44)
+            Text(title)
+                .font(.title3.weight(.bold))
+            Spacer()
+            VStack(alignment: .trailing, spacing: 3) {
+                statusTag
+                if let dateWeekday {
+                    Text(dateWeekday)
+                        .font(.caption)
+                        .foregroundStyle(Theme.sub)
                 }
             }
-            if isHotel {
-                hotelRoute
-            } else if isFlight {
-                flightRoute
-                flightGroundRow
-            } else {
-                transitRoute
+        }
+        .frame(maxHeight: .infinity)
+        .overlay(alignment: .bottom) { Divider() }
+    }
+
+    /// 机票头部：全彩图标 + 航司航班号；路线正中让位给时长/状态，日期星期在右上
+    private var flightHeader: some View {
+        HStack(spacing: 10) {
+            TripIconChip(kindRaw: item.tripKindRaw, size: 44)
+            Text(title)
+                .font(.headline)
+            Spacer()
+            VStack(alignment: .trailing, spacing: 3) {
+                statusTag
+                if let dateWeekday {
+                    Text(dateWeekday)
+                        .font(.caption2)
+                        .foregroundStyle(Theme.sub)
+                }
             }
+        }
+    }
+
+    /// 酒店头部：木床图标 + 酒店名，房型（seat 字段，可含早餐说明）作副标题
+    private var hotelHeader: some View {
+        HStack(spacing: 10) {
+            TripIconChip(kindRaw: item.tripKindRaw, size: 44)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.headline)
+                    .lineLimit(1)
+                if let room = item.seat, !room.isEmpty {
+                    Text(room)
+                        .font(.caption)
+                        .foregroundStyle(Theme.sub)
+                        .lineLimit(1)
+                }
+            }
+            Spacer()
+            statusTag
         }
     }
 
@@ -384,9 +431,8 @@ struct TripCard: View {
         }
     }
 
-    // MARK: 酒店路线行（入住 —（N晚 + 箭头）— 离店，复用车/机路线的三栏骨架）
+    // MARK: 酒店路线行（入住日期 —「N晚」— 退房日期，对齐参考稿）
 
-    /// 入住/离店跨天，两侧主文字放日期（车/机放时分）；正中放晚数（车/机放日期星期）
     private var nights: Int? {
         guard let checkIn = item.departAt, let checkOut = item.arriveAt else { return nil }
         let cal = Calendar.current
@@ -399,50 +445,149 @@ struct TripCard: View {
         date?.formatted(.dateTime.locale(Locale(identifier: "zh_CN")).month().day()) ?? "--"
     }
 
-    /// 时刻标签：解析常只有日期没有时刻（补年后时刻为 0:00），非零时刻才展示（如「14:00 入住」）
-    private func hotelTimeLabel(_ date: Date?, _ verb: String) -> String {
-        guard let date else { return verb }
+    private func weekdayText(_ date: Date?) -> String? {
+        date?.formatted(.dateTime.locale(Locale(identifier: "zh_CN")).weekday(.abbreviated))
+    }
+
+    /// 时刻提示（「14:00后可入住」「12:00前退房」）：解析常只有日期没有时刻
+    /// （补年后时刻为 0:00），非零时刻才展示
+    private func hotelTimeHint(_ date: Date?, checkIn: Bool) -> String? {
+        guard let date else { return nil }
         let c = Calendar.current.dateComponents([.hour, .minute], from: date)
-        guard (c.hour ?? 0) != 0 || (c.minute ?? 0) != 0 else { return verb }
-        return date.formatted(date: .omitted, time: .shortened) + " " + verb
+        guard (c.hour ?? 0) != 0 || (c.minute ?? 0) != 0 else { return nil }
+        let time = date.formatted(date: .omitted, time: .shortened)
+        return checkIn ? "\(time)后可入住" : "\(time)前退房"
     }
 
     private var hotelRoute: some View {
         HStack(alignment: .center, spacing: 8) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(hotelDate(item.departAt))
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                    .monospacedDigit()
-                Text(hotelTimeLabel(item.departAt, "入住"))
-                    .font(.footnote)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("入住")
+                    .font(.caption2)
                     .foregroundStyle(Theme.sub)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(hotelDate(item.departAt))
+                        .font(.title2.weight(.semibold))
+                        .monospacedDigit()
+                    if let w = weekdayText(item.departAt) {
+                        Text(w)
+                            .font(.footnote)
+                            .foregroundStyle(Theme.sub)
+                    }
+                }
+                if let hint = hotelTimeHint(item.departAt, checkIn: true) {
+                    Text(hint)
+                        .font(.caption)
+                        .foregroundStyle(Theme.sub)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if let nights {
+                Text("\(nights)晚")
+                    .font(.footnote.weight(.semibold))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 5)
+                    .background(Theme.fill, in: .rect(cornerRadius: 8))
+                    .fixedSize()
+            }
+
+            VStack(alignment: .trailing, spacing: 3) {
+                Text("退房")
+                    .font(.caption2)
+                    .foregroundStyle(Theme.sub)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(hotelDate(item.arriveAt))
+                        .font(.title2.weight(.semibold))
+                        .monospacedDigit()
+                    if let w = weekdayText(item.arriveAt) {
+                        Text(w)
+                            .font(.footnote)
+                            .foregroundStyle(Theme.sub)
+                    }
+                }
+                if let hint = hotelTimeHint(item.arriveAt, checkIn: false) {
+                    Text(hint)
+                        .font(.caption)
+                        .foregroundStyle(Theme.sub)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+    }
+
+    /// 酒店底部：上缘发丝线 + 地址 + 导航（拉起系统地图搜「名称 地址」）
+    private var hotelFooter: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "mappin.and.ellipse")
+                .font(.footnote)
+                .foregroundStyle(Theme.sub)
+            Text(item.tripAddress ?? "暂无地址")
+                .font(.footnote)
+                .foregroundStyle(item.tripAddress == nil ? Theme.sub : Theme.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Spacer()
+            if item.tripAddress != nil {
+                Button(action: openHotelInMaps) {
+                    HStack(spacing: 2) {
+                        Text("导航")
+                            .font(.footnote.weight(.medium))
+                        Image(systemName: "chevron.right")
+                            .font(.caption2.weight(.semibold))
+                    }
+                    .foregroundStyle(Theme.accent)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(PressableStyle())
+            }
+        }
+        .frame(maxHeight: .infinity)
+        .overlay(alignment: .top) { Divider() }
+    }
+
+    private func openHotelInMaps() {
+        let query = [item.departPlace, item.tripAddress].compactMap { $0 }.joined(separator: " ")
+        guard let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: "maps://?q=\(encoded)") else { return }
+        UIApplication.shared.open(url)
+    }
+
+    // MARK: 火车路线行（大字时刻 + 站名，正中时长与轨道线，对齐参考稿）
+
+    private var trainRoute: some View {
+        HStack(alignment: .center, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.departAt?.formatted(date: .omitted, time: .shortened) ?? "--:--")
+                    .font(.title.weight(.semibold))
+                    .monospacedDigit()
+                Text(item.departPlace ?? "出发")
+                    .font(.subheadline)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            VStack(spacing: 3) {
-                if let nights {
-                    Text("\(nights)晚")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(Theme.trip)
-                        .lineLimit(1)
+            VStack(spacing: 5) {
+                if let duration = Self.durationText(item.departAt, item.arriveAt) {
+                    Text(duration)
+                        .font(.caption2)
+                        .foregroundStyle(Theme.sub)
                 }
-                Image(systemName: "arrow.right")
-                    .font(.caption)
-                    .foregroundStyle(Theme.sub)
+                TrainTrackLine()
             }
-            .fixedSize()
+            .frame(maxWidth: .infinity)
 
-            VStack(alignment: .trailing, spacing: 4) {
-                Text(hotelDate(item.arriveAt))
-                    .font(.title2)
-                    .fontWeight(.semibold)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(item.arriveAt?.formatted(date: .omitted, time: .shortened) ?? "--:--")
+                    .font(.title.weight(.semibold))
                     .monospacedDigit()
-                Text(hotelTimeLabel(item.arriveAt, "离店"))
-                    .font(.footnote)
-                    .foregroundStyle(Theme.sub)
+                Text(item.arrivePlace ?? "到达")
+                    .font(.subheadline)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
@@ -450,50 +595,26 @@ struct TripCard: View {
         }
     }
 
-    // MARK: 车/机路线行
-
-    // 出发 —（日期·星期 + 箭头）— 到达：日期星期升到路线正中，与出发/到达时间同一视觉层，不再是底部孤立小灰字
-    private var transitRoute: some View {
-        HStack(alignment: .center, spacing: 8) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.departAt?.formatted(date: .omitted, time: .shortened) ?? "--:--")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                    .monospacedDigit()
-                Text(item.departPlace ?? "出发")
-                    .font(.footnote)
-                    .foregroundStyle(Theme.sub)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            VStack(spacing: 3) {
-                if let dateWeekday {
-                    Text(dateWeekday)
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(Theme.trip)
-                        .lineLimit(1)
-                }
-                Image(systemName: "arrow.right")
-                    .font(.caption)
-                    .foregroundStyle(Theme.sub)
-            }
-            .fixedSize()
-
-            VStack(alignment: .trailing, spacing: 4) {
-                Text(item.arriveAt?.formatted(date: .omitted, time: .shortened) ?? "--:--")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                    .monospacedDigit()
-                Text(item.arrivePlace ?? "到达")
-                    .font(.footnote)
-                    .foregroundStyle(Theme.sub)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-            .frame(maxWidth: .infinity, alignment: .trailing)
+    /// 火车地面信息行：检票口 / 车厢 / 座位 / 席别 四格，灰底圆角托盘（对齐参考稿）。
+    /// 车厢与座位从 seat（如"05车12F号"）拆出；拆不动整串放座位格。
+    private var trainInfoRow: some View {
+        HStack(spacing: 8) {
+            groundCell("检票口", item.ticketGate)
+            groundCell("车厢", trainSeatParts.carriage)
+            groundCell("座位", trainSeatParts.seatNo)
+            groundCell("席别", item.seatClass)
         }
+        .padding(.horizontal, 12)
+        .frame(maxHeight: .infinity)
+        .background(Theme.fill, in: .rect(cornerRadius: 10))
+    }
+
+    private var trainSeatParts: (carriage: String?, seatNo: String?) {
+        guard let seat = item.seat, !seat.isEmpty else { return (nil, nil) }
+        if let m = seat.firstMatch(of: #/(\d{1,2})\s*车\s*(\d{1,3}[A-Za-z]?)\s*号?/#) {
+            return (String(m.output.1), String(m.output.2))
+        }
+        return (nil, seat)
     }
 
     // MARK: 机票路线行（登机牌样式）
@@ -568,19 +689,22 @@ struct TripCard: View {
         }
     }
 
-    /// 登机口 / 座位 / 行李转盘：有任一数据才显示整行，无值格子占位「—」
-    @ViewBuilder private var flightGroundRow: some View {
+    /// 机票地面信息行：登机口 / 座位 / 行李转盘，与火车信息行同一副灰底托盘
+    /// （常显、无值格子占位「—」，保证三种卡同高）
+    private var flightGroundRow: some View {
         let dyn = flightDynamics
-        if dyn != nil || item.seat != nil {
-            HStack(spacing: 8) {
-                flightGroundCell("登机口", dyn?.gate)
-                flightGroundCell("座位", item.seat)
-                flightGroundCell("行李转盘", dyn?.luggage)
-            }
+        return HStack(spacing: 8) {
+            groundCell("登机口", dyn?.gate)
+            groundCell("座位", item.seat)
+            groundCell("行李转盘", dyn?.luggage)
         }
+        .padding(.horizontal, 12)
+        .frame(maxHeight: .infinity)
+        .background(Theme.fill, in: .rect(cornerRadius: 10))
     }
 
-    private func flightGroundCell(_ label: String, _ value: String?) -> some View {
+    /// 地面信息格：小灰标签 + 加粗值，机票/火车信息行共用
+    private func groundCell(_ label: String, _ value: String?) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label)
                 .font(.caption2)
@@ -588,6 +712,8 @@ struct TripCard: View {
             Text((value?.isEmpty == false ? value : nil) ?? "—")
                 .font(.subheadline.weight(.semibold))
                 .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -626,6 +752,30 @@ struct TripCard: View {
         if seconds < 3600 { return "\(max(1, Int(seconds / 60))) 分钟" }
         if seconds < 48 * 3600 { return "\(Int(seconds / 3600)) 小时" }
         return "\(Int(seconds / 86400)) 天"
+    }
+}
+
+/// 火车路线中间的轨道线：两端圆点夹实线，正中一枚侧视高铁符号
+/// （与机票路线的 airplane 同为 SF Symbol + 行程色，风格统一）
+private struct TrainTrackLine: View {
+    var body: some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(Theme.sub.opacity(0.55))
+                .frame(width: 5, height: 5)
+            Rectangle()
+                .fill(Theme.line)
+                .frame(height: 1)
+            Image(systemName: "train.side.front.car")
+                .font(.caption2)
+                .foregroundStyle(Theme.trip)
+            Rectangle()
+                .fill(Theme.line)
+                .frame(height: 1)
+            Circle()
+                .fill(Theme.sub.opacity(0.55))
+                .frame(width: 5, height: 5)
+        }
     }
 }
 

@@ -410,6 +410,9 @@ enum Ingestor {
         item.arriveAt = resolveDate(info.arrival)
         item.arrivePlace = info.arrivalPlace
         item.seat = info.seat
+        item.ticketGate = info.ticketGate
+        item.seatClass = info.seatClass
+        item.tripAddress = info.address
         context.insert(item)
         return item
     }

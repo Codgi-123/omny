@@ -50,6 +50,7 @@ P0（查询谓词层/tab 重构/设置分层）与 P1（消纯复制）已完成
 
 ## 已完成
 
+- [x] 高铁/酒店卡片重设计 + 三种行程卡同高（2026-07-15）：`TripCard` 改三段定高骨架（头部 44 / 路线 60 / 地面信息 48，发丝线一律 overlay 不占高度）⇒ 机票·火车·酒店卡总高严格一致。火车卡对齐票面参考稿：车次+日期头部、大字时刻+轨道线（正中高铁图标）、灰底四格「检票口/车厢/座位/席别」（车厢座位从 seat 正则拆分）；酒店卡：房型副标题（可含早餐说明）、入住/退房大字日期+「N晚」胶囊+时刻提示（14:00后可入住式）、底部地址行+导航（拉起系统地图）。解析链路同步补字段：`TripInfo` 新增 `ticketGate`/`seatClass`/`address`，短信与识屏两个 trip prompt+schema、RuleParser 火车正则（检票口/席别）、InboxItem、Ingestor、InboxItemEntity.Payload 全链路透传。
 - [x] 组件化 P1「消纯复制」（2026-07-15，issue #10 问题2）：纯复制 UI 收敛到 `Views/Components/` 5 个新文件——CollapsibleSectionHeader（待办页 3 处折叠组头收编，chevron 按 HIG 收起指右/展开指下）；SelectableChip + TagPicker（收藏添加/详情两处多选 chip 与筛选栏单选 chip 收编，`filterStyle` 参数保留筛选栏刻意差异；FlowLayout 随迁；「配置池+已用值」合并收敛为 `AppSettings.mergedTagCandidates`）；CheckToggleButton（取件圈×2 + 待办勾选收编，命中区保底 44pt 自动外扩，取件双向推进业务包装成 Cards.swift 的 PickupCheckButton）；FloatingAddButton 参数化（记账页内联 FAB 收编，`size: 56` 保留原尺寸差异）；OmnyDateFormat（6 处「每次调用 new DateFormatter」收敛为静态实例复用，日历裸紧凑金额并入 `ExpenseFormat.compactBare`）。
 - [x] 设置页按使用频率分层重构（2026-07-14，issue #10 问题3）：定论见上方「设计定论 → 设置页分层」。
 - [x] 正式 5 tab 结构落地（2026-07-14，issue #10 问题1）：**今天 / 包裹·行程 / 记账 / 待办 / 收藏**。快递+行程合并进「包裹·行程」tab（`PackageTripView` 薄容器，顶部纯文字分段控件切换，分段选择持久化 `omnyPackageTripSegment`，同键兼作首页「查看详情」的跨页传参通道）；腾出的 tab 给记账，`ExpenseHomeView` 升 tab 根视图并挂 NavActions，设置页仅保留「消费分类 / 解析测试」入口（设置页重构时再安置）。tab 标识改 `RootTab` enum：`omnySelectedTab` 旧整数越界自动回落「今天」，旧 2(行程) 首启落到记账一次可接受；`-omnyTab N` 按新序。遗留：TabPackageTrip / TabExpense 图标为对齐既有线稿风格的自绘 SVG，真机看效果后可再打磨。

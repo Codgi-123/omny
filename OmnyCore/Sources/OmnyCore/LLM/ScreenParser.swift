@@ -115,9 +115,15 @@ public struct ScreenParser: Parser {
         你从手机截图 OCR 出的文本里提取行程信息（火车、航班、酒店/民宿）。\(noisePreamble)今天是 {TODAY}。
         输出 JSON：{"trips":[{"kind":"train 或 flight 或 hotel","number":"车次/航班号，酒店填 null",\
         "departure":"出发时间 ISO8601 或 null","departurePlace":"出发地或 null",\
-        "arrival":"到达时间 ISO8601 或 null","arrivalPlace":"到达地或 null","seat":"座位/舱位/房型或 null"}]}
-        酒店/民宿（kind=hotel）的字段映射：departure=入住时间、arrival=离店时间、\
-        departurePlace=酒店或民宿名称（含分店名或地址）。
+        "arrival":"到达时间 ISO8601 或 null","arrivalPlace":"到达地或 null",\
+        "seat":"座位/房型或 null","ticketGate":"检票口/登机口或 null",\
+        "seatClass":"席别/舱位或 null","address":"酒店地址或 null"}]}
+        火车/航班的字段口径：seat 是座位号（如"05车12F号"）；ticketGate 只填口号（如"A6"，\
+        不带"检票口"字样）；seatClass 如"二等座""商务座""经济舱"；address 填 null。
+        酒店/民宿（kind=hotel）的字段映射：departure=入住时间（含当天可入住时刻，如 14:00）、\
+        arrival=离店时间（含退房时刻，如 12:00）、departurePlace=酒店或民宿名称（含分店名）、\
+        address=酒店地址（如"渝中区民族路188号"，与名称分开）、\
+        seat=房型（含早餐等说明，如"高级大床房·含双早"）；number/ticketGate/seatClass 填 null。
         只提取用户自己的行程，忽略页面里推荐、广告、比价的班次和价格。\
         日期表述（明天、周五、7月10日）换算成 ISO8601，缺年份就省略年份部分。\
         没有就给空数组。只输出 JSON，不要任何其他文字。
@@ -148,6 +154,7 @@ public struct ScreenParser: Parser {
             let kind: String?; let number: String?
             let departure: String?; let departurePlace: String?
             let arrival: String?; let arrivalPlace: String?; let seat: String?
+            let ticketGate: String?; let seatClass: String?; let address: String?
         }
         struct Todo: Decodable { let title: String?; let due: String? }
         struct Expense: Decodable {
@@ -197,7 +204,9 @@ public struct ScreenParser: Parser {
                     departure: t.departure.flatMap(LLMClient.dateComponents(fromISO:)),
                     departurePlace: t.departurePlace?.nilIfEmpty,
                     arrival: t.arrival.flatMap(LLMClient.dateComponents(fromISO:)),
-                    arrivalPlace: t.arrivalPlace?.nilIfEmpty, seat: t.seat?.nilIfEmpty)))
+                    arrivalPlace: t.arrivalPlace?.nilIfEmpty, seat: t.seat?.nilIfEmpty,
+                    ticketGate: t.ticketGate?.nilIfEmpty, seatClass: t.seatClass?.nilIfEmpty,
+                    address: t.address?.nilIfEmpty)))
             }
         case .todo:
             let todos = (extracted.todos ?? []).compactMap { todo -> TodoInfo? in
@@ -283,10 +292,12 @@ public struct ScreenParser: Parser {
                     "number": nullableString,
                     "departure": nullableString, "departurePlace": nullableString,
                     "arrival": nullableString, "arrivalPlace": nullableString,
-                    "seat": nullableString,
+                    "seat": nullableString, "ticketGate": nullableString,
+                    "seatClass": nullableString, "address": nullableString,
                 ],
                 "required": ["kind", "number", "departure", "departurePlace",
-                             "arrival", "arrivalPlace", "seat"],
+                             "arrival", "arrivalPlace", "seat", "ticketGate",
+                             "seatClass", "address"],
                 "additionalProperties": false,
             ]
         case .todo:
