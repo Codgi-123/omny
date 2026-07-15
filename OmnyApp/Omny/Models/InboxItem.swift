@@ -150,3 +150,23 @@ extension Sequence where Element == InboxItem {
         for (i, item) in arr.enumerated() { item.sortOrder = i }
     }
 }
+
+// MARK: - 收藏展示辅助（首页与收藏页共用）
+
+extension InboxItem {
+    /// 收藏条目的展示标题：抓到的标题 → 域名 → 正文首行
+    var bookmarkDisplayTitle: String {
+        if let t = bookmarkTitle, !t.isEmpty { return t }
+        if let url = urlString.flatMap(URL.init(string:)) { return url.host() ?? "链接" }
+        return rawText.components(separatedBy: .newlines).first ?? rawText
+    }
+
+    /// 收藏「加代办」的预填内容：标题 = 查看收藏：{标题缩写}，描述 = 完整标题 + 链接
+    var bookmarkTodoPrefill: (title: String, note: String) {
+        let full = bookmarkDisplayTitle
+        let abbrev = full.count > 12 ? String(full.prefix(12)) + "…" : full
+        var note = full
+        if let s = urlString { note += "\n" + s }
+        return ("查看收藏：\(abbrev)", note)
+    }
+}

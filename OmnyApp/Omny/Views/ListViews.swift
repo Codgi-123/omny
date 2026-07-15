@@ -492,6 +492,8 @@ struct BookmarkView: View {
     @State private var showAddSheet = false
     @State private var editingItem: InboxItem?
     @State private var detailItem: InboxItem?
+    /// 左滑「加代办」的预填内容，非 nil 时呈现快捷输入条
+    @State private var todoPrefill: (title: String, note: String)?
     /// zoom 转场命名空间：列表行（源）与详情页（目的地）共用
     @Namespace private var zoomNS
 
@@ -530,6 +532,7 @@ struct BookmarkView: View {
                 BookmarkCard(item: item,
                              onOpenDetail: { detailItem = item },
                              onEditTags: { editingItem = item },
+                             onAddTodo: { todoPrefill = item.bookmarkTodoPrefill },
                              onDelete: {
                                  withAnimation(.snappy) { Trash.softDelete(item, context: context) }
                              })
@@ -573,6 +576,13 @@ struct BookmarkView: View {
         }
         .overlay(alignment: .bottomTrailing) {
             FloatingAddButton { showAddSheet = true }
+        }
+        .overlay {
+            if let prefill = todoPrefill {
+                TodoQuickAdd(isPresented: Binding(get: { todoPrefill != nil },
+                                                  set: { if !$0 { todoPrefill = nil } }),
+                             initialTitle: prefill.title, initialNote: prefill.note)
+            }
         }
         .toolbar(.hidden, for: .navigationBar)
     }
@@ -633,6 +643,7 @@ struct BookmarkCard: View {
     let item: InboxItem
     var onOpenDetail: () -> Void
     var onEditTags: () -> Void
+    var onAddTodo: () -> Void
     var onDelete: () -> Void
 
     private var url: URL? { item.urlString.flatMap(URL.init(string:)) }
@@ -693,9 +704,13 @@ struct BookmarkCard: View {
             }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            // destructive 的原生红会被同组邻位按钮的 tint 串染成蓝（iOS 26 bug），显式指红
             Button(role: .destructive, action: onDelete) { Label("删除", systemImage: "trash") }
+                .tint(.red)
             Button(action: onEditTags) { Label("标签", systemImage: "tag") }
-                .tint(Theme.green)
+                .tint(.blue)
+            Button(action: onAddTodo) { Label("加代办", systemImage: "checklist") }
+                .tint(.green)
         }
         .contextMenu {
             if let url {
@@ -1163,6 +1178,13 @@ struct TodoQuickAdd: View {
     @Environment(\.modelContext) private var context
     @State private var title = ""
     @State private var note = ""
+
+    /// 支持外部预填（如首页收藏「加代办」）；默认空串，原有调用不变
+    init(isPresented: Binding<Bool>, initialTitle: String = "", initialNote: String = "") {
+        _isPresented = isPresented
+        _title = State(initialValue: initialTitle)
+        _note = State(initialValue: initialNote)
+    }
     @State private var due: Date?
     @State private var priority = 0
     @State private var showDue = false

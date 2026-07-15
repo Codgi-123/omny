@@ -13,9 +13,16 @@ struct TodayView: View {
     /// 首页待办卡片是否展开全部（默认只露前 5 条）
     @State private var todosExpanded = false
     @Environment(\.openURL) private var openURL
+    @Environment(\.modelContext) private var context
     /// 「今日收藏」图文条目的全屏详情（交互与收藏页一致：fullScreenCover + zoom 缩回源卡）
     @State private var bookmarkDetail: InboxItem?
     @Namespace private var bookmarkZoomNS
+    /// 左滑「标签」操作的编辑目标
+    @State private var editingTagsItem: InboxItem?
+    /// 左滑「加代办」操作的预填内容，非 nil 时呈现快捷输入条
+    @State private var todoPrefill: TodoPrefill?
+
+    private struct TodoPrefill { let title: String; let note: String }
 
     private let margin: CGFloat = Theme.Space.page
 
@@ -60,11 +67,24 @@ struct TodayView: View {
         items.compactMap { FlightDynamicsStore.query(for: $0)?.key }.sorted()
     }
 
+    /// 首页区块（按展示顺序）；第一可见区块顶部不留 20pt 区块间距
+    private enum HomeSection { case trips, packages, todos, bookmarks, review }
+    private var firstVisibleSection: HomeSection? {
+        if !upcomingTrips.isEmpty { return .trips }
+        if !awaitingPackages.isEmpty { return .packages }
+        if !openTodos.isEmpty { return .todos }
+        if !todayBookmarks.isEmpty { return .bookmarks }
+        if !reviewItems.isEmpty { return .review }
+        return nil
+    }
+    private func sectionGap(_ s: HomeSection) -> CGFloat { firstVisibleSection == s ? 0 : 20 }
+
     var body: some View {
         VStack(spacing: 0) {
             ScreenHeader("今天") { NavActions() }
-            ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            // 整页用 List 而非 ScrollView：收藏行才能用原生 swipeActions（左滑手感与收藏页完全一致）。
+            // 各区块行用 carouselRow()/cardCell() 清掉 List 默认行样式，还原仪表盘排版。
+            List {
                 if !upcomingTrips.isEmpty {
                     // 只有一个行程时卡片占满内容区（无 peek/指示器）；两个及以上留出后卡的 peek。
                     let single = upcomingTrips.count == 1
@@ -77,6 +97,8 @@ struct TodayView: View {
                                     }) {
                         TripCard(item: $0).cardStyle()
                     }
+                    .padding(.top, sectionGap(.trips))
+                    .carouselRow()
                 }
 
                 if !awaitingPackages.isEmpty {
@@ -97,6 +119,8 @@ struct TodayView: View {
                             PackageCardCompact(item: $0).cardStyle()
                         }
                     }
+                    .padding(.top, sectionGap(.packages))
+                    .carouselRow()
                 }
 
                 if !openTodos.isEmpty {
@@ -109,7 +133,7 @@ struct TodayView: View {
                         let homeTodos = todosExpanded ? openTodos : Array(openTodos.prefix(5))
                         VStack(spacing: 0) {
                             ForEach(homeTodos) { todo in
-                                TodoRow(item: todo, showsContextMenu: false)
+                                TodoRow(item: todo, showsContextMenu: false, showsSwipeActions: false)
                                     .padding(.vertical, 11)
                             }
                             if openTodos.count > 5 {
@@ -136,35 +160,52 @@ struct TodayView: View {
                         .shadow(color: .black.opacity(0.05), radius: 5, y: 2)
                     }
                     .padding(.horizontal, margin)
+                    .padding(.top, sectionGap(.todos))
+                    .carouselRow()
                 }
 
                 if !todayBookmarks.isEmpty {
-                    VStack(alignment: .leading, spacing: 10) {
-                        SectionHeader(icon: "bookmark.fill", tint: Theme.bookmark, title: "今日收藏",
-                                      count: "\(todayBookmarks.count) 条",
-                                      onDetail: { selectedTab = .bookmark })
-                        VStack(spacing: 10) {
-                            // 点击行为与收藏页一致：链接直接跳转（打不开兜底进详情），图文进全屏详情
-                            ForEach(todayBookmarks.prefix(5)) { bm in
-                                TodayBookmarkRow(item: bm)
-                                    .cardStyle(pad: 11)
-                                    .matchedTransitionSource(id: bm.id, in: bookmarkZoomNS) {
-                                        $0.clipShape(.rect(cornerRadius: 12))
+                    SectionHeader(icon: "bookmark.fill", tint: Theme.bookmark, title: "今日收藏",
+                                  count: "\(todayBookmarks.count) 条",
+                                  onDetail: { selectedTab = .bookmark })
+                        .padding(.horizontal, margin)
+                        .padding(.top, sectionGap(.bookmarks))
+                        .padding(.bottom, 5)   // 行自带 5pt 上边距，合计与其他区块的 10pt 头距一致
+                        .carouselRow()
+                    // 点击行为与收藏页一致：链接直接跳转（打不开兜底进详情），图文进全屏详情；
+                    // 每条是独立 List 行，左滑原生 swipeActions：加代办 / 标签 / 删除
+                    ForEach(todayBookmarks.prefix(5)) { bm in
+                        // 修饰符顺序对齐收藏页：swipeActions 在 cardCell/matchedTransitionSource 之前，
+                        // 否则滑出按钮被转场源包装带偏、渲染不成系统圆形样式
+                        TodayBookmarkRow(item: bm)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                if let url = bm.urlString.flatMap(URL.init(string:)) {
+                                    openURL(url) { accepted in
+                                        if !accepted { bookmarkDetail = bm }
                                     }
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        if let url = bm.urlString.flatMap(URL.init(string:)) {
-                                            openURL(url) { accepted in
-                                                if !accepted { bookmarkDetail = bm }
-                                            }
-                                        } else {
-                                            bookmarkDetail = bm
-                                        }
-                                    }
+                                } else {
+                                    bookmarkDetail = bm
+                                }
                             }
-                        }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                // destructive 的原生红会被邻位按钮 tint 串染（iOS 26 bug），显式指红
+                                Button(role: .destructive) {
+                                    withAnimation(.snappy) { Trash.softDelete(bm, context: context) }
+                                } label: { Label("删除", systemImage: "trash") }
+                                    .tint(.red)
+                                Button { editingTagsItem = bm } label: { Label("标签", systemImage: "tag") }
+                                    .tint(.blue)
+                                Button { todoPrefill = makeTodoPrefill(from: bm) } label: {
+                                    Label("加代办", systemImage: "checklist")
+                                }
+                                .tint(.green)
+                            }
+                            .cardCell(pad: 11)
+                            .matchedTransitionSource(id: bm.id, in: bookmarkZoomNS) {
+                                $0.clipShape(.rect(cornerRadius: 12))
+                            }
                     }
-                    .padding(.horizontal, margin)
                 }
 
                 if !reviewItems.isEmpty {
@@ -192,11 +233,16 @@ struct TodayView: View {
                         .buttonStyle(.plain)
                     }
                     .padding(.horizontal, margin)
+                    .padding(.top, sectionGap(.review))
+                    .carouselRow()
                 }
             }
-            .padding(.top, 8)
-            .padding(.bottom, 20)
-            }
+            .listStyle(.plain)
+            // 不要设 listRowSpacing(0)：iOS 26 起 List 行距为 0 时滑动按钮退化成旧式方块，
+            // 保留默认行距才有系统圆形（液态玻璃）滑动按钮，与收藏页一致
+            .scrollContentBackground(.hidden)
+            .contentMargins(.top, 8, for: .scrollContent)
+            .contentMargins(.bottom, 20, for: .scrollContent)
             // 航班动态：下拉强刷无视缓存；页面出现/航班集合变化时只补过期的（10 分钟 TTL）。
             // 防取消原因见 Views/Components/RefreshableDetached.swift。
             .refreshableDetached {
@@ -217,6 +263,23 @@ struct TodayView: View {
             }
             .navigationTransition(.zoom(sourceID: item.id, in: bookmarkZoomNS))
         }
+        .sheet(item: $editingTagsItem) { item in
+            BookmarkTagSheet(item: item)
+                .presentationDetents([.medium])
+        }
+        .overlay {
+            if let prefill = todoPrefill {
+                TodoQuickAdd(isPresented: Binding(get: { todoPrefill != nil },
+                                                  set: { if !$0 { todoPrefill = nil } }),
+                             initialTitle: prefill.title, initialNote: prefill.note)
+            }
+        }
+    }
+
+    /// 「加代办」预填（逻辑在 InboxItem.bookmarkTodoPrefill，与收藏页共用）
+    private func makeTodoPrefill(from item: InboxItem) -> TodoPrefill {
+        let p = item.bookmarkTodoPrefill
+        return TodoPrefill(title: p.title, note: p.note)
     }
 
     private var emptyState: some View {
@@ -228,18 +291,14 @@ struct TodayView: View {
     }
 }
 
-/// 首页「今日收藏」精简卡：缩略图/类型图标 + 标题 + 域名或标签。
-/// 点击交互由 TodayView 挂载（链接直跳 / 图文进全屏详情，与收藏页一致）；编辑/删标签仍留在收藏页。
+/// 首页「今日收藏」精简卡：缩略图/类型图标 + 标题 + 域名和标签。
+/// 点击/左滑交互由 TodayView 挂载（链接直跳 / 图文进全屏详情 / 加代办·标签·删除，与收藏页一致）。
 private struct TodayBookmarkRow: View {
     let item: InboxItem
 
     private var url: URL? { item.urlString.flatMap(URL.init(string:)) }
 
-    private var title: String {
-        if let t = item.bookmarkTitle, !t.isEmpty { return t }
-        if let url { return url.host() ?? "链接" }
-        return item.rawText.components(separatedBy: .newlines).first ?? item.rawText
-    }
+    private var title: String { item.bookmarkDisplayTitle }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -257,18 +316,20 @@ private struct TodayBookmarkRow: View {
                     .font(.subheadline)
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
-                if let url {
-                    Text(url.host() ?? url.absoluteString)
-                        .font(.caption2)
-                        .foregroundStyle(Theme.sub)
-                        .lineLimit(1)
-                } else if item.tags.isEmpty {
-                    Text("未打标")
-                        .font(.caption2)
-                        .foregroundStyle(Theme.sub.opacity(0.7))
-                } else {
-                    HStack(spacing: 6) {
-                        ForEach(item.tags.prefix(3), id: \.self) { TagPill(text: $0) }
+                // 第二行：链接型 = 域名 + 标签；图文型 = 标签（无标签时占位）
+                HStack(spacing: 6) {
+                    if let url {
+                        Text(url.host() ?? url.absoluteString)
+                            .font(.caption2)
+                            .foregroundStyle(Theme.sub)
+                            .lineLimit(1)
+                    }
+                    if !item.tags.isEmpty {
+                        ForEach(item.tags.prefix(url != nil ? 2 : 3), id: \.self) { TagPill(text: $0) }
+                    } else if url == nil {
+                        Text("未打标")
+                            .font(.caption2)
+                            .foregroundStyle(Theme.sub.opacity(0.7))
                     }
                 }
             }
