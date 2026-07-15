@@ -41,7 +41,7 @@ struct ExpenseHomeView: View {
         .overlay(alignment: .bottomTrailing) {
             // 分析视图无需记账入口时也保留 FAB，任何视图都能随手记一笔。
             // 56pt 是记账页的既有尺寸（比待办/收藏的 64pt 小一号），保留
-            FloatingAddButton(size: 56) { showAdd = true }
+            FloatingAddButton { showAdd = true }
         }
         .sheet(isPresented: $showAdd) {
             ExpenseEditView(editing: nil, defaultDate: month)

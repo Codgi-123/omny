@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import OmnyCore
 
 // MARK: - InboxItem 统一查询层
 // 各视图散落的「按 kind 过滤 + 排除回收站（deletedAt == nil）」手写过滤收敛到这里。
@@ -44,5 +45,15 @@ extension Sequence where Element == InboxItem {
     /// 回收站条目（TrashView 用）：与 active 相反的那一半。
     func trashed() -> [InboxItem] {
         filter { $0.deletedAt != nil }
+    }
+
+    /// 待取快递：活跃 + 非低置信 + 状态为「待取」。通知每日汇总与列表角标可共用。
+    func awaitingPickupPackages() -> [InboxItem] {
+        active(.package).filter { !$0.needsReview && $0.packageStatus == .awaitingPickup }
+    }
+
+    /// 未来行程：活跃 + 非低置信 + 出发时间在指定时刻之后（默认现在）。通知排期用。
+    func upcomingTrips(after date: Date = .now) -> [InboxItem] {
+        active(.trip).filter { !$0.needsReview && ($0.departAt ?? .distantPast) > date }
     }
 }

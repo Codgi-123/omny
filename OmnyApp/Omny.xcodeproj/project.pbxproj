@@ -56,9 +56,12 @@
 		E925FEDEC748B022B3EA739C /* AdvancedSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C3F4FFDA5AD28F6C01B7860 /* AdvancedSettingsView.swift */; };
 		EBD461EB2EBDC910F893DF4D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D45BF39A16836BC3A781E046 /* Assets.xcassets */; };
 		EDED4FFB878F89C752291554 /* CheckToggleButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDEFAF4C63D435261B696B7E /* CheckToggleButton.swift */; };
+		F10C76C1E980A388BB580BA1 /* NotificationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = F42132006EAC97DF94C6DFE8 /* NotificationScheduler.swift */; };
 		F50FF79CBB6B4E4D1A517C78 /* ShortcutsGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DBB7E7B98F2F9698053FD65 /* ShortcutsGuideView.swift */; };
+		F774359198A2EC3129089F6F /* TodoReminderRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 966A2E293E4CF794E8492DF2 /* TodoReminderRule.swift */; };
 		F83466FB631A6F5D5AE2EA5C /* ExpenseAnalysisView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20FFFD49BAE913AAFD9B419 /* ExpenseAnalysisView.swift */; };
 		FC67BC38603BFF996C6616EE /* OmnyCore in Frameworks */ = {isa = PBXBuildFile; productRef = B38BBAD844DE7BB40C46030C /* OmnyCore */; };
+		FDED1172832E99478DB04B17 /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CF988992FF7745B8B495D45 /* NotificationSettingsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -112,6 +115,8 @@
 		7CC21DA2A336C3F18CBD4472 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		7E7262A76C5A0CB5400D6D7A /* DeveloperToolsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeveloperToolsView.swift; sourceTree = "<group>"; };
 		85454E4F6E16C8854FE43A6B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		8CF988992FF7745B8B495D45 /* NotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettingsView.swift; sourceTree = "<group>"; };
+		966A2E293E4CF794E8492DF2 /* TodoReminderRule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoReminderRule.swift; sourceTree = "<group>"; };
 		99C0C8F96080EABD245FC39C /* ExpenseEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseEditView.swift; sourceTree = "<group>"; };
 		9A7EE04CE4A538273114ED55 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		A35C215086E8D5D653CCECB8 /* DidaSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DidaSettingsView.swift; sourceTree = "<group>"; };
@@ -137,6 +142,7 @@
 		EDA3EC43CC114A3BA3AAE2CD /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		EDEFAF4C63D435261B696B7E /* CheckToggleButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckToggleButton.swift; sourceTree = "<group>"; };
 		F035203A42962D76D81AFAA0 /* ExpenseSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseSupport.swift; sourceTree = "<group>"; };
+		F42132006EAC97DF94C6DFE8 /* NotificationScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationScheduler.swift; sourceTree = "<group>"; };
 		F5BE3B107B134EB9418AC588 /* OCRService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRService.swift; sourceTree = "<group>"; };
 		F6286E75E2350A9610F07F50 /* SharedInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedInbox.swift; sourceTree = "<group>"; };
 		F7B355A202BA7EB4EFADE8BB /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
@@ -202,6 +208,7 @@
 				7E7262A76C5A0CB5400D6D7A /* DeveloperToolsView.swift */,
 				A35C215086E8D5D653CCECB8 /* DidaSettingsView.swift */,
 				D50535A8576BD671F3594D75 /* LLMSettingsView.swift */,
+				8CF988992FF7745B8B495D45 /* NotificationSettingsView.swift */,
 				3DBB7E7B98F2F9698053FD65 /* ShortcutsGuideView.swift */,
 			);
 			path = Settings;
@@ -232,6 +239,7 @@
 			children = (
 				37F66C226030118977E6ED59 /* InboxItem.swift */,
 				0C91267225B5856A0E81D324 /* InboxItem+Queries.swift */,
+				966A2E293E4CF794E8492DF2 /* TodoReminderRule.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -295,6 +303,7 @@
 				E11C02EDDB66A6F143E77CEA /* ExpenseCategoryAppearance.swift */,
 				AE39A13A4D5B399B4876D73A /* FlightDynamicsStore.swift */,
 				A42FEA9C1D69A760D542AE4D /* Ingestor.swift */,
+				F42132006EAC97DF94C6DFE8 /* NotificationScheduler.swift */,
 				F5BE3B107B134EB9418AC588 /* OCRService.swift */,
 				EDA3EC43CC114A3BA3AAE2CD /* Secrets.swift */,
 			);
@@ -449,6 +458,8 @@
 				D1436F1C8D387FB2E7E76106 /* Ingestor.swift in Sources */,
 				2DE3C84A720B42FC215E9B03 /* LLMSettingsView.swift in Sources */,
 				E32CD62F4A5289EDEFF2D6D0 /* ListViews.swift in Sources */,
+				F10C76C1E980A388BB580BA1 /* NotificationScheduler.swift in Sources */,
+				FDED1172832E99478DB04B17 /* NotificationSettingsView.swift in Sources */,
 				428BDC49572EB4F2911B4FD9 /* OCRService.swift in Sources */,
 				2B6169C091832764B753F49C /* OmnyApp.swift in Sources */,
 				7C981362B9DE75AB71EAAAD7 /* OmnyDateFormat.swift in Sources */,
@@ -464,6 +475,7 @@
 				66E9C1F2CA0130CC4BEE89EF /* TagPicker.swift in Sources */,
 				E5FE10AEF8923B1C7F6A70EE /* Theme.swift in Sources */,
 				402F23D9EC330177DF3D2AFB /* TodayView.swift in Sources */,
+				F774359198A2EC3129089F6F /* TodoReminderRule.swift in Sources */,
 				009C7D0738F72E54E05427EF /* ZoomableImageView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

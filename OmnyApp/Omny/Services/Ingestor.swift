@@ -84,6 +84,14 @@ enum Ingestor {
         // 快捷指令入口（App Intent）传 awaitEnrichment=true——Intent perform 返回后进程会被系统
         // 挂起，游离 Task 来不及跑完，必须在返回前同步 await，否则记账分类/收藏标签永远补不上。
         await enrich(items, context: context, awaitEnrichment: awaitEnrichment)
+
+        // 入库后重排通知（新行程/快递/待办可能产生新提醒）。
+        // App Intent 入口（awaitEnrichment=true）必须同步 await：perform 返回后进程被挂起，防抖 Task 跑不完。
+        if awaitEnrichment {
+            await NotificationScheduler.rescheduleAll(context: context)
+        } else {
+            NotificationScheduler.requestReschedule(context: context)
+        }
         return items
     }
 
