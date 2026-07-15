@@ -89,6 +89,9 @@ final class DidaService: ObservableObject {
         } catch {
             lastError = "同步失败：\(error.localizedDescription)"
         }
+        // 远端拉回的变更（完成/删除/改期）可能影响待办通知，同步尝试后统一重排；
+        // 收在这里让所有 syncNow 调用点（勾选回写、确认入库、设置页手动同步等）都被覆盖
+        NotificationScheduler.requestReschedule(context: context)
     }
 }
 

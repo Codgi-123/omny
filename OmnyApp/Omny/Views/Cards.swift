@@ -230,6 +230,8 @@ struct PickupCheckButton: View {
                 item.packageStatus = done ? .awaitingPickup : .pickedUp
             }
             try? context.save()
+            // 取件状态变化影响「每日待取数」汇总，重排通知
+            NotificationScheduler.requestReschedule(context: context)
         }
         .sensoryFeedback(trigger: item.packageStatus) { _, new in
             new == .pickedUp ? .success : nil
@@ -370,11 +372,15 @@ struct TripCard: View {
                 }
             }
         }
+        // 卡面顶部内边距叠在头部槽上方而分割线贴槽底，内容在槽内居中仍会视觉偏下；
+        // 上移半个内边距（纯视觉位移，不动布局），让内容在「卡顶边缘 ↔ 分割线」区间居中（三种卡同款）
+        .offset(y: -Theme.Space.cardPad / 2)
         .frame(maxHeight: .infinity)
         .overlay(alignment: .bottom) { Divider() }
     }
 
-    /// 机票头部：全彩图标 + 航司航班号；路线正中让位给时长/状态，日期星期在右上
+    /// 机票头部：全彩图标 + 航司航班号；路线正中让位给时长/状态，日期星期在右上，
+    /// 下缘发丝线与火车卡同款
     private var flightHeader: some View {
         HStack(spacing: 10) {
             TripIconChip(kindRaw: item.tripKindRaw, size: 44)
@@ -390,9 +396,14 @@ struct TripCard: View {
                 }
             }
         }
+        // 同 trainHeader：上移半个卡面内边距，视觉居中于卡顶与分割线之间
+        .offset(y: -Theme.Space.cardPad / 2)
+        .frame(maxHeight: .infinity)
+        .overlay(alignment: .bottom) { Divider() }
     }
 
-    /// 酒店头部：木床图标 + 酒店名，房型（seat 字段，可含早餐说明）作副标题
+    /// 酒店头部：木床图标 + 酒店名，房型（seat 字段，可含早餐说明）作副标题，
+    /// 下缘发丝线与火车卡同款
     private var hotelHeader: some View {
         HStack(spacing: 10) {
             TripIconChip(kindRaw: item.tripKindRaw, size: 44)
@@ -410,6 +421,10 @@ struct TripCard: View {
             Spacer()
             statusTag
         }
+        // 同 trainHeader：上移半个卡面内边距，视觉居中于卡顶与分割线之间
+        .offset(y: -Theme.Space.cardPad / 2)
+        .frame(maxHeight: .infinity)
+        .overlay(alignment: .bottom) { Divider() }
     }
 
     /// 车/机：出发前倒计时，出发后已结束；酒店：入住前倒计时 → 入住中 → 离店后已结束
@@ -520,19 +535,20 @@ struct TripCard: View {
         }
     }
 
-    /// 酒店底部：上缘发丝线 + 地址 + 导航（拉起系统地图搜「名称 地址」）
-    private var hotelFooter: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "mappin.and.ellipse")
-                .font(.footnote)
-                .foregroundStyle(Theme.sub)
-            Text(item.tripAddress ?? "暂无地址")
-                .font(.footnote)
-                .foregroundStyle(item.tripAddress == nil ? Theme.sub : Theme.text)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-            Spacer()
-            if item.tripAddress != nil {
+    /// 酒店底部：上缘发丝线 + 地址 + 导航（拉起系统地图搜「名称 地址」）。
+    /// 无地址时整段留白不展示（外层 footer 槽位定高，三卡总高不变）
+    @ViewBuilder private var hotelFooter: some View {
+        if let address = item.tripAddress {
+            HStack(spacing: 6) {
+                Image(systemName: "mappin.and.ellipse")
+                    .font(.footnote)
+                    .foregroundStyle(Theme.sub)
+                Text(address)
+                    .font(.footnote)
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Spacer()
                 Button(action: openHotelInMaps) {
                     HStack(spacing: 2) {
                         Text("导航")
@@ -545,9 +561,11 @@ struct TripCard: View {
                 }
                 .buttonStyle(PressableStyle())
             }
+            .frame(maxHeight: .infinity)
+            .overlay(alignment: .top) { Divider() }
+        } else {
+            Color.clear
         }
-        .frame(maxHeight: .infinity)
-        .overlay(alignment: .top) { Divider() }
     }
 
     private func openHotelInMaps() {
@@ -747,11 +765,16 @@ struct TripCard: View {
         return Theme.trip
     }
 
+    /// 倒计时刻度（火车/机票/酒店同一套规则）：1 小时内按分钟、24 小时内按小时、
+    /// 更远按自然日（明天 = 1 天后，避免出现「41 小时后」这类跨天仍按小时的观感割裂）
     private func countdown(to date: Date) -> String {
         let seconds = date.timeIntervalSinceNow
         if seconds < 3600 { return "\(max(1, Int(seconds / 60))) 分钟" }
-        if seconds < 48 * 3600 { return "\(Int(seconds / 3600)) 小时" }
-        return "\(Int(seconds / 86400)) 天"
+        if seconds < 24 * 3600 { return "\(Int(seconds / 3600)) 小时" }
+        let cal = Calendar.current
+        let days = cal.dateComponents([.day], from: cal.startOfDay(for: .now),
+                                      to: cal.startOfDay(for: date)).day ?? 1
+        return "\(max(1, days)) 天"
     }
 }
 
@@ -811,6 +834,7 @@ private extension VerticalAlignment {
 struct TodoRow: View {
     @Bindable var item: InboxItem
     var showsContextMenu = true          // 首页传 false 关闭长按菜单
+    var showsSwipeActions = true         // 首页传 false：多条合并在一个 List 行里，左滑会整卡一起滑
     @Environment(\.modelContext) private var context
     @EnvironmentObject private var dida: DidaService
     @State private var editing = false
@@ -871,7 +895,7 @@ struct TodoRow: View {
         .contentShape(Rectangle())
         .onTapGesture { if isLocal { editing = true } }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            if isLocal {
+            if showsSwipeActions, isLocal {
                 // 删除：红色底（role .destructive）；「编辑」改为「放弃」（灰系，与删除的红区分）
                 Button(role: .destructive) { delete() } label: { Label("删除", systemImage: "trash") }
                 if item.todoAbandoned {
@@ -907,12 +931,17 @@ struct TodoRow: View {
         if item.todoAbandoned {
             withAnimation(.snappy) { item.todoAbandoned = false }
             try? context.save()
+            // 撤销放弃 = 待办复活，需重新排期
+            NotificationScheduler.requestReschedule(context: context)
             return
         }
         withAnimation(.snappy) { item.todoCompleted.toggle() }
         // 滴答待办：完成/取消完成要标脏并回写滴答；本地待办纯本地，只存不同步
         if item.isDidaSynced { item.needsPush = true }
         try? context.save()
+        // 完成→立即取消通知；取消完成→防抖重排里重新补上
+        if item.todoCompleted { NotificationScheduler.cancelTodoNotification(for: item) }
+        NotificationScheduler.requestReschedule(context: context)
         if item.isDidaSynced { Task { await dida.syncNow(context: context) } }
     }
 
@@ -920,12 +949,17 @@ struct TodoRow: View {
     private func abandon() {
         withAnimation(.snappy) { item.todoAbandoned = true }
         try? context.save()
+        // 放弃即不再提醒：先单条取消立即生效，再防抖重排兜底收敛
+        NotificationScheduler.cancelTodoNotification(for: item)
+        NotificationScheduler.requestReschedule(context: context)
     }
 
     /// 撤销放弃，回到未完成。
     private func restore() {
         withAnimation(.snappy) { item.todoAbandoned = false }
         try? context.save()
+        // 复活的待办重新排期
+        NotificationScheduler.requestReschedule(context: context)
     }
 
     private var checkSymbol: String {
@@ -986,6 +1020,8 @@ struct TodoEditSheet: View {
     @State private var due: Date?
     @State private var priority: Int
     @State private var completed: Bool
+    /// 条目级提醒规则：nil 跟随全局默认（issue #16）
+    @State private var reminderMinutes: Int?
     @State private var showDate = false
     @State private var showPriority = false
     @State private var confirmDelete = false
@@ -1001,6 +1037,7 @@ struct TodoEditSheet: View {
         _due = State(initialValue: item.todoDue)
         _priority = State(initialValue: item.todoPriority)
         _completed = State(initialValue: item.todoCompleted)
+        _reminderMinutes = State(initialValue: item.todoReminderMinutes)
     }
 
     var body: some View {
@@ -1029,7 +1066,7 @@ struct TodoEditSheet: View {
         .padding(20)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-        .sheet(isPresented: $showDate) { DueDateSheet(due: $due) }
+        .sheet(isPresented: $showDate) { DueDateSheet(due: $due, reminderMinutes: $reminderMinutes) }
         .sheet(isPresented: $showPriority) { PrioritySheet(priority: $priority) }
         .alert("删除这条待办？", isPresented: $confirmDelete) {
             Button("删除", role: .destructive) { onDelete(); dismiss() }
@@ -1126,6 +1163,10 @@ struct TodoEditSheet: View {
         item.todoDue = due
         item.todoPriority = priority
         item.todoCompleted = completed
+        item.todoReminderMinutes = reminderMinutes
         try? context.save()
+        // 编辑可能改了截止/提醒/完成态，重排通知；已完成则立即取消
+        if completed { NotificationScheduler.cancelTodoNotification(for: item) }
+        NotificationScheduler.requestReschedule(context: context)
     }
 }

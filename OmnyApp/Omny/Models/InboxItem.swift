@@ -72,6 +72,9 @@ final class InboxItem {
     /// 本地「放弃」状态：纯本地展示标记（给默认值保证轻量迁移）。
     /// 放弃的待办不当成完成推送滴答、也不被远端拉取复活——仅前台过滤展示为「已放弃」分组。
     var todoAbandoned: Bool = false
+    /// 条目级提醒规则（TodoReminderRule.rawValue）：nil = 跟随设置页全局默认；
+    /// -1 不提醒 / 0 准时 / 其余为提前分钟数。可选属性，SwiftData 轻量迁移自动通过。
+    var todoReminderMinutes: Int?
 
     // 收藏
     var urlString: String?
@@ -148,5 +151,25 @@ extension Sequence where Element == InboxItem {
         var arr = Array(self)
         arr.move(fromOffsets: source, toOffset: destination)
         for (i, item) in arr.enumerated() { item.sortOrder = i }
+    }
+}
+
+// MARK: - 收藏展示辅助（首页与收藏页共用）
+
+extension InboxItem {
+    /// 收藏条目的展示标题：抓到的标题 → 域名 → 正文首行
+    var bookmarkDisplayTitle: String {
+        if let t = bookmarkTitle, !t.isEmpty { return t }
+        if let url = urlString.flatMap(URL.init(string:)) { return url.host() ?? "链接" }
+        return rawText.components(separatedBy: .newlines).first ?? rawText
+    }
+
+    /// 收藏「加代办」的预填内容：标题 = 查看收藏：{标题缩写}，描述 = 完整标题 + 链接
+    var bookmarkTodoPrefill: (title: String, note: String) {
+        let full = bookmarkDisplayTitle
+        let abbrev = full.count > 12 ? String(full.prefix(12)) + "…" : full
+        var note = full
+        if let s = urlString { note += "\n" + s }
+        return ("查看收藏：\(abbrev)", note)
     }
 }

@@ -115,6 +115,38 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(autoAddToCalendar, forKey: "trip.autoCalendar") }
     }
 
+    // MARK: 通知（issue #16：行程/快递/待办三类本地通知；时刻用当日分钟数存，避免 Date 带日期歧义）
+
+    /// 行程提醒开关。默认开。
+    @Published var tripNotifyEnabled: Bool {
+        didSet { defaults.set(tripNotifyEnabled, forKey: "notify.trip.enabled") }
+    }
+    /// 行程前一天提醒时刻（当日分钟数，默认 1320 = 22:00）。
+    @Published var tripEveMinutes: Int {
+        didSet { defaults.set(tripEveMinutes, forKey: "notify.trip.eveMinutes") }
+    }
+    /// 行程出发前提前量（小时，默认 3）。
+    @Published var tripLeadHours: Int {
+        didSet { defaults.set(tripLeadHours, forKey: "notify.trip.leadHours") }
+    }
+    /// 快递每日待取汇总开关。默认开。
+    @Published var packageNotifyEnabled: Bool {
+        didSet { defaults.set(packageNotifyEnabled, forKey: "notify.package.enabled") }
+    }
+    /// 快递每日汇总时刻（当日分钟数，默认 1200 = 20:00）。
+    @Published var packageDailyMinutes: Int {
+        didSet { defaults.set(packageDailyMinutes, forKey: "notify.package.dailyMinutes") }
+    }
+    /// 待办到期提醒开关。默认开。
+    @Published var todoNotifyEnabled: Bool {
+        didSet { defaults.set(todoNotifyEnabled, forKey: "notify.todo.enabled") }
+    }
+    /// 待办默认提醒规则（TodoReminderRule.rawValue，默认 15 = 提前 15 分钟；-1 不提醒）。
+    /// 单条待办可用 InboxItem.todoReminderMinutes 覆盖。
+    @Published var todoDefaultReminderMinutes: Int {
+        didSet { defaults.set(todoDefaultReminderMinutes, forKey: "notify.todo.defaultReminderMinutes") }
+    }
+
     // MARK: 高级设置（低频参数；默认值 = 原硬编码值，语义不变。入口：设置 → 高级设置）
 
     /// 解析低置信度阈值：解析置信度低于该值的条目标记 needsReview 进「需处理」。默认 0.8。
@@ -169,6 +201,13 @@ final class AppSettings: ObservableObject {
         didaProjectName = defaults.string(forKey: "dida.projectName")
         didaLastSync = defaults.object(forKey: "dida.lastSync") as? Date
         autoAddToCalendar = defaults.object(forKey: "trip.autoCalendar") as? Bool ?? true
+        tripNotifyEnabled = defaults.object(forKey: "notify.trip.enabled") as? Bool ?? true
+        tripEveMinutes = defaults.object(forKey: "notify.trip.eveMinutes") as? Int ?? 1320
+        tripLeadHours = defaults.object(forKey: "notify.trip.leadHours") as? Int ?? 3
+        packageNotifyEnabled = defaults.object(forKey: "notify.package.enabled") as? Bool ?? true
+        packageDailyMinutes = defaults.object(forKey: "notify.package.dailyMinutes") as? Int ?? 1200
+        todoNotifyEnabled = defaults.object(forKey: "notify.todo.enabled") as? Bool ?? true
+        todoDefaultReminderMinutes = defaults.object(forKey: "notify.todo.defaultReminderMinutes") as? Int ?? TodoReminderRule.before15m.rawValue
         lowConfidenceThreshold = defaults.object(forKey: "parsing.lowConfidenceThreshold") as? Double ?? 0.8
         screenshotTodoDirectIngest = defaults.object(forKey: "parsing.screenshotTodoDirectIngest") as? Bool ?? false
         expenseDedupWindowMinutes = defaults.object(forKey: "expense.dedupWindowMinutes") as? Int ?? 10
@@ -193,6 +232,13 @@ final class AppSettings: ObservableObject {
         didaProjectName = nil
         didaLastSync = nil
         autoAddToCalendar = true
+        tripNotifyEnabled = true
+        tripEveMinutes = 1320
+        tripLeadHours = 3
+        packageNotifyEnabled = true
+        packageDailyMinutes = 1200
+        todoNotifyEnabled = true
+        todoDefaultReminderMinutes = TodoReminderRule.before15m.rawValue
         lowConfidenceThreshold = 0.8
         screenshotTodoDirectIngest = false
         expenseDedupWindowMinutes = 10

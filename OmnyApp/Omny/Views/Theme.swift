@@ -167,6 +167,23 @@ struct IconChip: View {
     }
 }
 
+/// 收藏类型图标：SVG 线稿（BookmarkLink 锁链 / BookmarkNote 图文页面），
+/// 中性灰底替代原粉色 IconChip——收藏卡不需要强分类色，线稿更安静。
+struct BookmarkKindIcon: View {
+    let isLink: Bool
+    var size: CGFloat = 38
+
+    var body: some View {
+        Image(isLink ? "BookmarkLink" : "BookmarkNote")
+            .resizable()
+            .scaledToFit()
+            .frame(width: size * 0.58, height: size * 0.58)
+            .foregroundStyle(Theme.sub)
+            .frame(width: size, height: size)
+            .background(Theme.sub.opacity(0.1), in: .rect(cornerRadius: size * 0.28))
+    }
+}
+
 /// 快递承运商图标：立体牛皮纸箱 + 哑光品牌色宽胶带（带撕口）+ 品牌色面单。
 /// 说明：各快递真实 logo 是注册商标，故用「统一风格 + 品牌色 + 首字面单」来指代而非复刻。
 /// 识别不出的承运商退回通用蓝色胶带、不贴面单。全部用 Canvas 在 100×100 逻辑坐标里绘制后缩放。
