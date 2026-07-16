@@ -2,10 +2,12 @@ import SwiftUI
 import SwiftData
 import OmnyCore
 
-/// 收支分析：环状图（按大类占比）+ 引线式图例 + 大类→细分→单据逐级下钻。
+/// 收支分析：收支统计宫格 + 环状图（按大类占比）+ 引线式图例 + 大类→细分→单据逐级下钻。
 /// 支出/收入可切换。
 struct ExpenseAnalysisView: View {
     let summary: ExpenseSummary
+    /// 当前所选月份（算日均支出用）
+    var month: Date = .now
 
     @State private var direction: ExpenseDirection = .expense
     @State private var expandedMajor: String?
@@ -17,15 +19,35 @@ struct ExpenseAnalysisView: View {
     private var total: Decimal {
         direction == .expense ? summary.totalExpense : summary.totalIncome
     }
-    /// 大类 → 颜色映射（本图内不重复，按金额倒序的分段顺序分配）。
-    /// 环状图分段、图例、下钻列表色点共用，保证三处颜色一致。
+    /// 大类 → 颜色映射：优先用分类签名色（与列表行图标一色，扇区↔行一眼对上），
+    /// 撞色时（自定义分类 hash 兜底可能重复）顺延取色板中未用过的一色，保证本图内不重复。
+    /// 环状图分段、排行行图标、下钻列表共用。
     private var majorColorMap: [String: Color] {
         let palette = Theme.ExpenseColor.palette
         var map: [String: Color] = [:]
-        for (index, m) in majors.enumerated() {
-            map[m.major] = palette[index % palette.count]
+        var used = Set<Color>()
+        for m in majors {
+            var color = ExpenseCategoryAppearance.shared.appearance(major: m.major).color
+            if used.contains(color) {
+                color = palette.first { !used.contains($0) } ?? color
+            }
+            used.insert(color)
+            map[m.major] = color
         }
         return map
+    }
+
+    /// 日均支出：当月已过天数（本月）或整月天数（历史月）摊平总支出
+    private var dailyAverage: Decimal {
+        let cal = Calendar.current
+        let days: Int
+        if cal.isDate(month, equalTo: .now, toGranularity: .month) {
+            days = cal.component(.day, from: .now)
+        } else {
+            days = cal.range(of: .day, in: .month, for: month)?.count ?? 30
+        }
+        guard days > 0 else { return summary.totalExpense }
+        return summary.totalExpense / Decimal(days)
     }
 
     /// 环状图分段数据（大类名 + 金额 + 色）。颜色取自 majorColorMap（同图不重复）。
@@ -40,6 +62,15 @@ struct ExpenseAnalysisView: View {
 
     var body: some View {
         List {
+            // 收支统计宫格：月度关键指标一屏总览
+            Section {
+                statsGrid
+                    .listRowInsets(EdgeInsets(top: 4, leading: Theme.Space.page,
+                                              bottom: 0, trailing: Theme.Space.page))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
+
             Section {
                 VStack(spacing: 16) {
                     directionToggle
@@ -52,11 +83,10 @@ struct ExpenseAnalysisView: View {
                                    centerTitle: direction == .expense ? "总支出" : "总收入",
                                    centerValue: ExpenseFormat.compact(total))
                             .frame(height: 230)
-                            .frame(height: 230)
                     }
                 }
                 .cardStyle()
-                .listRowInsets(EdgeInsets(top: 4, leading: Theme.Space.page,
+                .listRowInsets(EdgeInsets(top: 12, leading: Theme.Space.page,
                                           bottom: 12, trailing: Theme.Space.page))
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
@@ -77,6 +107,33 @@ struct ExpenseAnalysisView: View {
         .background(Theme.screen)
     }
 
+    // MARK: 收支统计宫格
+
+    private var statsGrid: some View {
+        let cols = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
+        return LazyVGrid(columns: cols, spacing: 10) {
+            statTile("支出", ExpenseFormat.amount(summary.totalExpense, signed: false), Theme.red)
+            statTile("收入", ExpenseFormat.amount(summary.totalIncome, signed: false), Theme.green)
+            statTile("结余", ExpenseFormat.balance(summary.balance), Theme.text)
+            statTile("日均支出", ExpenseFormat.amount(dailyAverage, signed: false), Theme.text)
+        }
+    }
+
+    private func statTile(_ label: String, _ value: String, _ color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label).font(.caption).foregroundStyle(Theme.sub)
+            Text(value)
+                .font(.system(.body, design: .rounded).weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(Theme.card, in: .rect(cornerRadius: 12))
+    }
+
     private var directionToggle: some View {
         Picker("", selection: $direction) {
             Text("支出").tag(ExpenseDirection.expense)
@@ -88,20 +145,34 @@ struct ExpenseAnalysisView: View {
 
     // MARK: 大类行
 
+    /// 大类排行行：分类图标 + 名称/占比进度条 + 金额。图标底色与扇区同色，行↔图一眼对应。
     private func majorRow(_ m: (major: String, amount: Decimal, count: Int)) -> some View {
         let pct = total > 0 ? NSDecimalNumber(decimal: m.amount / total).doubleValue : 0
         let color = majorColorMap[m.major] ?? Theme.ExpenseColor.other
+        let icon = ExpenseCategoryAppearance.shared.currentIcon(major: m.major)
         return Button {
             withAnimation(.snappy) {
                 expandedMajor = (expandedMajor == m.major) ? nil : m.major
             }
         } label: {
             HStack(spacing: 12) {
-                Circle().fill(color).frame(width: 10, height: 10)
-                Text(m.major).font(.body).foregroundStyle(Theme.text)
-                Text("\(Int((pct * 100).rounded()))%")
-                    .font(.caption).foregroundStyle(Theme.sub).monospacedDigit()
-                Spacer()
+                ExpenseCategoryChip(appearance: CategoryAppearance(icon: icon, color: color),
+                                    size: 34)
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 6) {
+                        Text(m.major).font(.subheadline).foregroundStyle(Theme.text)
+                        Text(percentText(pct))
+                            .font(.caption).foregroundStyle(Theme.sub).monospacedDigit()
+                    }
+                    // 占比进度条：淡底 + 分类色填充
+                    GeometryReader { geo in
+                        Capsule().fill(Theme.fill)
+                        Capsule().fill(color.gradient)
+                            .frame(width: max(4, geo.size.width * pct))
+                    }
+                    .frame(height: 5)
+                }
+                Spacer(minLength: 8)
                 Text(ExpenseFormat.amount(m.amount, signed: false))
                     .font(.system(.body, design: .rounded).weight(.semibold))
                     .monospacedDigit().foregroundStyle(Theme.text)
@@ -113,6 +184,11 @@ struct ExpenseAnalysisView: View {
         }
         .buttonStyle(.plain)
         .cardCell()
+    }
+
+    /// 「76.9%」——一位小数，个位数占比更有区分度；100% 特判不带小数
+    private func percentText(_ pct: Double) -> String {
+        pct >= 0.9995 ? "100%" : String(format: "%.1f%%", pct * 100)
     }
 
     // MARK: 细分 + 单据

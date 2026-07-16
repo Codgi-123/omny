@@ -78,7 +78,7 @@ struct ExpenseHomeView: View {
         case .calendar:
             ExpenseCalendarView(month: $month, items: monthItems)
         case .analysis:
-            ExpenseAnalysisView(summary: summary)
+            ExpenseAnalysisView(summary: summary, month: month)
         }
     }
 }
@@ -115,35 +115,46 @@ struct ExpenseDetailList: View {
         .background(Theme.screen)
         .overlay {
             if summary.items.isEmpty {
-                ContentUnavailableView("本月暂无记账", systemImage: "yensign.circle",
-                                       description: Text("点右下按钮记一笔，或让银行短信/截图自动记账"))
+                ContentUnavailableView {
+                    Label {
+                        Text("本月暂无记账")
+                    } icon: {
+                        // 自绘钱袋线稿替代 SF yensign.circle，与分类图标同一套风格
+                        CategoryIconGlyph(icon: .asset("ExpIconMoneyBag"), pointSize: 46)
+                            .foregroundStyle(Theme.sub)
+                    }
+                } description: {
+                    Text("点右下按钮记一笔，或让银行短信/截图自动记账")
+                }
             }
         }
     }
 
+    /// 汇总卡：总支出为主角（记账 App 最高频关注项），收入/结余降为次级指标。
     private var summaryCard: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("本月结余").font(.subheadline).foregroundStyle(Theme.sub)
-            Text(ExpenseFormat.amount(summary.balance, signed: false))
+            Text("本月支出").font(.subheadline).foregroundStyle(Theme.sub)
+            Text(ExpenseFormat.amount(summary.totalExpense, signed: false))
                 .font(.system(size: 36, weight: .bold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(Theme.text)
                 .padding(.top, 4)
             Divider().padding(.vertical, 14)
             HStack {
-                metric("支出", summary.totalExpense, color: Theme.text)
+                metric("本月收入", ExpenseFormat.amount(summary.totalIncome, signed: false),
+                       color: Theme.green)
                 Spacer()
-                metric("收入", summary.totalIncome, color: Theme.green)
+                metric("月结余", ExpenseFormat.balance(summary.balance), color: Theme.text)
                 Spacer()
             }
         }
         .cardStyle()
     }
 
-    private func metric(_ label: String, _ value: Decimal, color: Color) -> some View {
+    private func metric(_ label: String, _ value: String, color: Color) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(label).font(.caption).foregroundStyle(Theme.sub)
-            Text(ExpenseFormat.amount(value, signed: false))
+            Text(value)
                 .font(.system(.body, design: .rounded).weight(.semibold))
                 .monospacedDigit()
                 .foregroundStyle(color)

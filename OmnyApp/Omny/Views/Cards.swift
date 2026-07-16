@@ -838,8 +838,17 @@ struct TodoRow: View {
     @Environment(\.modelContext) private var context
     @EnvironmentObject private var dida: DidaService
     @State private var editing = false
+    /// 重复待办「完成本次」的触感触发器：母条目不真正置完成（避免闪进已完成分组再弹回），
+    /// 用独立计数器触发一次与普通完成相同的 .success 触感
+    @State private var repeatFeedback = 0
 
     private var isLocal: Bool { item.canEditLocally }
+
+    /// 解析后的重复规则：仅本地待办生效（滴答待办不参与重复），parse 失败视为无规则
+    private var repeatRule: TodoRepeatRule? {
+        guard isLocal else { return nil }
+        return item.todoRepeatRule.flatMap(TodoRepeatRule.parse)
+    }
 
     /// 未勾选圆圈的颜色：有优先级时用优先级色着色（对齐滴答），否则中性灰
     private var uncheckedTint: Color {
@@ -848,13 +857,17 @@ struct TodoRow: View {
 
     var body: some View {
         HStack(alignment: .checkTitle, spacing: 8) {
-            // 视觉 36×26（滴答式小方框），命中区由 CheckToggleButton 保底外扩到 44pt
+            // 视觉 36×26（滴答式小方框）。命中区不外扩：右侧紧贴「点按进编辑」的标题区，
+            // 只点方框本身才切换完成/取消完成，避免点标题边缘误触勾选
             CheckToggleButton(symbol: checkSymbol, tint: checkTint, symbolSize: 18,
                               visualSize: CGSize(width: 36, height: 26),
+                              expandsHitArea: false,
                               accessibilityLabel: checkLabel, action: toggleCheck)
                 .sensoryFeedback(trigger: item.todoCompleted) { _, done in
                     done ? .success : nil
                 }
+                // 重复待办完成本次：母条目保持未完成，触感走独立触发器
+                .sensoryFeedback(.success, trigger: repeatFeedback)
                 // 方框中心作为对齐基准
                 .alignmentGuide(.checkTitle) { $0[VerticalAlignment.center] }
 
@@ -881,6 +894,11 @@ struct TodoRow: View {
                     HStack(spacing: 4) {
                         Image(systemName: "clock")
                             .font(.caption2)
+                        // 重复待办在日期文案前加小重复图标，颜色跟随日期着色（过期红/今天蓝/其余灰）
+                        if item.todoRepeatRule != nil {
+                            Image(systemName: "repeat")
+                                .font(.caption2)
+                        }
                         Text(dueLabel(due))
                             .font(.caption)
                             .fontWeight(.medium)
@@ -902,7 +920,8 @@ struct TodoRow: View {
                     Button { restore() } label: { Label("恢复", systemImage: "arrow.uturn.backward") }
                         .tint(Theme.accent)
                 } else {
-                    Button { abandon() } label: { Label("放弃", systemImage: "xmark.bin") }
+                    // 重复待办的「放弃」= 跳过本次（滚到下一期），文案与图标随之切换
+                    Button { abandon() } label: { Label(abandonTitle, systemImage: abandonSymbol) }
                         .tint(Color(.systemGray))
                 }
             }
@@ -913,7 +932,7 @@ struct TodoRow: View {
                 if item.todoAbandoned {
                     Button { restore() } label: { Label("恢复", systemImage: "arrow.uturn.backward") }
                 } else {
-                    Button { abandon() } label: { Label("放弃", systemImage: "xmark.bin") }
+                    Button { abandon() } label: { Label(abandonTitle, systemImage: abandonSymbol) }
                 }
                 Button(role: .destructive) { delete() } label: { Label("删除", systemImage: "trash") }
             }
@@ -926,13 +945,19 @@ struct TodoRow: View {
         withAnimation(.snappy) { Trash.softDelete(item, context: context) }
     }
 
-    /// 勾选：放弃态点按撤销放弃；否则切换完成（滴答待办需标脏回写）。
+    /// 勾选：放弃态点按撤销放弃；重复待办「未完成→完成」走快照+滚动；否则切换完成（滴答待办需标脏回写）。
     private func toggleCheck() {
         if item.todoAbandoned {
             withAnimation(.snappy) { item.todoAbandoned = false }
             try? context.save()
             // 撤销放弃 = 待办复活，需重新排期
             NotificationScheduler.requestReschedule(context: context)
+            return
+        }
+        // 重复待办完成本次：落已完成快照 + 母条目滚到下一期。
+        // 防御：todoDue 为 nil 或规则 parse 失败（repeatRule 为 nil）时退回普通完成
+        if !item.todoCompleted, let rule = repeatRule, let due = item.todoDue {
+            completeRepeating(rule: rule, due: due)
             return
         }
         withAnimation(.snappy) { item.todoCompleted.toggle() }
@@ -945,8 +970,33 @@ struct TodoRow: View {
         if item.isDidaSynced { Task { await dida.syncNow(context: context) } }
     }
 
+    /// 重复待办完成本次：母条目不置完成，落一条已完成快照进「已完成」分组，母条目滚动到下一期。
+    /// 快照是普通已完成待办（无重复规则、无条目级提醒），不会被排通知；
+    /// 母条目滚到新日期后由防抖重排按新截止重新排期。
+    private func completeRepeating(rule: TodoRepeatRule, due: Date) {
+        repeatFeedback += 1   // 触感：与普通完成相同的一次 .success
+        let snapshot = item.makeRepeatSnapshot(due: due)
+        withAnimation(.snappy) {
+            context.insert(snapshot)
+            // 从本次截止反复推进到严格晚于现在（跳过错过的期次），保留时分
+            item.todoDue = rule.nextOccurrence(from: due, now: Date(), calendar: .current)
+        }
+        try? context.save()
+        NotificationScheduler.requestReschedule(context: context)
+    }
+
     /// 放弃：纯本地展示状态。不改完成态、不标脏 → 不会被当成完成推送滴答；远端拉取也不复活（仅前台过滤展示）。
+    /// 重复待办的「放弃」语义改为「跳过本次」：不设放弃标记、不落快照，直接滚到下一期。
     private func abandon() {
+        if let rule = repeatRule, let due = item.todoDue {
+            withAnimation(.snappy) {
+                item.todoDue = rule.nextOccurrence(from: due, now: Date(), calendar: .current)
+            }
+            try? context.save()
+            // 滚动后按新截止重排（旧通知由全量重排统一清理）
+            NotificationScheduler.requestReschedule(context: context)
+            return
+        }
         withAnimation(.snappy) { item.todoAbandoned = true }
         try? context.save()
         // 放弃即不再提醒：先单条取消立即生效，再防抖重排兜底收敛
@@ -961,6 +1011,12 @@ struct TodoRow: View {
         // 复活的待办重新排期
         NotificationScheduler.requestReschedule(context: context)
     }
+
+    /// 「放弃」按钮实际会走「跳过本次」分支：有可解析的重复规则且有截止时间（与 abandon() 的判断一致）
+    private var abandonSkips: Bool { repeatRule != nil && item.todoDue != nil }
+    /// 「放弃」按钮文案/图标：重复待办显示「跳过」（跳过本次，滚到下一期）
+    private var abandonTitle: String { abandonSkips ? "跳过" : "放弃" }
+    private var abandonSymbol: String { abandonSkips ? "arrow.forward.to.line" : "xmark.bin" }
 
     private var checkSymbol: String {
         if item.todoAbandoned { return "xmark.square.fill" }   // 放弃：叉叉方框
@@ -1022,6 +1078,8 @@ struct TodoEditSheet: View {
     @State private var completed: Bool
     /// 条目级提醒规则：nil 跟随全局默认（issue #16）
     @State private var reminderMinutes: Int?
+    /// 重复规则工作副本（TodoRepeatRule 编码串）：nil 不重复。仅本地待办，滴答待办不写入
+    @State private var repeatRule: String?
     @State private var showDate = false
     @State private var showPriority = false
     @State private var confirmDelete = false
@@ -1038,6 +1096,7 @@ struct TodoEditSheet: View {
         _priority = State(initialValue: item.todoPriority)
         _completed = State(initialValue: item.todoCompleted)
         _reminderMinutes = State(initialValue: item.todoReminderMinutes)
+        _repeatRule = State(initialValue: item.todoRepeatRule)
     }
 
     var body: some View {
@@ -1066,7 +1125,7 @@ struct TodoEditSheet: View {
         .padding(20)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-        .sheet(isPresented: $showDate) { DueDateSheet(due: $due, reminderMinutes: $reminderMinutes) }
+        .sheet(isPresented: $showDate) { DueDateSheet(due: $due, reminderMinutes: $reminderMinutes, repeatRule: $repeatRule) }
         .sheet(isPresented: $showPriority) { PrioritySheet(priority: $priority) }
         .alert("删除这条待办？", isPresented: $confirmDelete) {
             Button("删除", role: .destructive) { onDelete(); dismiss() }
@@ -1160,13 +1219,28 @@ struct TodoEditSheet: View {
         item.todoTitle = trimmed.isEmpty ? item.rawText : trimmed
         let n = note.trimmingCharacters(in: .whitespacesAndNewlines)
         item.todoNote = n.isEmpty ? nil : n
-        item.todoDue = due
         item.todoPriority = priority
-        item.todoCompleted = completed
         item.todoReminderMinutes = reminderMinutes
+        // 重复规则仅本地待办可写（防御：编辑 sheet 本就只对本地待办开放，滴答条目保持 nil）
+        item.todoRepeatRule = item.isDidaSynced ? nil : repeatRule
+
+        // 重复待办在编辑页把「未完成→完成」：与 TodoRow 勾选一致走「快照 + 滚动」，
+        // 母条目保持未完成、截止滚到下一期，避免两个入口行为不一致。
+        // 防御：截止为空或规则 parse 失败时退回普通完成
+        if completed, !item.todoCompleted, !item.isDidaSynced,
+           let rule = item.todoRepeatRule.flatMap(TodoRepeatRule.parse),
+           let d = due {
+            context.insert(item.makeRepeatSnapshot(due: d))
+            item.todoDue = rule.nextOccurrence(from: d, now: Date(), calendar: .current)
+            item.todoCompleted = false
+        } else {
+            item.todoDue = due
+            item.todoCompleted = completed
+        }
         try? context.save()
         // 编辑可能改了截止/提醒/完成态，重排通知；已完成则立即取消
-        if completed { NotificationScheduler.cancelTodoNotification(for: item) }
+        // （重复滚动分支母条目仍未完成，按新截止在重排里重新排期）
+        if item.todoCompleted { NotificationScheduler.cancelTodoNotification(for: item) }
         NotificationScheduler.requestReschedule(context: context)
     }
 }

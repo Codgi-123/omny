@@ -51,7 +51,7 @@ struct ExpenseCategoryManageView: View {
         let ap = ExpenseCategoryAppearance.shared.appearance(major: major)
         let count = settings.expenseCategoryPool[major]?.count ?? 0
         return HStack(spacing: 12) {
-            IconChip(symbol: ap.symbol, color: ap.color)
+            ExpenseCategoryChip(appearance: ap)
             Text(major).font(.body)
             Spacer()
             Text("\(count) 细分").font(.caption).foregroundStyle(Theme.sub)
@@ -101,9 +101,8 @@ private struct SubcategoryListView: View {
                 ForEach(subs, id: \.self) { sub in
                     HStack(spacing: 12) {
                         // 细分图标（颜色沿用大类色）
-                        let symbol = ExpenseCategoryAppearance.shared.currentSymbol(major: major, sub: sub)
-                        let color = ExpenseCategoryAppearance.shared.appearance(major: major).color
-                        IconChip(symbol: symbol, color: color, size: 32)
+                        let ap = ExpenseCategoryAppearance.shared.appearance(major: major, sub: sub)
+                        ExpenseCategoryChip(appearance: ap, size: 32)
                         Text(sub).font(.body)
                     }
                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -154,7 +153,7 @@ private struct SubcategoryListView: View {
 
 // MARK: - 图标 + 颜色选择 sheet
 
-/// 给某分类名选图标（精选 SF Symbol 网格）+ 颜色（签名色板，仅大类可选）。
+/// 给某分类名选图标（自绘 SVG 线稿库网格）+ 颜色（签名色板，仅大类可选）。
 /// 保存写入 ExpenseCategoryAppearance 用户覆盖。
 private struct CategoryAppearanceSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -162,11 +161,14 @@ private struct CategoryAppearanceSheet: View {
     let isMajor: Bool
     var majorColorKey: String? = nil
 
-    @State private var selectedSymbol = ""
+    @State private var selectedAsset = ""
     @State private var selectedColorKey = "food"
 
     private var previewColor: Color {
         Theme.ExpenseColor.color(forKey: selectedColorKey) ?? Theme.ExpenseColor.other
+    }
+    private var previewIcon: CategoryIcon {
+        selectedAsset.isEmpty ? ExpenseCategoryAppearance.fallbackIcon : .asset(selectedAsset)
     }
 
     var body: some View {
@@ -174,15 +176,17 @@ private struct CategoryAppearanceSheet: View {
             ScrollView {
                 VStack(spacing: 20) {
                     // 预览
-                    IconChip(symbol: selectedSymbol.isEmpty ? "tag.fill" : selectedSymbol,
-                             color: previewColor, size: 64)
+                    ExpenseCategoryChip(
+                        appearance: CategoryAppearance(icon: previewIcon, color: previewColor),
+                        size: 64)
                         .padding(.top, 8)
                     Text(name).font(.headline)
 
-                    // 颜色（仅大类可选；细分沿用大类色）
+                    // 颜色（仅大类可选；细分沿用大类色）。
+                    // 图标本体不着色（中性线稿），这里选的色用在分析页图表：扇区/占比进度条。
                     if isMajor {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("颜色").font(.caption).foregroundStyle(Theme.sub)
+                            Text("颜色（用于分析图表）").font(.caption).foregroundStyle(Theme.sub)
                             HStack(spacing: 12) {
                                 ForEach(Theme.ExpenseColor.keys, id: \.self) { key in
                                     let c = Theme.ExpenseColor.color(forKey: key) ?? Theme.ExpenseColor.other
@@ -199,19 +203,19 @@ private struct CategoryAppearanceSheet: View {
                         .padding(.horizontal)
                     }
 
-                    // 图标网格
+                    // 图标网格（自绘 SVG 线稿库）
                     VStack(alignment: .leading, spacing: 8) {
                         Text("图标").font(.caption).foregroundStyle(Theme.sub)
                         let cols = Array(repeating: GridItem(.flexible(), spacing: 10), count: 6)
                         LazyVGrid(columns: cols, spacing: 12) {
-                            ForEach(ExpenseCategoryAppearance.pickerSymbols, id: \.self) { sym in
-                                Image(systemName: sym)
-                                    .font(.system(size: 20))
-                                    .foregroundStyle(sym == selectedSymbol ? .white : Theme.text)
+                            ForEach(ExpenseCategoryAppearance.pickerIcons, id: \.self) { asset in
+                                let selected = asset == selectedAsset
+                                CategoryIconGlyph(icon: .asset(asset), pointSize: 24)
+                                    .foregroundStyle(selected ? .white : Theme.text)
                                     .frame(width: 44, height: 44)
-                                    .background(sym == selectedSymbol ? previewColor : Theme.card,
+                                    .background(selected ? Theme.accent : Theme.card,
                                                 in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                                    .onTapGesture { selectedSymbol = sym }
+                                    .onTapGesture { selectedAsset = asset }
                             }
                         }
                     }
@@ -225,7 +229,7 @@ private struct CategoryAppearanceSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") { save() }.disabled(selectedSymbol.isEmpty)
+                    Button("保存") { save() }.disabled(selectedAsset.isEmpty)
                 }
             }
             .onAppear(perform: loadCurrent)
@@ -233,9 +237,12 @@ private struct CategoryAppearanceSheet: View {
     }
 
     private func loadCurrent() {
-        // 回显当前生效的图标；大类同时回显颜色（从当前 appearance 反推 key）
-        selectedSymbol = ExpenseCategoryAppearance.shared
-            .currentSymbol(major: isMajor ? name : nil, sub: isMajor ? nil : name)
+        // 回显当前生效的图标（旧 SF Symbol 覆盖无法回显到 SVG 库，留空让用户重选）；
+        // 大类同时回显颜色（从当前 appearance 反推 key）
+        if case .asset(let asset) = ExpenseCategoryAppearance.shared
+            .currentIcon(major: isMajor ? name : nil, sub: isMajor ? nil : name) {
+            selectedAsset = asset
+        }
         if isMajor {
             let cur = ExpenseCategoryAppearance.shared.appearance(major: name).color
             selectedColorKey = Theme.ExpenseColor.keys.first {
@@ -245,9 +252,9 @@ private struct CategoryAppearanceSheet: View {
     }
 
     private func save() {
-        // 细分不改颜色：存 symbol，colorKey 传空（渲染时颜色取自大类）
+        // 细分不改颜色：colorKey 传空（渲染时颜色取自大类）
         ExpenseCategoryAppearance.shared.setOverride(
-            name: name, symbol: selectedSymbol,
+            name: name, icon: .asset(selectedAsset),
             colorKey: isMajor ? selectedColorKey : "")
         dismiss()
     }

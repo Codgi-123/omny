@@ -546,3 +546,24 @@ struct SectionHeader: View {
         .textCase(nil)
     }
 }
+
+// MARK: - 液态玻璃卡片底
+
+extension View {
+    /// 卡片玻璃底：iOS 26 用系统液态玻璃（Liquid Glass），更早系统退回超薄材质。
+    /// 适合悬浮件；平铺在弹窗分组底上会显得过亮，弹窗内卡片请用 softCard。
+    @ViewBuilder
+    func glassCard(cornerRadius: CGFloat = 12) -> some View {
+        if #available(iOS 26.0, *) {
+            self.glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+        } else {
+            self.background(.ultraThinMaterial, in: .rect(cornerRadius: cornerRadius))
+        }
+    }
+
+    /// 弹窗内的低对比卡片底：与分组底色同系、只深一点点的填充（quaternarySystemFill，
+    /// 系统最浅一档填充色，自适应深浅模式）。分层靠一档极小的明度差，避免卡片发灰或发白。
+    func softCard(cornerRadius: CGFloat = 12) -> some View {
+        background(Color(.quaternarySystemFill), in: .rect(cornerRadius: cornerRadius))
+    }
+}

@@ -121,7 +121,7 @@ private struct ExpenseDebugRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            IconChip(symbol: appearance.symbol, color: appearance.color)
+            ExpenseCategoryChip(appearance: appearance)
             detail
         }
     }
