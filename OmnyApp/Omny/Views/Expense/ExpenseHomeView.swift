@@ -2,14 +2,11 @@ import SwiftUI
 import SwiftData
 import OmnyCore
 
-/// 记账 tab 根视图（issue #10 从设置页入口升格）：明细 / 日历 / 分析 三视图分段切换，
-/// 共享月份。右下悬浮添加。
-/// 骨架沿用 OmnyApp 现有页面模式（ScreenHeader + List + Theme.screen + toolbar 隐藏）。
+/// 记账 tab 根视图（issue #28 调整）：只承载「明细」内容，日历/统计降为控制条上的入口。
+/// 头部两行：ScreenHeader + NavActions，控制条切月 + 收支日历/数据统计入口。
+/// 右下悬浮添加。骨架沿用 OmnyApp 现有页面模式（ScreenHeader + List + Theme.screen + toolbar 隐藏）。
 struct ExpenseHomeView: View {
-    enum Mode: String, CaseIterable { case detail = "明细", calendar = "日历", analysis = "分析" }
-
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var allItems: [InboxItem]
-    @State private var mode: Mode = .detail
     @State private var month: Date = Calendar.current.startOfDay(for: .now)
     @State private var showAdd = false
     @State private var showMonthPicker = false
@@ -20,26 +17,38 @@ struct ExpenseHomeView: View {
     }
     private var summary: ExpenseSummary { ExpenseSummary(items: monthItems) }
 
+    /// 当前选中月是否不是本月（用于「本月」快速回跳按钮的显隐）
+    private var notCurrentMonth: Bool {
+        !Calendar.current.isDate(month, equalTo: .now, toGranularity: .month)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            // 标题行右侧与其他 tab 根一致挂 NavActions（需处理/设置入口）；
-            // 三段分段控件下移独占一排——与需处理角标同行时小屏会挤不下
-            ScreenHeader("记账") { NavActions() }
-
-            Picker("视图", selection: $mode) {
-                ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            // 第一行：大标题 + 尾部「本月」快速回跳（仅非本月时出现）+ NavActions
+            ScreenHeader("记账") {
+                HStack(spacing: 12) {
+                    if notCurrentMonth {
+                        Button {
+                            month = Calendar.current.startOfDay(for: .now)
+                        } label: {
+                            Text("本月")
+                                .font(.footnote).fontWeight(.semibold)
+                                .foregroundStyle(Theme.accent)
+                                .padding(.horizontal, 12).padding(.vertical, 6)
+                                .background(Theme.accent.opacity(0.14), in: Capsule())
+                        }
+                    }
+                    NavActions()
+                }
             }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, Theme.Space.page)
 
-            monthSwitcher
+            controlBar
 
-            content
+            ExpenseDetailList(summary: summary)
         }
         .background(Theme.screen)
         .toolbar(.hidden, for: .navigationBar)
         .overlay(alignment: .bottomTrailing) {
-            // 分析视图无需记账入口时也保留 FAB，任何视图都能随手记一笔。
             // 56pt 是记账页的既有尺寸（比待办/收藏的 64pt 小一号），保留
             FloatingAddButton { showAdd = true }
         }
@@ -51,35 +60,54 @@ struct ExpenseHomeView: View {
         }
     }
 
-    private var monthSwitcher: some View {
-        HStack(spacing: 24) {
-            Button { month = MonthTool.adding(-1, to: month) } label: {
-                Image(systemName: "chevron.left")
+    /// 第二行控制条：左边圆钮切月 + 月份标题；右边并排「收支日历」「数据统计」入口
+    private var controlBar: some View {
+        HStack(spacing: 12) {
+            HStack(spacing: 12) {
+                circleButton("chevron.left") { month = MonthTool.adding(-1, to: month) }
+                Button { showMonthPicker = true } label: {
+                    Text(OmnyDateFormat.monthTitle(month))
+                        .font(.subheadline).fontWeight(.semibold)
+                        .foregroundStyle(Theme.text)
+                }
+                circleButton("chevron.right") { month = MonthTool.adding(1, to: month) }
             }
-            // 点月份标题唤起年+月滚轮选择弹窗
-            Button { showMonthPicker = true } label: {
-                Text(OmnyDateFormat.monthTitle(month))
-                    .font(.subheadline).fontWeight(.semibold)
-                    .frame(minWidth: 100)
-            }
-            Button { month = MonthTool.adding(1, to: month) } label: {
-                Image(systemName: "chevron.right")
+
+            Spacer()
+
+            HStack(spacing: 8) {
+                NavigationLink { ExpenseCalendarPage() } label: {
+                    entryPill("收支日历")
+                }
+                NavigationLink { ExpenseStatsView() } label: {
+                    entryPill("数据统计")
+                }
             }
         }
-        .foregroundStyle(Theme.accent)
+        .padding(.horizontal, Theme.Space.page)
         .padding(.vertical, 8)
     }
 
-    @ViewBuilder
-    private var content: some View {
-        switch mode {
-        case .detail:
-            ExpenseDetailList(summary: summary)
-        case .calendar:
-            ExpenseCalendarView(month: $month, items: monthItems)
-        case .analysis:
-            ExpenseAnalysisView(summary: summary, month: month)
+    /// 30x30 圆形切月钮：Theme.fill 底、Theme.accent 前景
+    private func circleButton(_ systemName: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.accent)
+                .frame(width: 30, height: 30)
+                .background(Theme.fill, in: Circle())
         }
+    }
+
+    /// 入口胶囊：文字 + chevron.right，Theme.fill 底、Theme.accent 前景
+    private func entryPill(_ title: String) -> some View {
+        HStack(spacing: 2) {
+            Text(title).font(.footnote).fontWeight(.medium)
+            Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
+        }
+        .foregroundStyle(Theme.accent)
+        .padding(.horizontal, 12).padding(.vertical, 7)
+        .background(Theme.fill, in: Capsule())
     }
 }
 
@@ -88,6 +116,7 @@ struct ExpenseHomeView: View {
 /// 明细：顶部结余/支出/收入大卡片 + 按天分组的记账列表。
 struct ExpenseDetailList: View {
     let summary: ExpenseSummary
+    @Environment(\.modelContext) private var context
 
     var body: some View {
         List {
@@ -104,6 +133,15 @@ struct ExpenseDetailList: View {
                             ExpenseRow(item: item)
                         }
                         .cardCell()
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                withAnimation(.snappy) {
+                                    Trash.softDelete(item, context: context)
+                                }
+                            } label: {
+                                Label("删除", systemImage: "trash")
+                            }
+                        }
                     }
                 } header: {
                     dayHeader(group)

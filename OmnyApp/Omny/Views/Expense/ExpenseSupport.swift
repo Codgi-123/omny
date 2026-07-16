@@ -108,6 +108,31 @@ struct ExpenseSummary {
             .sorted { $0.amount > $1.amount }
     }
 
+    /// 跨全部大类按「细分」聚合（数据统计环形图切「子类维度」用），按金额倒序
+    func bySubAll(direction: ExpenseDirection) -> [(sub: String, major: String, amount: Decimal, count: Int)] {
+        let filtered = items.filter { $0.expenseDirection == direction }
+        let groups = Dictionary(grouping: filtered) { $0.categorySub ?? ($0.categoryMajor ?? "未分类") }
+        return groups.map { key, value in
+            (sub: key,
+             major: value.first?.categoryMajor ?? key,
+             amount: value.reduce(0) { $0 + ($1.amount ?? 0) },
+             count: value.count)
+        }
+        .sorted { $0.amount > $1.amount }
+    }
+
+    /// 某方向的全部条目（按时间倒序），供「支出/收入」点击后的清单页
+    func items(direction: ExpenseDirection) -> [InboxItem] {
+        items.filter { $0.expenseDirection == direction }
+            .sorted { effectiveDate($0) > effectiveDate($1) }
+    }
+
+    /// 日均支出：总支出 / 天数（天数由统计窗口给出）
+    func dailyAverageExpense(dayCount: Int) -> Decimal {
+        guard dayCount > 0 else { return 0 }
+        return totalExpense / Decimal(dayCount)
+    }
+
     /// 某大类下按细分聚合
     func bySub(major: String, direction: ExpenseDirection) -> [(sub: String, amount: Decimal, items: [InboxItem])] {
         let filtered = items.filter {

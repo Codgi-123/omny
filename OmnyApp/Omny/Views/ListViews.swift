@@ -1743,19 +1743,44 @@ struct DueDateSheet: View {
     }
 }
 
+/// 月历单格的额外信息行（替代农历副标题）：文字 + 颜色。收支日历用它显示当天收入/支出。
+struct CalendarDayLine: Identifiable {
+    let id = UUID()
+    let text: String
+    let color: Color
+}
+
 /// 自绘月历：周一起排，公历数字 + 农历/节气/节日副标题，支持上下月切换、今天/选中态。
+///
+/// 公共日历组件（issue #28）：待办截止日期、记账收支日历、账单详情改时间三处共用。
+/// 可选增强（默认关，不影响原有待办调用）：
+/// - `allowMonthPicker`：点标题「2026年7月」在其下方展开年月滚轮选择器。
+/// - `onMonthChange`：切月（箭头/滑动/选择器）时回调当前显示月份，供外层加载该月数据。
+/// - `dayLines`：某天返回非 nil 时，用返回的自定义行（如收入/支出）替代农历副标题。
 struct MonthCalendarView: View {
     @Binding var selection: Date?
+    var allowMonthPicker = false
+    var onMonthChange: ((Date) -> Void)? = nil
+    var dayLines: ((Date) -> [CalendarDayLine]?)? = nil
+
     @State private var month: Date
     /// 切月方向：true=向后（下个月，新页从右侧滑入），false=向前
     @State private var slideForward = true
+    /// 年月选择器是否在标题下方展开
+    @State private var showMonthPicker = false
 
     private let cal: Calendar
     private let lunar = ChineseCalendar()
     private let weekdays = ["一", "二", "三", "四", "五", "六", "日"]
 
-    init(selection: Binding<Date?>) {
+    init(selection: Binding<Date?>,
+         allowMonthPicker: Bool = false,
+         onMonthChange: ((Date) -> Void)? = nil,
+         dayLines: ((Date) -> [CalendarDayLine]?)? = nil) {
         _selection = selection
+        self.allowMonthPicker = allowMonthPicker
+        self.onMonthChange = onMonthChange
+        self.dayLines = dayLines
         var c = Calendar(identifier: .gregorian)
         c.locale = Locale(identifier: "zh_CN")
         c.firstWeekday = 2   // 周一起排
@@ -1766,6 +1791,11 @@ struct MonthCalendarView: View {
     var body: some View {
         VStack(spacing: 10) {
             header
+            // 点标题展开的年月滚轮选择器（allowMonthPicker 开启时）
+            if showMonthPicker {
+                inlineMonthPicker
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
             HStack(spacing: 0) {
                 ForEach(weekdays, id: \.self) { d in
                     Text(d).font(.footnote).foregroundStyle(Theme.sub).frame(maxWidth: .infinity)
@@ -1800,7 +1830,22 @@ struct MonthCalendarView: View {
                 Image(systemName: "chevron.left").font(.body.weight(.semibold))
             }
             Spacer()
-            Text(monthTitle).font(.headline)
+            if allowMonthPicker {
+                Button {
+                    withAnimation(.snappy(duration: 0.25)) { showMonthPicker.toggle() }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(monthTitle).font(.headline)
+                        Image(systemName: "chevron.down")
+                            .font(.caption2.weight(.bold))
+                            .rotationEffect(.degrees(showMonthPicker ? 180 : 0))
+                    }
+                    .foregroundStyle(Theme.text)
+                }
+                .buttonStyle(PressableStyle())
+            } else {
+                Text(monthTitle).font(.headline)
+            }
             Spacer()
             Button { shift(1) } label: {
                 Image(systemName: "chevron.right").font(.body.weight(.semibold))
@@ -1808,6 +1853,41 @@ struct MonthCalendarView: View {
         }
         .foregroundStyle(Theme.text)
         .padding(.horizontal, 6)
+    }
+
+    /// 标题下方内联的年+月双列滚轮，选完即改显示月份并回调。
+    private var inlineMonthPicker: some View {
+        HStack(spacing: 0) {
+            Picker("年", selection: yearBinding) {
+                ForEach(pickerYears, id: \.self) { Text("\($0)年").tag($0) }
+            }
+            .pickerStyle(.wheel)
+            Picker("月", selection: monthBinding) {
+                ForEach(1...12, id: \.self) { Text("\($0)月").tag($0) }
+            }
+            .pickerStyle(.wheel)
+        }
+        .frame(height: 130)
+    }
+
+    private var pickerYears: [Int] {
+        let y = cal.component(.year, from: Date())
+        return Array((y - 10)...(y + 1))
+    }
+    private var yearBinding: Binding<Int> {
+        Binding(get: { cal.component(.year, from: month) },
+                set: { setYearMonth(year: $0, month: cal.component(.month, from: month)) })
+    }
+    private var monthBinding: Binding<Int> {
+        Binding(get: { cal.component(.month, from: month) },
+                set: { setYearMonth(year: cal.component(.year, from: month), month: $0) })
+    }
+    private func setYearMonth(year: Int, month m: Int) {
+        var c = DateComponents(); c.year = year; c.month = m; c.day = 1
+        if let d = cal.date(from: c) {
+            withAnimation(.snappy(duration: 0.28)) { month = d }
+            onMonthChange?(d)
+        }
     }
 
     /// 当月按周一起排的格子；前导空位为 nil。
@@ -1828,24 +1908,36 @@ struct MonthCalendarView: View {
         if let m = cal.date(byAdding: .month, value: delta, to: month) {
             slideForward = delta > 0
             withAnimation(.snappy(duration: 0.28)) { month = m }
+            onMonthChange?(m)
         }
     }
 
     private func cell(_ day: Date) -> some View {
-        let ann = lunar.annotation(for: day)
         let selected = selection.map { cal.isDate(day, inSameDayAs: $0) } ?? false
         let isToday = cal.isDateInToday(day)
         let dayNum = cal.component(.day, from: day)
+        // 当天有自定义行（收支）则替代农历副标题，否则原样展示农历/节气/节日
+        let custom = dayLines?(day) ?? nil
         return Button { select(day) } label: {
             VStack(spacing: 1) {
                 Text("\(dayNum)")
                     .font(.system(size: 17, weight: .medium))
                     .foregroundStyle(selected ? .white : (isToday ? Theme.accent : Theme.text))
-                Text(ann.text)
-                    .font(.system(size: 9.5))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                    .foregroundStyle(selected ? .white.opacity(0.9) : subtitleColor(ann.kind))
+                if let custom, !custom.isEmpty {
+                    ForEach(custom) { line in
+                        Text(line.text)
+                            .font(.system(size: 9)).monospacedDigit()
+                            .lineLimit(1).minimumScaleFactor(0.7)
+                            .foregroundStyle(selected ? .white.opacity(0.95) : line.color)
+                    }
+                } else {
+                    let ann = lunar.annotation(for: day)
+                    Text(ann.text)
+                        .font(.system(size: 9.5))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .foregroundStyle(selected ? .white.opacity(0.9) : subtitleColor(ann.kind))
+                }
             }
             .frame(maxWidth: .infinity)
             .frame(height: 48)

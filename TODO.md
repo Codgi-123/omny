@@ -4,6 +4,12 @@
 
 ## 进行中 / 待验证
 
+### 记账功能优化（issue #28）— 已实现，待明日细调 + 真机验证
+基于 issue #24 新记账底层重做四部分（编译通过、已 USB 装机）。**组件复用**为主线：把 issue #24 记一笔的新键盘/新分类宫格抽成 `ExpenseKeypad`/`AmountEditorSheet`、`ExpenseCategoryPickerGrid`/`CategoryPickerSheet`；待办月历 `MonthCalendarView` 增强为公共日历（点标题选年月 + `dayLines` 每日收支行，向后兼容）；`ExpenseEditView` 改用抽取组件（行为不变，已验证）；新增 `ExpenseStats` 统计引擎 / `ExpenseItemListView`。
+- 页面：`ExpenseHomeView` 去三段 tab（大标题 + `<月份>` + 收支日历/数据统计入口 + 条目左滑删除 + 本月）；新增 `ExpenseCalendarPage`（收支日历）、`ExpenseStatsView`（周/月/年/全部/自定义 + 收支统计宫格 + 环形图大类/子类切换 + Swift Charts 折线）；重写 `ExpenseDetailView`（分类icon+金额 / 类型·时间·金额可编辑 / 只读+删除）。
+- [ ] **明日细调**：真机反馈的若干小问题（待列具体项）。
+- [ ] 待真机验证：控制条小屏是否挤；日历格三行密度；账单详情多 `.sheet` 切换；数据统计各周期/环形图点击/折线密度。
+
 ### 重复待办 — 待真机验证（2026-07-16 已实现，设计定论见下方备忘）
 - [ ] 真机过一遍：添加界面「重复」行与预设/自定义两层弹窗；勾选完成后快照进「已完成」、母条目滚到下一期；左滑「跳过」；通知按新截止重排；滴答待办不出现重复入口。
 
