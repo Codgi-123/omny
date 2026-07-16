@@ -75,6 +75,9 @@ final class InboxItem {
     /// 条目级提醒规则（TodoReminderRule.rawValue）：nil = 跟随设置页全局默认；
     /// -1 不提醒 / 0 准时 / 其余为提前分钟数。可选属性，SwiftData 轻量迁移自动通过。
     var todoReminderMinutes: Int?
+    /// 重复规则（TodoRepeatRule 编码串），nil = 不重复。仅本地待办使用，滴答待办不参与。
+    /// 可选属性，SwiftData 轻量迁移自动通过。
+    var todoRepeatRule: String?
 
     // 收藏
     var urlString: String?
@@ -152,6 +155,29 @@ extension Sequence where Element == InboxItem {
         var arr = Array(self)
         arr.move(fromOffsets: source, toOffset: destination)
         for (i, item) in arr.enumerated() { item.sortOrder = i }
+    }
+}
+
+// MARK: - 重复待办辅助（TodoRow 勾选与 TodoEditSheet 保存共用）
+
+extension InboxItem {
+    /// 重复待办「完成本次」时落的快照：一条普通的已完成本地待办，进现有「已完成」分组。
+    /// 不带重复规则与条目级提醒——快照是历史记录，不再滚动、也不会被排通知
+    /// （NotificationScheduler 只给 openTodos 排期，已完成态天然排除）。
+    /// - Parameter due: 本次的截止时间（母条目滚动前的 todoDue）。
+    func makeRepeatSnapshot(due: Date) -> InboxItem {
+        // source 用 .manual：与手动添加待办一致的本地来源，不参与滴答同步
+        let snap = InboxItem(kind: .todo, source: .manual, rawText: rawText)
+        snap.todoTitle = todoTitle
+        snap.todoNote = todoNote
+        snap.todoPriority = todoPriority
+        snap.todoDue = due
+        snap.todoCompleted = true
+        snap.todoRepeatRule = nil
+        snap.todoReminderMinutes = nil
+        snap.createdAt = Date()
+        snap.needsReview = false
+        return snap
     }
 }
 

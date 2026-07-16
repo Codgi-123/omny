@@ -1208,6 +1208,8 @@ struct TodoQuickAdd: View {
     @State private var priority = 0
     /// 条目级提醒规则：nil 跟随全局默认（issue #16）
     @State private var reminderMinutes: Int? = nil
+    /// 重复规则（TodoRepeatRule 编码字符串）：nil 不重复
+    @State private var repeatRule: String? = nil
     @State private var showDue = false
     @State private var showPriority = false
     /// 驱动进出动画：呈现后置 true 触发滑入，关闭前置 false 触发滑出
@@ -1266,7 +1268,7 @@ struct TodoQuickAdd: View {
                 }
                 .buttonStyle(PressableStyle(scale: 0.9))
                 .sheet(isPresented: $showDue) {
-                    DueDateSheet(due: $due, reminderMinutes: $reminderMinutes)
+                    DueDateSheet(due: $due, reminderMinutes: $reminderMinutes, repeatRule: $repeatRule)
                 }
                 .onChange(of: showDue) { _, now in
                     if !now { focus = .title }   // 关掉日期页后回焦标题并弹键盘
@@ -1361,6 +1363,7 @@ struct TodoQuickAdd: View {
         item.todoDue = due
         item.todoPriority = priority
         item.todoReminderMinutes = reminderMinutes
+        item.todoRepeatRule = repeatRule
         context.insert(item)
         try? context.save()
         // 新待办可能带截止提醒，重排通知
@@ -1375,7 +1378,7 @@ struct TodoQuickAdd: View {
     }
 
     /// 连续创建：回车即建，清空内容后停留弹窗、焦点回标题。
-    /// 保留截止时间/优先级，方便批量录入同批待办。
+    /// 保留截止时间/优先级，方便批量录入同批待办；重复规则挂在截止时间上，与 due 同进退一并保留。
     private func addAndContinue() {
         guard persist() else { return }
         title = ""
@@ -1384,8 +1387,8 @@ struct TodoQuickAdd: View {
     }
 }
 
-/// 时间行卡片的位置锚点：供 DueDateSheet 把时分浮层定位到「请选择」按钮上方。
-private struct TimeRowAnchorKey: PreferenceKey {
+/// 重复行卡片的位置锚点：供 DueDateSheet 把重复规则浮层菜单定位到「重复」行上方。
+private struct RepeatRowAnchorKey: PreferenceKey {
     static var defaultValue: Anchor<CGRect>? = nil
     static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
         value = nextValue() ?? value
@@ -1398,18 +1401,27 @@ struct DueDateSheet: View {
     @Binding var due: Date?
     /// 条目级提醒规则（InboxItem.todoReminderMinutes 语义）：nil 跟随全局默认 / -1 不提醒 / 其余提前分钟数
     @Binding var reminderMinutes: Int?
+    /// 重复规则（InboxItem.todoRepeatRule 的原始编码，TodoRepeatRule.encoded 语义）：nil 不重复
+    @Binding var repeatRule: String?
     @Environment(\.dismiss) private var dismiss
     @State private var working: Date?
     @State private var hasTime: Bool
     /// 提醒规则的工作副本：与 due 一致的「取消不生效」语义，✕ 关闭不写回
     @State private var workingReminder: Int?
-    /// 时分浮层是否可见：点「请选择」后在其上方浮出小时间选择器，点外部收起
-    @State private var showTimePicker = false
+    /// 重复规则的工作副本：同上，✓ 确认才写回
+    @State private var workingRepeat: String?
     @State private var showReminder = false
+    /// 行内时分滚轮是否展开（日历 App 式：点「请选择」/时间文本在行下方展开系统滚轮）
+    @State private var showTimeWheel = false
+    /// 重复规则浮层菜单是否可见：点「重复」行后在其上方浮出（仿滴答），点外部收起
+    @State private var showRepeatMenu = false
+    /// 自定义重复 sheet（从浮层菜单「自定义」进入）
+    @State private var showCustomRepeat = false
 
-    init(due: Binding<Date?>, reminderMinutes: Binding<Int?>) {
+    init(due: Binding<Date?>, reminderMinutes: Binding<Int?>, repeatRule: Binding<String?>) {
         _due = due
         _reminderMinutes = reminderMinutes
+        _repeatRule = repeatRule
         let base = due.wrappedValue
         _working = State(initialValue: base ?? Calendar.current.startOfDay(for: Date()))
         if let base {
@@ -1419,6 +1431,7 @@ struct DueDateSheet: View {
             _hasTime = State(initialValue: false)
         }
         _workingReminder = State(initialValue: reminderMinutes.wrappedValue)
+        _workingRepeat = State(initialValue: repeatRule.wrappedValue)
     }
 
     var body: some View {
@@ -1428,8 +1441,7 @@ struct DueDateSheet: View {
                 VStack(spacing: 18) {
                     quickTiles
                     MonthCalendarView(selection: $working)
-                    timeRow
-                    reminderRow          // ← 新增：截止时间选择器下方（issue #16）
+                    settingsCard         // 时间/提醒/重复三行合一张卡（issue #16 + 重复规则）
                     if working != nil { clearButton }
                 }
                 .padding(.horizontal, 18)
@@ -1437,28 +1449,36 @@ struct DueDateSheet: View {
                 .padding(.bottom, 20)
             }
         }
-        // 时分浮层：通过时间行的锚点定位到「请选择」按钮上方（无箭头的小浮窗），
-        // 挂在 body 层而非行内，避免被 ScrollView 裁剪、且能全屏接住"点外部收起"
-        .overlayPreferenceValue(TimeRowAnchorKey.self) { anchor in
-            if showTimePicker, let anchor {
+        // 重复规则浮层菜单：锚定到「重复」行上方（形态同时分浮层：点外部收起、右缘对齐卡片）
+        .overlayPreferenceValue(RepeatRowAnchorKey.self) { anchor in
+            if showRepeatMenu, let anchor {
                 GeometryReader { proxy in
                     let rect = proxy[anchor]
-                    let popW: CGFloat = 220, popH: CGFloat = 190
+                    let popW: CGFloat = 280, popH = RepeatRuleMenu.estimatedHeight
                     ZStack {
-                        // 点浮层外任意处收起（近乎透明但可命中，同时挡住底下滚动）
                         Color.black.opacity(0.001)
-                            .onTapGesture { withAnimation(.snappy) { showTimePicker = false } }
-                        timePopover
-                            .frame(width: popW, height: popH)
-                            // 右缘对齐时间行卡片右缘（即「请选择」一侧），底缘悬在卡片上方 8pt
-                            .position(x: min(rect.maxX - popW / 2, proxy.size.width - popW / 2 - 12),
-                                      y: max(rect.minY - popH / 2 - 8, popH / 2 + 8))
-                            .transition(.scale(scale: 0.9, anchor: .bottomTrailing).combined(with: .opacity))
+                            .onTapGesture { withAnimation(.snappy) { showRepeatMenu = false } }
+                        RepeatRuleMenu(
+                            rule: $workingRepeat,
+                            referenceDate: working ?? Calendar.current.startOfDay(for: Date()),
+                            onDismiss: { withAnimation(.snappy) { showRepeatMenu = false } },
+                            onCustom: {
+                                withAnimation(.snappy) { showRepeatMenu = false }
+                                showCustomRepeat = true
+                            }
+                        )
+                        .frame(width: popW)
+                        .position(x: min(rect.maxX - popW / 2, proxy.size.width - popW / 2 - 12),
+                                  y: max(rect.minY - popH / 2 - 8, popH / 2 + 8))
+                        .transition(.scale(scale: 0.9, anchor: .bottomTrailing).combined(with: .opacity))
                     }
                 }
             }
         }
-        .presentationDetents([.height(600)])
+        // 弹窗底用系统分组底色：卡片（玻璃/材质）与底色的对比度贴近原生设置页，不再是白底上浮突兀白卡
+        .presentationBackground(Color(.systemGroupedBackground))
+        // 高度按屏幕比例动态给（固定 600 在小屏会挡住重复行/清除按钮）
+        .presentationDetents([.fraction(0.85)])
         .presentationDragIndicator(.hidden)
     }
 
@@ -1532,6 +1552,37 @@ struct DueDateSheet: View {
         .buttonStyle(PressableStyle())
     }
 
+    // MARK: 时间/提醒/重复整卡
+    // 三行装进一张玻璃卡（行间细分割线，缩进对齐文案起点），
+    // 只在整卡挂一次玻璃底，避免多张小卡与弹窗底色对比过强显得零碎
+
+    private var settingsCard: some View {
+        VStack(spacing: 0) {
+            timeRow
+            if showTimeWheel { timeWheel }
+            rowDivider
+            reminderRow
+            rowDivider
+            repeatRow
+        }
+        .softCard(cornerRadius: 14)
+    }
+
+    /// 行内展开的系统时分滚轮（日历 App 式），跟随 timeBinding 即改即生效
+    private var timeWheel: some View {
+        DatePicker("", selection: timeBinding, displayedComponents: .hourAndMinute)
+            .datePickerStyle(.wheel)
+            .labelsHidden()
+            .frame(maxWidth: .infinity)
+            .frame(height: 170)
+            .clipped()
+    }
+
+    /// 行间分割线：缩进跳过图标列（14 边距 + 24 图标 + 10 间距）
+    private var rowDivider: some View {
+        Divider().padding(.leading, 48)
+    }
+
     // MARK: 时间行
 
     private var timeRow: some View {
@@ -1540,47 +1591,29 @@ struct DueDateSheet: View {
             Text("时间").foregroundStyle(Theme.text)
             Spacer()
             if hasTime {
-                // 已设时间：右侧显示当前时分（点击可重开浮层微调），点 ✕ 清除
-                Button { withAnimation(.snappy) { showTimePicker.toggle() } } label: {
+                // 已设时间：点时间文本展开/收起行下方的系统滚轮，点 ✕ 清除
+                Button { withAnimation(.snappy) { showTimeWheel.toggle() } } label: {
                     Text(timeBinding.wrappedValue.formatted(date: .omitted, time: .shortened))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Theme.accent)
                 }
                 .buttonStyle(.plain)
-                Button { withAnimation(.snappy) { hasTime = false; showTimePicker = false } } label: {
+                Button { withAnimation(.snappy) { hasTime = false; showTimeWheel = false } } label: {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.sub)
                 }
                 .buttonStyle(.plain)
             } else {
-                // 未设时间：点「请选择」在按钮上方浮出小时间选择器（不再向下展开占位）
-                Button { withAnimation(.snappy) { enableTime(); showTimePicker = true } } label: {
-                    HStack(spacing: 3) {
-                        Text("请选择")
-                        Image(systemName: "chevron.up").font(.caption2.weight(.semibold))
-                    }
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(Theme.accent)
+                // 未设时间：点「请选择」落到 9:00 并直接展开系统滚轮
+                Button { withAnimation(.snappy) { enableTime(); showTimeWheel = true } } label: {
+                    Text("请选择")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Theme.accent)
                 }
                 .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 18)
-        .background(Theme.card,
-                    in: .rect(cornerRadius: 12))
-        // 记录时间行卡片位置，供浮层定位到「请选择」上方
-        .anchorPreference(key: TimeRowAnchorKey.self, value: .bounds) { $0 }
-    }
-
-    /// 浮层时间选择器：无箭头的小浮窗（圆角卡片 + 阴影），滚轮直接选，点外部收起。
-    private var timePopover: some View {
-        DatePicker("", selection: timeBinding, displayedComponents: .hourAndMinute)
-            .datePickerStyle(.wheel)
-            .labelsHidden()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipped()
-            .background(Theme.card, in: .rect(cornerRadius: 14))
-            .shadow(color: .black.opacity(0.22), radius: 18, y: 8)
     }
 
     // MARK: 提醒行（截止前多久发本地通知；样式与 timeRow 一致）
@@ -1600,7 +1633,6 @@ struct DueDateSheet: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 18)
-            .background(Theme.card, in: .rect(cornerRadius: 12))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -1614,6 +1646,39 @@ struct DueDateSheet: View {
         }
         let d = TodoReminderRule(rawValue: AppSettings.shared.todoDefaultReminderMinutes)?.label ?? "提前 15 分钟"
         return "默认（\(d)）"
+    }
+
+    // MARK: 重复行（到期后按规则滚动生成下一次；样式与 reminderRow 一致）
+
+    private var repeatRow: some View {
+        Button { withAnimation(.snappy) { showRepeatMenu.toggle() } } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "repeat").foregroundStyle(Theme.accent)
+                Text("重复").foregroundStyle(Theme.text)
+                Spacer()
+                Text(repeatLabel)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(Theme.accent)
+                Image(systemName: "chevron.up")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(Theme.sub)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 18)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        // 记录重复行卡片位置，供浮层菜单定位到其上方
+        .anchorPreference(key: RepeatRowAnchorKey.self, value: .bounds) { $0 }
+        .sheet(isPresented: $showCustomRepeat) {
+            CustomRepeatSheet(rule: $workingRepeat,
+                              referenceDate: working ?? Calendar.current.startOfDay(for: Date()))
+        }
+    }
+
+    /// 当前重复规则文案：nil 或解析失败显示「无」
+    private var repeatLabel: String {
+        workingRepeat.flatMap { TodoRepeatRule.parse($0)?.label } ?? "无"
     }
 
     /// 开启具体时间：在当前所选日期上落到 9:00（可再点 compact 控件调整）。
@@ -1635,9 +1700,11 @@ struct DueDateSheet: View {
     private var clearButton: some View {
         Button {
             // 清除即生效：直接置空并退出，无需再点完成/取消。
-            // 提醒规则一并写回（清了日期规则仍保留无妨，通知层对 todoDue == nil 不排）。
+            // 提醒规则一并写回（清了日期规则仍保留无妨，通知层对 todoDue == nil 不排）；
+            // 重复规则挂在日期上，没日期无意义，随之清空。
             due = nil
             reminderMinutes = workingReminder
+            repeatRule = nil
             dismiss()
         } label: {
             Label("清除截止时间", systemImage: "xmark.circle.fill")
@@ -1656,6 +1723,7 @@ struct DueDateSheet: View {
             due = nil
         }
         reminderMinutes = workingReminder
+        repeatRule = workingRepeat
         dismiss()
     }
 
