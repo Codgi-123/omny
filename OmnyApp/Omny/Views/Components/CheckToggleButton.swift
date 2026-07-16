@@ -12,6 +12,9 @@ struct CheckToggleButton: View {
     var symbolSize: CGFloat = 24
     /// 视觉占位尺寸（影响布局）；命中区在此基础上自动外扩到至少 44×44，不改变布局
     var visualSize = CGSize(width: 44, height: 44)
+    /// 命中区是否外扩到 44pt 保底。挨着其他可点内容、需要「只点方框本身才触发」
+    /// 的场景（待办行的完成勾选，右侧紧贴点按进编辑的标题区）传 false，只认视觉框
+    var expandsHitArea = true
     let accessibilityLabel: String
     let action: () -> Void
 
@@ -22,7 +25,7 @@ struct CheckToggleButton: View {
                 .foregroundStyle(tint)
                 .contentTransition(.symbolEffect(.replace))
                 .frame(width: visualSize.width, height: visualSize.height)
-                .contentShape(MinHitArea())
+                .contentShape(expandsHitArea ? AnyShape(MinHitArea()) : AnyShape(Rectangle()))
         }
         .buttonStyle(PressableStyle(scale: 0.9))
         .accessibilityLabel(accessibilityLabel)

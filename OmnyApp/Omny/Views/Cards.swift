@@ -857,9 +857,11 @@ struct TodoRow: View {
 
     var body: some View {
         HStack(alignment: .checkTitle, spacing: 8) {
-            // 视觉 36×26（滴答式小方框），命中区由 CheckToggleButton 保底外扩到 44pt
+            // 视觉 36×26（滴答式小方框）。命中区不外扩：右侧紧贴「点按进编辑」的标题区，
+            // 只点方框本身才切换完成/取消完成，避免点标题边缘误触勾选
             CheckToggleButton(symbol: checkSymbol, tint: checkTint, symbolSize: 18,
                               visualSize: CGSize(width: 36, height: 26),
+                              expandsHitArea: false,
                               accessibilityLabel: checkLabel, action: toggleCheck)
                 .sensoryFeedback(trigger: item.todoCompleted) { _, done in
                     done ? .success : nil
