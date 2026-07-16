@@ -7,10 +7,10 @@
 ### 重复待办 — 待真机验证（2026-07-16 已实现，设计定论见下方备忘）
 - [ ] 真机过一遍：添加界面「重复」行与预设/自定义两层弹窗；勾选完成后快照进「已完成」、母条目滚到下一期；左滑「跳过」；通知按新截止重排；滴答待办不出现重复入口。
 
-### 记账模块 — 待真机验证（主体已完成，build 19）
-OmnyCore 全链路 + App 正式记账页均已实现并上线（实现现状见 `docs/expense-module-design.md`「八、实现现状」）。**剩余只差真机实测**（本机无 Key/无法编译 App，覆盖不到）：
-- [ ] 装 TestFlight build 19，验证：① 分析页环状图引线在分类多时是否拥挤；② 配 LLM Key 后真实抽取 + 打标准确率；③ 短信/截图多渠道去重效果。
-- [ ] 待细化：需处理页 expense 低置信项文案；`needsReview` 阈值（当前 0.8）；设置页「记账分类自定义」的图标/颜色选择器 UI（映射器接口已预留）。
+### 记账模块 — 待真机验证（主体已完成；issue #24 二次完善已落地，USB 装机逐轮实测过）
+OmnyCore 全链路 + App 正式记账页均已实现并上线（实现现状见 `docs/expense-module-design.md`「八、实现现状」）。issue #24 参考稿完善（2026-07-16，见「已完成」）已在真机逐轮验收，**剩余验证项**：
+- [ ] 配 LLM Key 后真实抽取 + 打标准确率；短信/截图多渠道去重效果；分析页环状图引线在分类多时是否拥挤。
+- [ ] 待细化：需处理页 expense 低置信项文案；`needsReview` 阈值（当前 0.8）。
 
 ### 组件化分期路线（issue #10 问题2）
 P0（查询谓词层/tab 重构/设置分层）与 P1（消纯复制）已完成，见「已完成」。剩余：
@@ -60,6 +60,7 @@ P0（查询谓词层/tab 重构/设置分层）与 P1（消纯复制）已完成
 
 ## 已完成
 
+- [x] 记账功能二次完善（2026-07-16，issue #24，参考钱迹风格四图 + HIG 评审）：① **45 个自绘 SVG 分类图标**（`Assets.xcassets/ExpIcon*`，24×24 线稿 1.8pt 圆头描边，与收藏页 BookmarkLink 同风格，template 渲染）全面替换记账 SF Symbol；`ExpenseCategoryAppearance` 改 `CategoryIcon.asset/.symbol` 双态（旧用户覆盖 SF 名向后兼容，新覆盖存 `svg:资产名|colorKey`），预置表额外收录旅行/宠物/教育等常见自定义分类名；渲染组件 `ExpenseCategoryChip`（**中性灰底+灰线稿**，对齐收藏页 BookmarkKindIcon 的安静风格；彩色底方案被用户否掉——"太丑"，分类色只留给分析页图表）/`CategoryIconGlyph`（裸线稿）收进 `Views/Components/ExpenseCategoryIcon.swift`；记账页残余图形性 SF Symbol 一并换自绘 SVG（备注笔 ExpIconNote、键盘退格 ExpIconBackspace、空态钱袋），方向性 chevron 与系统操作词汇（trash/plus/FAB）按 HIG 保留系统符号。② **明细页**：汇总卡改「本月支出」主角（收入/结余降次级），记账行升级两栏（大类·细分 + 时刻·备注 / 金额 + 渠道尾号），金额语义色支出红/收入绿全链路统一（行/详情/汇总）；新增 `ExpenseFormat.balance`（负结余 "-¥77.00"，修掉原 "¥-77.00"）。③ **记一笔**：分类选中态从蓝描边圈改「点亮」——未选中裸线稿（无底），选中系统蓝底+白线稿（snappy 过渡）；金额与完成键随方向红/绿（`directionTint`）；金额数字 `contentTransition(.numericText())`；时间卡新增常驻备注行（`InboxItem.expenseNote` 可选字段轻量迁移，`addManualExpense` 加 `note:` 参数，详情页显示、行内 caption 备注优先于商户）。④ **分析页**：顶部新增收支统计宫格（支出/收入/结余/日均支出，日均按本月已过天数或历史月整月摊）；环状图/排行改用分类签名色（撞色顺延取未用色，行图标↔扇区一色）；大类排行行升级图标 chip + 占比进度条 + 一位小数占比。⑤ 分类管理页图标选择器换自绘 SVG 库网格。后续同日按真机反馈迭代：图标统一圆形灰底；细分面板改在父类所在行下方就地展开（灰底分区 + 「…」角标）；记一笔改三段式（宫格→单张信息卡→灰底白键键盘，仅完成键带色）；键盘四等宽列、+×/−÷ 单键循环、完成键固定文案且未算完直接按全式结果入库、全键触感、长按退格清空；宫格「设置」直达分类管理。剩余验证项见「进行中」。
 - [x] 收藏页优化（2026-07-15，issue #18）：① 红粉色 IconChip 换自绘 SVG 线稿图标（BookmarkLink 锁链 / BookmarkNote 图文页，`BookmarkKindIcon` 中性灰底，今天页同步）；② 绿字标签换 `TagPill` 药丸（TagPicker.swift，只读 Capsule）；③ 链接型 tap 直接 openURL（失败兜底进详情，详情入口移长按菜单），图文型进全屏 `BookmarkDetailView`；④ iOS 18 `navigationTransition(.zoom)` + `matchedTransitionSource(id: item.id)` 拿到非线性放大进入、左缘滑动返回、缩回源行——宿主用 `fullScreenCover` 而非 push（push+zoom 在 List 交互滑返有框架级残影 bug 且 tab 栏不回弹，Apple 论坛 thread 810944）；⑤ 详情页通栏无框排版（原 `BookmarkDetailSheet` Form 分框已删），配图 tap 经独立 photoNS zoom 进全屏 `ZoomableImageView`（捏合 1–4x 橡皮筋、双击 2.5x、放大后拖拽、未放大单击关闭/下拉缩回）；编辑改同页 toolbar 切换（全屏 TextEditor），保存语义与原 Sheet 一致。跟进（同日）：首页整页 ScrollView→List（swipeActions 是 List 行专属；SDK 26.5 无 iOS 27 的 swipeActionsContainer），今日收藏行原生左滑 加代办(绿)/标签(蓝)/删除(红)，收藏页左滑同款并补加代办；「加代办」预填 TodoQuickAdd（标题「查看收藏：{缩写}」，描述=完整标题+链接；TodoQuickAdd 支持预填参数，逻辑收敛 `InboxItem.bookmarkTodoPrefill`）；TodoRow 加 `showsSwipeActions` 开关（首页多条合一个 List 行，否则左滑整卡一起滑）；两个坑（模拟器 cliclick 实测定位）：iOS 26 下 List 行距设 0 会让滑动按钮退化成旧式方块（勿设 `listRowSpacing(0)`）；destructive 原生红会被同组邻位按钮 tint 串染，需显式 `.tint(.red)`。
 - [x] 高铁/酒店卡片重设计 + 三种行程卡同高（2026-07-15）：`TripCard` 改三段定高骨架（头部 44 / 路线 60 / 地面信息 48，发丝线一律 overlay 不占高度）⇒ 机票·火车·酒店卡总高严格一致。火车卡对齐票面参考稿：车次+日期头部、大字时刻+轨道线（正中高铁图标）、灰底四格「检票口/车厢/座位/席别」（车厢座位从 seat 正则拆分）；酒店卡：房型副标题（可含早餐说明）、入住/退房大字日期+「N晚」胶囊+时刻提示（14:00后可入住式）、底部地址行+导航（拉起系统地图）。解析链路同步补字段：`TripInfo` 新增 `ticketGate`/`seatClass`/`address`，短信与识屏两个 trip prompt+schema、RuleParser 火车正则（检票口/席别）、InboxItem、Ingestor、InboxItemEntity.Payload 全链路透传。
 - [x] 组件化 P1「消纯复制」（2026-07-15，issue #10 问题2）：纯复制 UI 收敛到 `Views/Components/` 5 个新文件——CollapsibleSectionHeader（待办页 3 处折叠组头收编，chevron 按 HIG 收起指右/展开指下）；SelectableChip + TagPicker（收藏添加/详情两处多选 chip 与筛选栏单选 chip 收编，`filterStyle` 参数保留筛选栏刻意差异；FlowLayout 随迁；「配置池+已用值」合并收敛为 `AppSettings.mergedTagCandidates`）；CheckToggleButton（取件圈×2 + 待办勾选收编，命中区保底 44pt 自动外扩，取件双向推进业务包装成 Cards.swift 的 PickupCheckButton）；FloatingAddButton 参数化（记账页内联 FAB 收编，`size: 56` 保留原尺寸差异）；OmnyDateFormat（6 处「每次调用 new DateFormatter」收敛为静态实例复用，日历裸紧凑金额并入 `ExpenseFormat.compactBare`）。

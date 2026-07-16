@@ -95,6 +95,7 @@ final class InboxItem {
     var channel: String?               // 渠道/银行/支付平台
     var cardTail: String?              // 卡尾号，去重主键之一
     var txnID: String?                 // 官方交易单号，CSV 导入去重主键
+    var expenseNote: String?           // 记账备注（手动记账填写；可选字段，轻量迁移安全）
 
     init(kind: ItemKind, source: ItemSource, rawText: String) {
         self.kindRaw = kind.rawValue

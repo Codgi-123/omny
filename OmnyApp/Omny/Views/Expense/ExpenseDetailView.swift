@@ -19,11 +19,11 @@ struct ExpenseDetailView: View {
         List {
             Section {
                 VStack(spacing: 14) {
-                    IconChip(symbol: appearance.symbol, color: appearance.color, size: 60)
+                    ExpenseCategoryChip(appearance: appearance, size: 60)
                     Text(ExpenseFormat.amount(item.amount, direction: item.expenseDirection))
                         .font(.system(size: 40, weight: .bold, design: .rounded))
                         .monospacedDigit()
-                        .foregroundStyle(isIncome ? Theme.green : Theme.text)
+                        .foregroundStyle(isIncome ? Theme.green : Theme.red)
                     Text(categoryText).font(.subheadline).foregroundStyle(Theme.sub)
                 }
                 .frame(maxWidth: .infinity)
@@ -33,6 +33,9 @@ struct ExpenseDetailView: View {
             }
 
             Section {
+                if let note = item.expenseNote, !note.isEmpty {
+                    field("备注", note)
+                }
                 if let merchant = item.merchant, !merchant.isEmpty {
                     field("商户", merchant)
                 }

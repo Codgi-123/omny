@@ -20,6 +20,14 @@ enum ExpenseFormat {
         numberFormatter.string(from: NSDecimalNumber(decimal: value)) ?? "\(value)"
     }
 
+    /// 结余类可正可负的金额：负数把负号提到 ¥ 前（"-¥77.00"），正数无符号（"¥14.00"）。
+    /// 与 amount(signed:false) 的区别：后者对负数会输出 "¥-77.00"，符号位置不对。
+    static func balance(_ value: Decimal) -> String {
+        let prefix = value < 0 ? "-" : ""
+        let n = NSDecimalNumber(decimal: value < 0 ? -value : value)
+        return "\(prefix)¥\(numberFormatter.string(from: n) ?? "\(n)")"
+    }
+
     /// 紧凑金额（带 ¥）：给饼图中心等窄空间用。上万显示「¥X.X万」，否则整数千分位。
     /// 避免大金额在小圆心里溢出。
     static func compact(_ value: Decimal) -> String {
@@ -199,8 +207,8 @@ struct MonthPickerSheet: View {
 
 // MARK: - 记账行（明细/日历共用）
 
-/// 一条记账列表行：分类图标 + 大类/细分 + 金额。
-/// 商户名不在行内显示（可能很长），进详情看——符合原型定的信息层级。
+/// 一条记账列表行：分类图标 + 「大类·细分 / 时刻+备注」+ 「金额 / 渠道尾号」两栏。
+/// 金额语义色：支出红、收入绿（+号），与汇总卡/详情一致。
 struct ExpenseRow: View {
     let item: InboxItem
 
@@ -209,24 +217,59 @@ struct ExpenseRow: View {
     }
     private var isIncome: Bool { item.expenseDirection == .income }
 
+    /// 「餐饮·外卖」；无细分时只显示大类
+    private var title: String {
+        let major = item.categoryMajor ?? "未分类"
+        if let sub = item.categorySub, !sub.isEmpty { return "\(major)·\(sub)" }
+        return major
+    }
+
+    /// 「17:24 · 备注/商户」；备注优先（手动填写的更准），无则商户
+    private var caption: String {
+        let time = OmnyDateFormat.timeHM(item.occurredAt ?? item.createdAt)
+        let extra = [item.expenseNote, item.merchant]
+            .compactMap { $0 }.first { !$0.isEmpty }
+        if let extra { return "\(time) · \(extra)" }
+        return time
+    }
+
+    /// 「招商银行 4892」/「尾号 4892」——右下角的账户来源
+    private var account: String? {
+        let channel = item.channel?.trimmingCharacters(in: .whitespaces) ?? ""
+        let tail = item.cardTail?.trimmingCharacters(in: .whitespaces) ?? ""
+        switch (channel.isEmpty, tail.isEmpty) {
+        case (false, false): return "\(channel) \(tail)"
+        case (false, true):  return channel
+        case (true, false):  return "尾号 \(tail)"
+        case (true, true):   return nil
+        }
+    }
+
     var body: some View {
         HStack(spacing: 12) {
-            IconChip(symbol: appearance.symbol, color: appearance.color)
+            ExpenseCategoryChip(appearance: appearance)
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.categoryMajor ?? "未分类")
+                Text(title)
                     .font(.body)
                     .foregroundStyle(Theme.text)
-                if let sub = item.categorySub, !sub.isEmpty {
-                    Text(sub).font(.caption).foregroundStyle(Theme.sub)
-                }
+                    .lineLimit(1)
+                Text(caption)
+                    .font(.caption)
+                    .foregroundStyle(Theme.sub)
+                    .lineLimit(1)
             }
             Spacer(minLength: 8)
-            Text(ExpenseFormat.amount(item.amount, direction: item.expenseDirection))
-                .font(.system(.body, design: .rounded).weight(.semibold))
-                .monospacedDigit()
-                .foregroundStyle(isIncome ? Theme.green : Theme.text)
             if item.needsReview {
                 StatusTag(text: "待确认", color: Theme.red)
+            }
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(ExpenseFormat.amount(item.amount, direction: item.expenseDirection))
+                    .font(.system(.body, design: .rounded).weight(.semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(isIncome ? Theme.green : Theme.red)
+                if let account {
+                    Text(account).font(.caption).foregroundStyle(Theme.sub).lineLimit(1)
+                }
             }
         }
         .contentShape(Rectangle())

@@ -40,6 +40,7 @@
 		7C981362B9DE75AB71EAAAD7 /* OmnyDateFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D082366D4929A7AF8CB6247 /* OmnyDateFormat.swift */; };
 		80443BC94F5EC375ECDD4461 /* SharedInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6286E75E2350A9610F07F50 /* SharedInbox.swift */; };
 		8F5D9108AC007DDD9B4EDAF8 /* ExpenseCategoryManageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCF3C282053FF6CE9E33B4BF /* ExpenseCategoryManageView.swift */; };
+		90EAC411AEFF67B5D959B39D /* ExpenseCategoryIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = D611A52739CEFAE48EA91E2F /* ExpenseCategoryIcon.swift */; };
 		A3AB250C560EC31C3416A4F8 /* ExpenseDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE6CEE6D0BA1256600616E83 /* ExpenseDraftStore.swift */; };
 		A5006BBC0AB5703C1C7263F4 /* ExpenseCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADD6297A5443435803E13821 /* ExpenseCalendarView.swift */; };
 		B3A6006F0AE117BE5AB597F5 /* RefreshableDetached.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D17E1E2D50D01289A161384 /* RefreshableDetached.swift */; };
@@ -138,6 +139,7 @@
 		D0A174314D834C4ABEE5BC20 /* OmnyShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OmnyShare.entitlements; sourceTree = "<group>"; };
 		D45BF39A16836BC3A781E046 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		D50535A8576BD671F3594D75 /* LLMSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMSettingsView.swift; sourceTree = "<group>"; };
+		D611A52739CEFAE48EA91E2F /* ExpenseCategoryIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseCategoryIcon.swift; sourceTree = "<group>"; };
 		DC5FBDA57ACF5835BD05840A /* Omny.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Omny.entitlements; sourceTree = "<group>"; };
 		E11C02EDDB66A6F143E77CEA /* ExpenseCategoryAppearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseCategoryAppearance.swift; sourceTree = "<group>"; };
 		EA6F7E784C489081942772C4 /* BookmarkDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkDetailView.swift; sourceTree = "<group>"; };
@@ -181,6 +183,7 @@
 			children = (
 				EDEFAF4C63D435261B696B7E /* CheckToggleButton.swift */,
 				C305230BFF418EA84919FF91 /* CollapsibleSectionHeader.swift */,
+				D611A52739CEFAE48EA91E2F /* ExpenseCategoryIcon.swift */,
 				271A98018F0AC6C3FC811DD1 /* Feedback.swift */,
 				201DF82160199695C13D2414 /* FloatingAddButton.swift */,
 				2D082366D4929A7AF8CB6247 /* OmnyDateFormat.swift */,
@@ -443,6 +446,7 @@
 				F83466FB631A6F5D5AE2EA5C /* ExpenseAnalysisView.swift in Sources */,
 				A5006BBC0AB5703C1C7263F4 /* ExpenseCalendarView.swift in Sources */,
 				15BECF4ED7504D4E2B70B73C /* ExpenseCategoryAppearance.swift in Sources */,
+				90EAC411AEFF67B5D959B39D /* ExpenseCategoryIcon.swift in Sources */,
 				8F5D9108AC007DDD9B4EDAF8 /* ExpenseCategoryManageView.swift in Sources */,
 				01F87993F4C31CB75D5AC8C2 /* ExpenseConfirmIntent.swift in Sources */,
 				CF06F2B4FFF8230600DAE475 /* ExpenseConfirmSnippet.swift in Sources */,

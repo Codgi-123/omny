@@ -23,6 +23,9 @@ enum OmnyDateFormat {
     /// 「7-14」——分析页凭据行的紧凑日期
     static func shortMonthDay(_ date: Date) -> String { shortMonthDayFormatter.string(from: date) }
 
+    /// 「17:24」——记账明细行的时刻
+    static func timeHM(_ date: Date) -> String { timeHMFormatter.string(from: date) }
+
     // MARK: 静态实例（zh_CN 锁死，避免跟随系统语言变脸）
 
     private static let monthTitleFormatter = make("yyyy年M月")
@@ -30,6 +33,7 @@ enum OmnyDateFormat {
     private static let fullDateTimeFormatter = make("yyyy年M月d日 HH:mm")
     private static let monthDayTimeFormatter = make("M月d日 HH:mm")
     private static let shortMonthDayFormatter = make("M-d")
+    private static let timeHMFormatter = make("HH:mm")
 
     private static func make(_ format: String) -> DateFormatter {
         let f = DateFormatter()

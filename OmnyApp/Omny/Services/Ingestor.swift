@@ -332,6 +332,7 @@ enum Ingestor {
     /// `item` 非空时为编辑已有条目（表单回写），空则新建。返回落库后的条目，save 失败返回 nil。
     @discardableResult
     static func addManualExpense(_ info: ExpenseInfo, occurredAt: Date?,
+                                 note: String? = nil,
                                  editing item: InboxItem? = nil,
                                  context: ModelContext) -> InboxItem? {
         let target: InboxItem
@@ -350,6 +351,7 @@ enum Ingestor {
         target.channel = info.channel
         target.cardTail = info.cardTail
         target.txnID = info.txnID
+        target.expenseNote = note
         // 手动录入字段完整、意图明确，不进「需处理」
         target.needsReview = false
         guard saveOrRollback([target], context: context) else { return nil }
