@@ -63,6 +63,49 @@ jobs:
           security unlock-keychain -p ci build.keychain
           security set-keychain-settings -lut 21600 build.keychain
 
+      # 一次性 runner 上云签名归档会新建一张 iOS Development 证书（私钥随 runner 销毁、无法复用），
+      # 攒够 Apple 上限后归档报「maximum number of certificates / No profiles found」。
+      # 归档前先用 ASC API 吊销全部 DEVELOPMENT 证书兜底：付费 team 的开发证书只有 CI 在生成，
+      # 吊销不影响本地真机开发（本地走个人 team 证书），Distribution 证书不动。
+      - name: 吊销积压的 CI 开发证书
+        run: |
+          python3 -m pip install --quiet --user --break-system-packages pyjwt cryptography 2>/dev/null \
+            || python3 -m pip install --quiet --user pyjwt cryptography
+          python3 - <<'PY'
+          import json, os, time, urllib.request, jwt
+
+          key_id = os.environ["ASC_KEY"]
+          issuer = os.environ["ASC_ISSUER"]
+          with open(os.path.expanduser(f"~/.appstoreconnect/private_keys/AuthKey_{key_id}.p8")) as f:
+              private_key = f.read()
+          token = jwt.encode({"iss": issuer, "exp": int(time.time()) + 1200,
+                              "aud": "appstoreconnect-v1"},
+                             private_key, algorithm="ES256", headers={"kid": key_id})
+
+          def call(method, url):
+              req = urllib.request.Request(url, method=method,
+                                           headers={"Authorization": f"Bearer {token}"})
+              with urllib.request.urlopen(req) as resp:
+                  return resp.status, resp.read()
+
+          base = "https://api.appstoreconnect.apple.com/v1/certificates"
+          _, body = call("GET", f"{base}?limit=200")
+          certs = json.loads(body)["data"]
+          by_type = {}
+          for c in certs:
+              by_type.setdefault(c["attributes"]["certificateType"], []).append(c)
+          for t, items in sorted(by_type.items()):
+              print(f"{t}: {len(items)} 张")
+
+          for c in by_type.get("DEVELOPMENT", []):
+              cid, name = c["id"], c["attributes"]["name"]
+              try:
+                  status, _ = call("DELETE", f"{base}/{cid}")
+                  print(f"已吊销 DEVELOPMENT {cid}（{name}）→ {status}")
+              except Exception as e:  # 权限不足等：不阻塞构建，留日志排查
+                  print(f"::warning::吊销 {cid} 失败：{e}")
+          PY
+
       - name: 归档
         run: |
           # 构建号：手动触发可覆盖，否则 run_number + 偏移量自动生成（唯一且递增，多人发布不撞号）。
